@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+*.log
+.env*
+!.env.example
+Dockerfile
+.dockerignore
+README.md
+BUILD_SUMMARY.md
+SETUP.md
+e2e
+playwright-report
+test-results

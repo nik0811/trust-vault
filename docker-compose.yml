@@ -1,0 +1,134 @@
+version: '3.8'
+
+services:
+  # TrustVault API Gateway
+  trustvault-gateway:
+    build: .
+    ports:
+      - "8080:8080"
+      - "8099:8099"
+    environment:
+      - DATABASE_URL=postgres://trustvault:trustvault@postgres:5432/trustvault?sslmode=disable
+      - KAFKA_BROKERS=kafka:9092
+      - DATAHUB_URL=http://datahub-gms:8080
+      - QDRANT_URL=http://qdrant:6333
+      - JWT_SECRET=change-me-in-production
+    depends_on:
+      - postgres
+      - kafka
+      - qdrant
+    command: ["./server", "--mode=gateway"]
+
+  # TrustVault Classification Worker
+  trustvault-worker:
+    build: .
+    deploy:
+      replicas: 2
+    environment:
+      - DATABASE_URL=postgres://trustvault:trustvault@postgres:5432/trustvault?sslmode=disable
+      - KAFKA_BROKERS=kafka:9092
+      - MODEL_PATH=/models/gliner-pii-edge-int8.onnx
+    depends_on:
+      - postgres
+      - kafka
+    command: ["./server", "--mode=worker"]
+
+  # PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=trustvault
+      - POSTGRES_PASSWORD=trustvault
+      - POSTGRES_DB=trustvault
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Kafka (KRaft mode - no ZooKeeper)
+  kafka:
+    image: bitnami/kafka:3.7
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_CFG_NODE_ID=0
+      - KAFKA_CFG_PROCESS_ROLES=controller,broker
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@kafka:9093
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    volumes:
+      - kafka_data:/bitnami/kafka
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:v1.8.4
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # DataHub GMS (Metadata Service)
+  datahub-gms:
+    image: linkedin/datahub-gms:v0.13.0
+    ports:
+      - "8081:8080"
+    environment:
+      - DATAHUB_GMS_PORT=8080
+      - EBEAN_DATASOURCE_URL=jdbc:mysql://mysql:3306/datahub?verifyServerCertificate=false&useSSL=true&useUnicode=yes&characterEncoding=UTF-8
+      - EBEAN_DATASOURCE_USERNAME=datahub
+      - EBEAN_DATASOURCE_PASSWORD=datahub
+      - KAFKA_BOOTSTRAP_SERVER=kafka:9092
+      - ELASTICSEARCH_HOST=elasticsearch
+      - ELASTICSEARCH_PORT=9200
+    depends_on:
+      - mysql
+      - kafka
+      - elasticsearch
+
+  # MySQL for DataHub
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=datahub
+      - MYSQL_DATABASE=datahub
+      - MYSQL_USER=datahub
+      - MYSQL_PASSWORD=datahub
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # Elasticsearch for DataHub
+  elasticsearch:
+    image: elasticsearch:7.17.18
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  # Document Processing Service (Python)
+  trustvault-docservice:
+    build:
+      context: ./docservice
+      dockerfile: Dockerfile
+    ports:
+      - "8088:8088"
+    environment:
+      - MODEL_PATH=/models/paddleocr-vl
+    volumes:
+      - docservice_models:/models
+
+volumes:
+  postgres_data:
+  kafka_data:
+  qdrant_data:
+  mysql_data:
+  elasticsearch_data:
+  docservice_models:

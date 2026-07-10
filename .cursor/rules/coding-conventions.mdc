@@ -1,0 +1,107 @@
+---
+description: TrustVault coding conventions and quality standards
+alwaysApply: true
+---
+
+# Coding Conventions
+
+## Core Philosophy: Less Code, More Features
+
+- **Maximize feature density** - Every line of code must deliver value
+- **Zero boilerplate** - Use code generation, generics, and shared utilities
+- **Convention over configuration** - Sensible defaults, override only when needed
+- **DRY ruthlessly** - If you write it twice, extract it
+
+## Code Reduction Strategies
+
+### 1. Generic CRUD Layer
+One generic repository handles ALL entities:
+```go
+// Instead of UserRepo, TenantRepo, PolicyRepo... ONE repo:
+repo := crud.New[Policy](db)
+repo.Create(ctx, &policy)
+repo.FindByID(ctx, id)
+repo.List(ctx, filters)
+```
+
+### 2. Auto-Generated APIs
+Use reflection/codegen for REST endpoints:
+```go
+// Register entity → auto-generates GET/POST/PUT/DELETE
+api.RegisterCRUD[DataSource]("/datasources")
+api.RegisterCRUD[Policy]("/policies")
+```
+
+### 3. Middleware Composition
+Stack middleware declaratively:
+```go
+router.Group("/api/v1",
+    middleware.Auth(),
+    middleware.Tenant(),
+    middleware.RBAC("admin", "analyst"),
+    middleware.RateLimit(100),
+)
+```
+
+### 4. Declarative Validation
+Struct tags, not manual checks:
+```go
+type Policy struct {
+    Name   string `json:"name" validate:"required,min=3,max=100"`
+    Type   string `json:"type" validate:"oneof=access redaction ai"`
+    Active bool   `json:"active"`
+}
+```
+
+### 5. Event-Driven Side Effects
+Decouple with events, not inline code:
+```go
+// Instead of calling 5 services inline:
+events.Emit("classification.completed", result)
+// Listeners handle: audit, notifications, labels, quality, lineage
+```
+
+## What NOT To Do
+
+- ❌ Separate interface + implementation for internal services
+- ❌ Factory patterns for simple object creation
+- ❌ Builder patterns unless 5+ optional params
+- ❌ Custom errors for every case (use wrapped stdlib errors)
+- ❌ Separate DTO/Entity/Model layers (one struct, multiple tags)
+- ❌ Repository pattern for simple queries (use db directly)
+- ❌ Service layer that just proxies to repository
+
+## What TO Do
+
+- ✅ One struct with `json`, `db`, `validate` tags
+- ✅ Generic functions over copy-paste
+- ✅ Table-driven configs over switch statements
+- ✅ Embed common fields (BaseModel, TenantScoped)
+- ✅ Use sqlc/sqlx for type-safe queries without ORM bloat
+- ✅ Functional options only when truly needed
+
+## File Organization
+
+```
+internal/
+├── api/           # HTTP handlers (thin, delegate to domain)
+├── domain/        # Business logic (pure functions where possible)
+├── store/         # Database access (generic + specific queries)
+├── events/        # Event bus + handlers
+└── pkg/           # Shared utilities (auth, validation, errors)
+```
+
+## Testing: Minimal But Complete
+
+- Table-driven tests only
+- One integration test per API endpoint
+- Mock at boundaries (DB, Kafka, external APIs)
+- No unit tests for trivial code
+
+## Feature Completion Criteria
+
+A feature is DONE when:
+1. API works end-to-end
+2. One happy-path test + one error test
+3. Multi-tenant scoping verified
+4. No TODOs in code

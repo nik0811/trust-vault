@@ -1,0 +1,71 @@
+---
+description: TrustVault project context, architecture, and session continuity. Ensures every new session instantly knows the project state.
+alwaysApply: true
+---
+
+# TrustVault - Data & AI Trust Platform
+
+## What This Project Is
+
+TrustVault is an enterprise-grade Data & AI Trust Platform built in Go. It acts as an active governance gateway between data sources and AI systems (RAG + LLMs). It classifies, governs, and audits all data flowing to/from AI.
+
+## Architecture Summary
+
+- **Language:** Go 1.22+ (single binary), Python/FastAPI (OCR sidecar only)
+- **Metadata Backbone:** DataHub (GraphQL + OpenAPI) -- backend only, users NEVER see DataHub UI
+- **Classification Model:** GLiNER ONNX (INT8, 197MB, runs on CPU, 60+ PII types, 4M chars/sec)
+- **Document Processing:** PaddleOCR-VL (0.9B) for scanned PDFs/images
+- **Vector DB:** Qdrant (managed) + external adapters
+- **Message Broker:** Kafka (KRaft, no ZooKeeper)
+- **Database:** PostgreSQL (multi-tenant, tenant_id on every table)
+- **Auth:** JWT + API keys, full RBAC, super admin backdoor on :8099
+- **Lineage:** OpenLineage events emitted to DataHub
+- **LLM:** Agnostic proxy -- customer brings their own endpoint
+
+## Code Philosophy: Less Code, More Features
+
+- **6 internal packages only:** api, domain, store, events, external, pkg
+- **Single binary:** `--mode=gateway` or `--mode=worker`
+- **Generic CRUD[T]:** One repo handles all entities
+- **Event-driven:** Side effects via event handlers, not inline calls
+- **One models.go:** All DB models in one file with embedded TenantScoped
+
+## Key Features (25 total)
+
+1. Multi-tenant Auth + RBAC
+2. Generic API Gateway
+3. DataSource Management
+4. Document Intelligence
+5. Classification Engine (GLiNER + Rules)
+6. Sensitivity Labels
+7. Self-learning Feedback Loop
+8. Kafka Pipeline (billions-scale)
+9. Governance Engine
+10. AI Gate (proxy/intercept)
+11. Data Fetch + Vector DB
+12. LLM Proxy
+13. Audit + OpenLineage
+14. Data Quality
+15. Data Observability
+16. ROT Detection
+17. AI Governance
+18. Privacy Compliance
+19. Compliance Advisor
+20. Data Mapping
+21. Notifications
+22. Job Scheduler
+23. Data Remediation
+24. Outbound Integrations
+25. Reporting
+
+## Session Continuity
+
+BEFORE starting any work in a new session:
+1. Read `.cursor/status/progress.md` for current implementation status
+2. Check which todos are pending/in-progress/completed
+3. Do NOT re-evaluate the entire project -- trust the status file
+4. Continue from where the last session left off
+
+## Plan Location
+
+The full architectural plan is at: `.cursor/plans/trustvault_platform_build_7ba86799.plan.md`

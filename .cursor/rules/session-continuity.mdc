@@ -1,0 +1,58 @@
+---
+description: TrustVault session continuity protocol - read status before working
+alwaysApply: true
+---
+
+# Session Continuity Protocol
+
+## On Every New Session
+
+1. **Read status first:** Open `.cursor/status/progress.md` to know current state
+2. **Do NOT re-read entire codebase** unless a specific module is being worked on
+3. **Trust the status file** -- it's updated after every session
+4. **Continue from last checkpoint** -- don't restart work that's already done
+
+## Status Updates
+
+After completing work in any session:
+1. Update `.cursor/status/progress.md` with:
+   - Module status changes
+   - Session log entry (date + what was done)
+   - Any blockers or decisions needed
+2. Update the todo list in the plan file
+
+## Feature Lifecycle
+
+```
+NOT STARTED → IN PROGRESS → CODE COMPLETE → TESTING → DONE
+                    ↑                            |
+                    └────── (tests fail) ────────┘
+```
+
+- A feature moves to DONE **only** when tests pass
+- If tests reveal issues, status reverts to IN PROGRESS
+- Never skip TESTING phase
+
+## What Counts As "Tests Passing"
+
+- Unit tests: all pass, cover business logic (80%+)
+- Integration tests: DB operations, Kafka produce/consume, API endpoints
+- Multi-tenant tests: verify tenant isolation
+- RBAC tests: verify permission enforcement
+- Error case tests: invalid input, missing data, unauthorized access
+
+## Refactoring Protocol
+
+Before implementing a new module:
+1. Check if any existing code needs cleanup
+2. Look for repeated patterns that should be extracted to `pkg/`
+3. Ensure consistent error handling across existing services
+4. Refactor first, then build new
+
+## Quick Context Recall
+
+If you need to understand the full architecture:
+- Plan: `.cursor/plans/trustvault_platform_build_7ba86799.plan.md`
+- Status: `.cursor/status/progress.md`
+- Conventions: `.cursor/rules/coding-conventions.mdc`
+- Project info: `.cursor/rules/trustvault-project.mdc`
