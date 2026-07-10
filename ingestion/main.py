@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import subprocess
 import json
 import os
 import tempfile
 import yaml
+import time
 
 app = FastAPI(title="TrustVault Ingestion Sidecar", version="1.0.0")
 
@@ -15,6 +16,7 @@ class IngestionRequest(BaseModel):
     type: str
     config: Dict[str, Any]
     callback_url: Optional[str] = None
+    scan_log_id: Optional[str] = None
 
 class IngestionStatus(BaseModel):
     job_id: str
@@ -135,6 +137,27 @@ async def get_status(job_id: str):
 def run_ingestion(job_id: str, request: IngestionRequest):
     """Run DataHub ingestion in background (synchronous)"""
     import httpx
+    import threading
+    import queue
+    
+    def send_progress(message: str, log_lines: list = None):
+        """Send progress update to callback URL"""
+        if request.callback_url:
+            try:
+                progress_url = request.callback_url.replace("/callback", "/progress")
+                progress_data = {
+                    "job_id": job_id,
+                    "datasource_id": request.datasource_id,
+                    "tenant_id": request.tenant_id,
+                    "message": message,
+                    "scan_log_id": request.scan_log_id,
+                }
+                if log_lines:
+                    progress_data["log_lines"] = log_lines
+                with httpx.Client(timeout=5.0) as client:
+                    client.post(progress_url, json=progress_data)
+            except Exception as e:
+                print(f"Progress callback error: {e}", flush=True)
     
     try:
         # Generate recipe from template
@@ -145,59 +168,94 @@ def run_ingestion(job_id: str, request: IngestionRequest):
         recipe_content = template.format(**config)
         
         print(f"Starting ingestion for job {job_id}", flush=True)
-        print(f"Recipe:\n{recipe_content}", flush=True)
+        send_progress("Generating DataHub recipe...")
         
         # Write recipe to temp file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
             f.write(recipe_content)
             recipe_path = f.name
         
-        # Run DataHub ingestion CLI
-        result = subprocess.run(
+        send_progress("Starting DataHub ingestion...")
+        
+        # Run DataHub ingestion CLI with real-time output streaming
+        process = subprocess.Popen(
             ["datahub", "ingest", "-c", recipe_path],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
-            timeout=3600  # 1 hour timeout
+            bufsize=1
         )
         
-        print(f"Ingestion stdout: {result.stdout}", flush=True)
-        print(f"Ingestion stderr: {result.stderr}", flush=True)
-        print(f"Ingestion return code: {result.returncode}", flush=True)
+        output_lines = []
+        log_buffer = []
+        last_send_time = time.time()
+        
+        # Read output line by line and stream to frontend
+        for line in iter(process.stdout.readline, ''):
+            if not line:
+                break
+            line = line.strip()
+            if line:
+                output_lines.append(line)
+                log_buffer.append(line)
+                print(f"[DataHub] {line}", flush=True)
+                
+                # Send progress every 2 seconds or every 10 lines
+                current_time = time.time()
+                if len(log_buffer) >= 10 or (current_time - last_send_time) >= 2:
+                    send_progress("Processing...", log_buffer)
+                    log_buffer = []
+                    last_send_time = current_time
+        
+        # Send any remaining buffered logs
+        if log_buffer:
+            send_progress("Finalizing...", log_buffer)
+        
+        process.wait()
+        return_code = process.returncode
+        
+        print(f"Ingestion return code: {return_code}", flush=True)
         
         os.unlink(recipe_path)
         
-        if result.returncode == 0:
+        full_output = "\n".join(output_lines)
+        
+        if return_code == 0:
             jobs[job_id].status = "completed"
             jobs[job_id].message = "Ingestion completed successfully"
-            # Parse output to get dataset count
-            jobs[job_id].datasets_discovered = parse_dataset_count(result.stdout)
+            jobs[job_id].datasets_discovered = parse_dataset_count(full_output)
+            send_progress(f"Completed! Discovered {jobs[job_id].datasets_discovered} datasets")
         else:
             jobs[job_id].status = "failed"
-            # Sanitize stderr to remove null bytes
-            stderr_msg = (result.stderr or "Ingestion failed").replace('\x00', '').replace('\0', '')[:500]
-            jobs[job_id].message = stderr_msg
+            # Get last few lines as error message
+            error_lines = output_lines[-5:] if output_lines else ["Ingestion failed"]
+            error_msg = "\n".join(error_lines).replace('\x00', '').replace('\0', '')[:500]
+            jobs[job_id].message = error_msg
+            send_progress(f"Failed: {error_msg[:100]}")
             
     except subprocess.TimeoutExpired:
         jobs[job_id].status = "failed"
         jobs[job_id].message = "Ingestion timed out"
+        send_progress("Ingestion timed out")
     except Exception as e:
         print(f"Ingestion error: {e}", flush=True)
         jobs[job_id].status = "failed"
         jobs[job_id].message = str(e)
+        send_progress(f"Error: {str(e)}")
     
-    # Callback to main service (synchronous to ensure it completes)
+    # Final callback to main service
     if request.callback_url:
         try:
             print(f"Calling callback URL: {request.callback_url}", flush=True)
-            # Sanitize message to remove null bytes and limit length
             message = jobs[job_id].message or ""
             message = message.replace('\x00', '').replace('\0', '')[:500]
             
             callback_data = {
-                "job_id": job_id,  # Format: tenant_id::datasource_id
+                "job_id": job_id,
                 "status": jobs[job_id].status,
                 "message": message,
-                "datasets_discovered": jobs[job_id].datasets_discovered
+                "datasets_discovered": jobs[job_id].datasets_discovered,
+                "scan_log_id": request.scan_log_id,
             }
             print(f"Callback data: {callback_data}", flush=True)
             with httpx.Client(timeout=30.0) as client:

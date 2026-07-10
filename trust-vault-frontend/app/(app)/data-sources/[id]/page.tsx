@@ -179,17 +179,12 @@ export default function DataSourceDetailPage() {
               )}
             </button>
             <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-              <AlertDialogTrigger asChild>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => !deleteDataSource.isPending && setDeleteDialogOpen(true)}
-                  onKeyDown={(e) => e.key === 'Enter' && !deleteDataSource.isPending && setDeleteDialogOpen(true)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors cursor-pointer ${deleteDataSource.isPending ? 'opacity-50 pointer-events-none' : ''}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Delete
-                </div>
+              <AlertDialogTrigger
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg border border-destructive text-destructive hover:bg-destructive/10 transition-colors cursor-pointer ${deleteDataSource.isPending ? 'opacity-50 pointer-events-none' : ''}`}
+                disabled={deleteDataSource.isPending}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -383,11 +378,29 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            if (data.datasource_id === dataSourceId || data.type?.includes('scan') || data.type?.includes('datasource')) {
-              setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message || data.type || JSON.stringify(data)}`])
+            // Only process events for this datasource
+            if (data.datasource_id === dataSourceId) {
+              // Handle log lines from ingestion
+              if (data.log_lines && Array.isArray(data.log_lines)) {
+                data.log_lines.forEach((line: string) => {
+                  if (line && line.trim()) {
+                    setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${line}`])
+                  }
+                })
+              }
+              // Handle single message
+              if (data.message && typeof data.message === 'string' && data.message.trim()) {
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`])
+              }
+              // Handle status updates
+              if (data.status === 'completed') {
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Scan completed - ${data.datasets_discovered || 0} datasets discovered`])
+              } else if (data.status === 'failed') {
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✗ Scan failed: ${data.message || 'Unknown error'}`])
+              }
             }
           } catch {
-            setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${event.data}`])
+            // Ignore parse errors for non-JSON messages
           }
         }
         
@@ -405,11 +418,11 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
       eventSourceRef.current = null
       setIsConnected(false)
       
-      // Add completion log
-      if (status === 'connected') {
+      // Add completion log based on final status
+      if (status === 'active' || status === 'connected') {
         setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Scan completed successfully`])
       } else if (status === 'error') {
-        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✗ Scan failed - check DataHub logs for details`])
+        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✗ Scan failed - check logs for details`])
       }
     }
     
@@ -421,29 +434,7 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
     }
   }, [isScanning, dataSourceId, status])
 
-  // Simulate progress logs when scanning
-  useEffect(() => {
-    if (isScanning) {
-      const progressMessages = [
-        'Connecting to data source...',
-        'Authenticating...',
-        'Discovering schema...',
-        'Fetching table metadata...',
-        'Profiling tables...',
-        'Sending metadata to DataHub...',
-      ]
-      
-      let index = 0
-      const interval = setInterval(() => {
-        if (index < progressMessages.length) {
-          setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${progressMessages[index]}`])
-          index++
-        }
-      }, 2000)
-      
-      return () => clearInterval(interval)
-    }
-  }, [isScanning])
+  // No longer need simulated progress - real logs come from SSE
 
   // Helper to format duration
   const formatDuration = (startedAt: string, completedAt?: string) => {

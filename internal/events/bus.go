@@ -147,6 +147,7 @@ func Start(ctx context.Context) {
 func shouldBroadcast(eventName string) bool {
 	broadcastEvents := map[string]bool{
 		"datasource.scan.started":   true,
+		"datasource.scan.progress":  true,
 		"datasource.scan.completed": true,
 		"datasource.scan.failed":    true,
 		"datasource.created":        true,

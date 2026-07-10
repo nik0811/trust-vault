@@ -464,6 +464,43 @@ func splitJobID(jobID string) []string {
 	return parts
 }
 
+// scanProgress handles progress updates from the ingestion sidecar
+func (s *Server) scanProgress(w http.ResponseWriter, r *http.Request) {
+	var progress struct {
+		JobID        string   `json:"job_id"`
+		DatasourceID string   `json:"datasource_id"`
+		TenantID     string   `json:"tenant_id"`
+		Message      string   `json:"message"`
+		LogLines     []string `json:"log_lines"`
+		ScanLogID    string   `json:"scan_log_id"`
+	}
+	if err := pkg.Bind(r, &progress); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// Emit SSE event for progress update
+	eventData := map[string]any{
+		"datasource_id": progress.DatasourceID,
+		"tenant_id":     progress.TenantID,
+		"message":       progress.Message,
+	}
+	if len(progress.LogLines) > 0 {
+		eventData["log_lines"] = progress.LogLines
+	}
+
+	events.Emit("datasource.scan.progress", eventData)
+
+	log.Debug().
+		Str("datasource_id", progress.DatasourceID).
+		Str("tenant_id", progress.TenantID).
+		Str("message", progress.Message).
+		Int("log_lines", len(progress.LogLines)).
+		Msg("scan progress received")
+
+	pkg.JSON(w, map[string]string{"status": "ok"})
+}
+
 // listScanLogs returns scan history for a datasource
 func (s *Server) listScanLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
