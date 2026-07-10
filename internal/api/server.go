@@ -222,6 +222,10 @@ func (s *Server) setupRoutes() {
 				r.Get("/rules", s.listClassificationRules)
 				r.Post("/rules", s.createClassificationRule)
 				r.Get("/models", s.listModels)
+				// Dataset-specific classification endpoints
+				r.Get("/datasets/{id}", s.getDatasetClassification)
+				r.Get("/datasets/{id}/columns", s.getDatasetColumns)
+				r.Post("/datasets/{id}/reclassify", s.reclassifyDataset)
 			})
 
 			// AI Gate

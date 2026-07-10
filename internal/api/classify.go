@@ -501,3 +501,189 @@ func (s *Server) listClassificationRules(w http.ResponseWriter, r *http.Request)
 
 	pkg.JSON(w, rules)
 }
+
+// ColumnClassification represents classification results for a single column
+type ColumnClassification struct {
+	ID                string  `json:"id"`
+	ColumnName        string  `json:"column_name"`
+	DataType          string  `json:"data_type"`
+	SensitivityLevel  string  `json:"sensitivity_level"`
+	Confidence        float64 `json:"confidence"`
+	ClassificationTag string  `json:"classification_tag"`
+	Status            string  `json:"status"`
+}
+
+// DatasetClassificationResponse represents the full classification summary for a dataset
+type DatasetClassificationResponse struct {
+	ID                string                 `json:"id"`
+	Name              string                 `json:"name"`
+	SourceID          string                 `json:"source_id"`
+	TotalColumns      int                    `json:"total_columns"`
+	ClassifiedColumns int                    `json:"classified_columns"`
+	PendingColumns    int                    `json:"pending_columns"`
+	AvgConfidence     float64                `json:"avg_confidence"`
+	Columns           []ColumnClassification `json:"columns"`
+}
+
+// getDatasetClassification returns classification summary for a dataset
+func (s *Server) getDatasetClassification(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	datasetID := chi.URLParam(r, "id")
+
+	// Get classifications for this dataset
+	var classifications []store.Classification
+	err := s.db.SelectContext(ctx, &classifications,
+		"SELECT * FROM classifications WHERE tenant_id = $1 AND dataset_id = $2 ORDER BY confidence DESC",
+		tenantID, datasetID)
+	if err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	// Get datasource info for the dataset name
+	var datasource store.DataSource
+	err = s.db.GetContext(ctx, &datasource,
+		"SELECT * FROM datasources WHERE tenant_id = $1 AND id = $2",
+		tenantID, datasetID)
+	
+	datasetName := datasetID
+	sourceID := ""
+	if err == nil {
+		datasetName = datasource.Name
+		sourceID = datasource.ID
+	}
+
+	// Build column classifications from the classification results
+	columns := make([]ColumnClassification, 0, len(classifications))
+	var totalConfidence float64
+	classifiedCount := 0
+	pendingCount := 0
+
+	for _, c := range classifications {
+		status := "classified"
+		if c.Confidence < 0.7 {
+			status = "review"
+			pendingCount++
+		} else {
+			classifiedCount++
+		}
+
+		sensitivityLevel := determineSensitivityLevel(c.EntityType, c.Confidence)
+
+		columns = append(columns, ColumnClassification{
+			ID:                c.ID,
+			ColumnName:        c.Value,
+			DataType:          "string",
+			SensitivityLevel:  sensitivityLevel,
+			Confidence:        c.Confidence,
+			ClassificationTag: c.EntityType,
+			Status:            status,
+		})
+		totalConfidence += c.Confidence
+	}
+
+	avgConfidence := 0.0
+	if len(classifications) > 0 {
+		avgConfidence = totalConfidence / float64(len(classifications))
+	}
+
+	response := DatasetClassificationResponse{
+		ID:                datasetID,
+		Name:              datasetName,
+		SourceID:          sourceID,
+		TotalColumns:      len(columns),
+		ClassifiedColumns: classifiedCount,
+		PendingColumns:    pendingCount,
+		AvgConfidence:     avgConfidence,
+		Columns:           columns,
+	}
+
+	pkg.JSON(w, response)
+}
+
+// getDatasetColumns returns column-level classification results for a dataset
+func (s *Server) getDatasetColumns(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	datasetID := chi.URLParam(r, "id")
+
+	var classifications []store.Classification
+	err := s.db.SelectContext(ctx, &classifications,
+		"SELECT * FROM classifications WHERE tenant_id = $1 AND dataset_id = $2 ORDER BY confidence DESC",
+		tenantID, datasetID)
+	if err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	columns := make([]ColumnClassification, 0, len(classifications))
+	for _, c := range classifications {
+		status := "classified"
+		if c.Confidence < 0.7 {
+			status = "review"
+		}
+
+		sensitivityLevel := determineSensitivityLevel(c.EntityType, c.Confidence)
+
+		columns = append(columns, ColumnClassification{
+			ID:                c.ID,
+			ColumnName:        c.Value,
+			DataType:          "string",
+			SensitivityLevel:  sensitivityLevel,
+			Confidence:        c.Confidence,
+			ClassificationTag: c.EntityType,
+			Status:            status,
+		})
+	}
+
+	pkg.JSON(w, columns)
+}
+
+// reclassifyDataset triggers a re-classification job for a dataset
+func (s *Server) reclassifyDataset(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	datasetID := chi.URLParam(r, "id")
+
+	// Queue re-classification via Kafka
+	s.kafka.Produce(ctx, "classification-jobs", tenantID, map[string]any{
+		"dataset_id":    datasetID,
+		"tenant_id":     tenantID,
+		"reclassify":    true,
+	})
+
+	pkg.JSON(w, map[string]string{
+		"status":     "queued",
+		"job_id":     datasetID,
+		"message":    "Re-classification job has been queued",
+	})
+}
+
+// determineSensitivityLevel maps entity types to sensitivity levels
+func determineSensitivityLevel(entityType string, confidence float64) string {
+	highSensitivity := map[string]bool{
+		"SSN": true, "CREDIT_CARD": true, "CREDIT_CARD_FORMATTED": true,
+		"BANK_ACCOUNT": true, "ROUTING_NUMBER": true, "IBAN": true,
+		"AWS_ACCESS_KEY": true, "AWS_SECRET_KEY": true, "API_KEY": true,
+		"JWT_TOKEN": true, "MEDICAL_RECORD": true, "HEALTH_INSURANCE_ID": true,
+	}
+
+	mediumSensitivity := map[string]bool{
+		"EMAIL": true, "PHONE": true, "DATE_OF_BIRTH": true,
+		"PASSPORT": true, "DRIVER_LICENSE": true, "VIN": true,
+	}
+
+	if highSensitivity[entityType] {
+		if confidence >= 0.9 {
+			return "critical"
+		}
+		return "high"
+	}
+
+	if mediumSensitivity[entityType] {
+		return "medium"
+	}
+
+	return "low"
+}
