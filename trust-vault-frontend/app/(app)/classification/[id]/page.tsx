@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, use } from 'react'
+import { useEffect, use, useState, useRef } from 'react'
 import { StatCard } from '@/components/base/stat-card'
 import { DataTable, type Column } from '@/components/base/data-table'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { StatusIndicator } from '@/components/base/status-badge'
-import { ArrowLeft, Zap, TrendingUp, Settings, RefreshCw, Loader2, Table } from 'lucide-react'
+import { ArrowLeft, Zap, TrendingUp, Settings, RefreshCw, Loader2, Table, Play, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useDatasetClassification, useDatasetColumns, useClassificationRules, useClassificationModels, useReclassifyDataset, type ColumnClassification } from '@/hooks/use-classification'
 import { toast } from 'sonner'
@@ -77,11 +77,12 @@ const columns: Column<ColumnClassification>[] = [
 export default function ClassificationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)
   const router = useRouter()
-  const { data: dataset, isLoading: datasetLoading, error: datasetError } = useDatasetClassification(id)
-  const { data: columnsData, isLoading: columnsLoading, error: columnsError } = useDatasetColumns(id)
+  const { data: dataset, isLoading: datasetLoading, error: datasetError, refetch: refetchDataset } = useDatasetClassification(id)
+  const { data: columnsData, isLoading: columnsLoading, error: columnsError, refetch: refetchColumns } = useDatasetColumns(id)
   const { data: rulesData, isLoading: rulesLoading } = useClassificationRules()
   const { data: modelsData, isLoading: modelsLoading } = useClassificationModels()
   const reclassify = useReclassifyDataset()
+  const [isClassifying, setIsClassifying] = useState(false)
 
   useEffect(() => {
     if (datasetError) toast.error('Failed to load dataset classification')
@@ -91,7 +92,7 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
   const isLoading = datasetLoading || columnsLoading
   const columnsList: ColumnClassification[] = columnsData || dataset?.columns || []
   const rules: string[] = (rulesData || []).map((r: any) => r.name)
-  const models: string[] = (modelsData || []).map((m: any) => `${m.name} ${m.version || ''}`.trim())
+  const models: string[] = (modelsData || []).map((m: any) => m.name)
 
   const datasetName = dataset?.name || `Dataset ${id}`
   const totalColumns = dataset?.total_columns || columnsList.length
@@ -101,12 +102,23 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
     ? Math.round(columnsList.reduce((a, b) => a + b.confidence, 0) / columnsList.length) 
     : 0)
 
-  const handleReclassify = async () => {
+  // Determine if dataset has been classified before
+  const hasBeenClassified = classifiedColumns > 0 || columnsList.length > 0
+
+  const handleClassify = async () => {
     try {
+      setIsClassifying(true)
       await reclassify.mutateAsync(id)
     } catch {
       // Error handled by hook
     }
+  }
+
+  // Handle classification completion - refetch data and reset state
+  const handleClassificationComplete = () => {
+    setIsClassifying(false)
+    refetchDataset()
+    refetchColumns()
   }
 
   return (
@@ -144,18 +156,27 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-foreground">Column Classifications</h2>
             <button 
-              onClick={handleReclassify}
-              disabled={reclassify.isPending}
+              onClick={handleClassify}
+              disabled={reclassify.isPending || isClassifying}
               className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm font-medium disabled:opacity-50"
             >
-              {reclassify.isPending ? (
+              {reclassify.isPending || isClassifying ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
+              ) : hasBeenClassified ? (
                 <RefreshCw className="h-4 w-4" />
+              ) : (
+                <Play className="h-4 w-4" />
               )}
-              Re-classify
+              {hasBeenClassified ? 'Re-classify' : 'Classify'}
             </button>
           </div>
+
+          {/* Classification Status Card */}
+          <ClassificationStatusCard 
+            datasetId={id} 
+            isClassifying={isClassifying || reclassify.isPending}
+            onComplete={handleClassificationComplete}
+          />
 
           {isLoading ? (
             <div className="flex items-center justify-center py-12">

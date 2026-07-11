@@ -362,8 +362,12 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
       const token = document.cookie.split('; ').find(row => row.startsWith('accessToken='))?.split('=')[1]
       
-      // Add initial log
-      setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Scan started...`])
+      // Add initial log only if not already added
+      setLogs(prev => {
+        const hasStarted = prev.some(log => log.includes('Scan started...'))
+        if (hasStarted) return prev
+        return [...prev, `[${new Date().toLocaleTimeString()}] Scan started...`]
+      })
       
       // Try to connect to SSE endpoint
       try {
@@ -372,7 +376,6 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
         
         es.onopen = () => {
           setIsConnected(true)
-          setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connected to log stream`])
         }
         
         es.onmessage = (event) => {
