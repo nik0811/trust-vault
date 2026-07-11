@@ -237,3 +237,232 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
     </div>
   )
 }
+
+// Classification Status Card - Shows real-time job progress
+function ClassificationStatusCard({ 
+  datasetId, 
+  isClassifying, 
+  onComplete 
+}: { 
+  datasetId: string
+  isClassifying: boolean
+  onComplete: () => void 
+}) {
+  const [logs, setLogs] = useState<string[]>([])
+  const [isConnected, setIsConnected] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [jobStatus, setJobStatus] = useState<'idle' | 'queued' | 'running' | 'completed' | 'failed'>('idle')
+  const [progress, setProgress] = useState({ current: 0, total: 0 })
+  const logsEndRef = useRef<HTMLDivElement>(null)
+  const eventSourceRef = useRef<EventSource | null>(null)
+
+  // Auto-expand when classification starts
+  useEffect(() => {
+    if (isClassifying) {
+      setIsExpanded(true)
+      setJobStatus('queued')
+      setLogs([`[${new Date().toLocaleTimeString()}] Classification job queued...`])
+    }
+  }, [isClassifying])
+
+  // Auto-scroll to bottom when new logs arrive
+  useEffect(() => {
+    if (isExpanded) {
+      logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [logs, isExpanded])
+
+  // Connect to SSE when classification starts
+  useEffect(() => {
+    if (isClassifying && !eventSourceRef.current) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+      const token = document.cookie.split('; ').find(row => row.startsWith('accessToken='))?.split('=')[1]
+      
+      try {
+        const es = new EventSource(`${apiUrl}/api/v1/events/stream?token=${token}`)
+        eventSourceRef.current = es
+        
+        es.onopen = () => {
+          setIsConnected(true)
+          setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connected to classification stream`])
+        }
+        
+        es.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data)
+            // Only process events for this dataset's classification
+            if (data.dataset_id === datasetId && data.type === 'classification') {
+              // Handle progress updates
+              if (data.progress) {
+                setProgress({ current: data.progress.current || 0, total: data.progress.total || 0 })
+                setJobStatus('running')
+              }
+              // Handle log messages
+              if (data.message && typeof data.message === 'string' && data.message.trim()) {
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`])
+              }
+              // Handle status updates
+              if (data.status === 'completed') {
+                setJobStatus('completed')
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification completed - ${data.columns_classified || 0} columns classified`])
+                setTimeout(() => onComplete(), 1000)
+              } else if (data.status === 'failed') {
+                setJobStatus('failed')
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✗ Classification failed: ${data.error || 'Unknown error'}`])
+              } else if (data.status === 'running') {
+                setJobStatus('running')
+              }
+            }
+          } catch {
+            // Ignore parse errors for non-JSON messages
+          }
+        }
+        
+        es.onerror = () => {
+          setIsConnected(false)
+        }
+      } catch (err) {
+        console.error('SSE connection failed:', err)
+      }
+    }
+    
+    // Cleanup when classification stops
+    if (!isClassifying && eventSourceRef.current) {
+      eventSourceRef.current.close()
+      eventSourceRef.current = null
+      setIsConnected(false)
+      
+      // If job didn't complete via SSE, simulate completion after a delay
+      if (jobStatus === 'queued' || jobStatus === 'running') {
+        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification job submitted`])
+        setJobStatus('completed')
+        setTimeout(() => onComplete(), 2000)
+      }
+    }
+    
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+    }
+  }, [isClassifying, datasetId, onComplete, jobStatus])
+
+  // Don't render if no activity
+  if (!isClassifying && logs.length === 0) {
+    return null
+  }
+
+  const getStatusIcon = () => {
+    switch (jobStatus) {
+      case 'completed':
+        return <CheckCircle2 className="h-4 w-4 text-green-500" />
+      case 'failed':
+        return <XCircle className="h-4 w-4 text-red-500" />
+      case 'running':
+        return <Loader2 className="h-4 w-4 text-yellow-500 animate-spin" />
+      case 'queued':
+        return <Clock className="h-4 w-4 text-blue-500" />
+      default:
+        return <Clock className="h-4 w-4 text-muted-foreground" />
+    }
+  }
+
+  const getStatusLabel = () => {
+    switch (jobStatus) {
+      case 'completed':
+        return 'Completed'
+      case 'failed':
+        return 'Failed'
+      case 'running':
+        return 'Running'
+      case 'queued':
+        return 'Queued'
+      default:
+        return 'Idle'
+    }
+  }
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden mb-6">
+      {/* Collapsible Header */}
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <h3 className="text-sm font-semibold text-foreground">Classification Status</h3>
+          {isClassifying && (
+            <span className="flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full">
+              <span className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
+              Live
+            </span>
+          )}
+          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+            {getStatusIcon()}
+            {getStatusLabel()}
+          </span>
+          {progress.total > 0 && (
+            <span className="text-xs text-muted-foreground">
+              ({progress.current}/{progress.total} columns)
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground">{logs.length} entries</span>
+          <svg 
+            className={`h-4 w-4 text-muted-foreground transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none" 
+            viewBox="0 0 24 24" 
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+      
+      {/* Collapsible Content */}
+      {isExpanded && (
+        <div className="border-t border-border">
+          {/* Progress Bar */}
+          {progress.total > 0 && (
+            <div className="px-4 py-2 border-b border-border">
+              <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                <span>Progress</span>
+                <span>{Math.round((progress.current / progress.total) * 100)}%</span>
+              </div>
+              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-primary transition-all duration-300"
+                  style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+          
+          {/* Logs */}
+          <div className="max-h-48 overflow-y-auto p-4 font-mono text-xs bg-background/50">
+            {logs.length === 0 ? (
+              <p className="text-muted-foreground">Waiting for classification to start...</p>
+            ) : (
+              logs.map((log, i) => (
+                <div 
+                  key={i} 
+                  className={`py-0.5 ${
+                    log.includes('✓') ? 'text-green-600 dark:text-green-400' :
+                    log.includes('✗') ? 'text-red-600 dark:text-red-400' :
+                    log.includes('Connected') ? 'text-blue-600 dark:text-blue-400' :
+                    'text-muted-foreground'
+                  }`}
+                >
+                  {log}
+                </div>
+              ))
+            )}
+            <div ref={logsEndRef} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
