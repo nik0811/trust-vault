@@ -420,7 +420,9 @@ var builtInModels = []map[string]any{
 		"accuracy":    0.96,
 		"speed":       "4M chars/sec",
 		"default":     true,
-		"type":        "pattern",
+		"active":      true,
+		"type":        "Pattern",
+		"version":     "1.0.0",
 		"entity_types": []string{
 			"EMAIL", "PHONE", "SSN", "CREDIT_CARD", "IP_ADDRESS", "DATE_OF_BIRTH",
 			"PASSPORT", "DRIVER_LICENSE", "IBAN", "MAC_ADDRESS", "AWS_ACCESS_KEY",
@@ -430,12 +432,14 @@ var builtInModels = []map[string]any{
 	{
 		"id":          "trustvault-pii-pro",
 		"name":        "TrustVault PII Pro",
-		"description": "High-accuracy PII detection using GLiNER NER model. Best for comprehensive classification.",
+		"description": "High-accuracy PII detection using advanced ML model. Best for comprehensive classification.",
 		"size":        "330MB",
 		"accuracy":    0.98,
 		"speed":       "2M chars/sec",
 		"default":     false,
-		"type":        "ml",
+		"active":      true,
+		"type":        "ML",
+		"version":     "1.0.0",
 		"entity_types": []string{
 			"EMAIL", "PHONE", "SSN", "CREDIT_CARD", "IP_ADDRESS", "DATE_OF_BIRTH",
 			"PASSPORT", "DRIVER_LICENSE", "IBAN", "BANK_ACCOUNT", "ROUTING_NUMBER",
@@ -452,7 +456,9 @@ var builtInModels = []map[string]any{
 		"accuracy":    0.97,
 		"speed":       "3M chars/sec",
 		"default":     false,
-		"type":        "ml",
+		"active":      true,
+		"type":        "ML",
+		"version":     "1.0.0",
 		"entity_types": []string{
 			"MEDICAL_RECORD", "HEALTH_INSURANCE_ID", "DIAGNOSIS_CODE", "PROCEDURE_CODE",
 			"MEDICATION", "PATIENT_ID", "PROVIDER_ID", "DATE_OF_SERVICE",
