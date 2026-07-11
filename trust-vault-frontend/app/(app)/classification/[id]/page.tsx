@@ -281,7 +281,7 @@ function ClassificationStatusCard({
       try {
         // Remove /api/v1 suffix if present since we add it below
         const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '')
-        const es = new EventSource(`${baseUrl}/api/v1/events?token=${token}`)
+        const es = new EventSource(`${baseUrl}/api/v1/notifications/events?token=${token}`)
         eventSourceRef.current = es
         
         es.onopen = () => {
