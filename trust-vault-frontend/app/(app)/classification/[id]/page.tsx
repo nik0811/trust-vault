@@ -279,7 +279,9 @@ function ClassificationStatusCard({
       const token = document.cookie.split('; ').find(row => row.startsWith('accessToken='))?.split('=')[1]
       
       try {
-        const es = new EventSource(`${apiUrl}/api/v1/events/stream?token=${token}`)
+        // Remove /api/v1 suffix if present since we add it below
+        const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '')
+        const es = new EventSource(`${baseUrl}/api/v1/events?token=${token}`)
         eventSourceRef.current = es
         
         es.onopen = () => {
