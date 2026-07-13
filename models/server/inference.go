@@ -167,8 +167,22 @@ func (s *GLiNERSession) RunInference(
 	}
 	defer spanMaskTensor.Destroy()
 
-	// Create output tensor
-	outputTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(int64(batchSize), int64(numSpans), int64(len(defaultEntityTypes))))
+	// Create output tensor - shape is [batch_size, num_words, max_width, num_classes]
+	// For token-level GLiNER, the output is per-word, per-span-width, per-class
+	numClasses := int64(len(defaultEntityTypes))
+	maxWidth := int64(12)
+	numWords := int64(0)
+	// Count actual words from words_mask
+	for _, m := range wordsMask {
+		if m == 1 {
+			numWords++
+		}
+	}
+	if numWords == 0 {
+		numWords = 1
+	}
+	
+	outputTensor, err := ort.NewEmptyTensor[float32](ort.NewShape(int64(batchSize), numWords, maxWidth, numClasses))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create output tensor: %w", err)
 	}
