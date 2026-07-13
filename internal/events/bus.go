@@ -156,7 +156,11 @@ func shouldBroadcast(eventName string) bool {
 		"job.started":               true,
 		"job.completed":             true,
 		"job.failed":                true,
+		"classification.started":    true,
+		"classification.progress":   true,
 		"classification.completed":  true,
+		"classification.failed":     true,
+		"classification.queued":     true,
 		"policy.violated":           true,
 		"notification.created":      true,
 	}

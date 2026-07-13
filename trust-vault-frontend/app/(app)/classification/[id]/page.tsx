@@ -298,8 +298,9 @@ function ClassificationStatusCard({
         es.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data)
-            // Only process events for this dataset's classification
-            if (data.dataset_id === datasetId && data.type === 'classification') {
+            // Only process classification events for this dataset
+            // Events come with dataset_id in the data payload
+            if (data.dataset_id === datasetId) {
               // Handle progress updates
               if (data.progress) {
                 setProgress({ current: data.progress.current || 0, total: data.progress.total || 0 })
