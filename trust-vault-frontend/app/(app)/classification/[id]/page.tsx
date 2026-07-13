@@ -98,9 +98,11 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
   const totalColumns = dataset?.total_columns || columnsList.length
   const classifiedColumns = dataset?.classified_columns || columnsList.filter(c => c.status === 'classified').length
   const pendingColumns = dataset?.pending_columns || columnsList.filter(c => c.status === 'pending').length
-  const avgConfidence = dataset?.avg_confidence || (columnsList.length > 0 
-    ? Math.round(columnsList.reduce((a, b) => a + b.confidence, 0) / columnsList.length) 
-    : 0)
+  const avgConfidence = dataset?.avg_confidence 
+    ? (dataset.avg_confidence * 100).toFixed(1)
+    : (columnsList.length > 0 
+      ? (columnsList.reduce((a, b) => a + (b.confidence || 0), 0) / columnsList.length * 100).toFixed(1)
+      : '0')
 
   // Determine if dataset has been classified before
   const hasBeenClassified = classifiedColumns > 0 || columnsList.length > 0
