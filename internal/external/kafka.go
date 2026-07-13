@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -170,7 +171,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			"message":    "Classification started",
 		})
 
-		// Get datasource info to fetch column data
+		// Get datasource info
 		var ds store.DataSource
 		err := db.GetContext(ctx, &ds, 
 			`SELECT * FROM datasources WHERE id = $1 AND tenant_id = $2`,
@@ -185,59 +186,95 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			return
 		}
 
-		// For now, use pattern-based classification on column names
-		// In production, this would sample actual data from the datasource
-		columnsClassified := 0
-		
-		// Simulate column classification based on common patterns
-		commonColumns := []struct {
-			name       string
-			entityType string
-			confidence float64
-		}{
-			{"email", "EMAIL", 0.95},
-			{"phone", "PHONE", 0.90},
-			{"ssn", "SSN", 0.95},
-			{"social_security", "SSN", 0.95},
-			{"credit_card", "CREDIT_CARD", 0.95},
-			{"card_number", "CREDIT_CARD", 0.90},
-			{"first_name", "PERSON_NAME", 0.85},
-			{"last_name", "PERSON_NAME", 0.85},
-			{"name", "PERSON_NAME", 0.80},
-			{"address", "ADDRESS", 0.85},
-			{"street", "ADDRESS", 0.80},
-			{"city", "ADDRESS", 0.75},
-			{"zip", "ZIP_CODE", 0.90},
-			{"postal_code", "ZIP_CODE", 0.90},
-			{"dob", "DATE_OF_BIRTH", 0.90},
-			{"date_of_birth", "DATE_OF_BIRTH", 0.95},
-			{"birth_date", "DATE_OF_BIRTH", 0.95},
-			{"ip_address", "IP_ADDRESS", 0.90},
-			{"ip", "IP_ADDRESS", 0.85},
+		// Try to fetch real schema from DataHub
+		datahub := k.datahub
+		if datahub == nil {
+			datahub = NewDataHub("")
 		}
 
-		// Store classification results for each detected column pattern
-		for _, col := range commonColumns {
-			_, err := db.ExecContext(ctx,
-				`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, created_at)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
-				generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, col.entityType, col.name, col.confidence,
-				fmt.Sprintf(`{"column_name": "%s", "classification_source": "pattern_matching"}`, col.name))
-			if err != nil {
-				log.Error().Err(err).Str("column", col.name).Msg("Failed to store classification")
-				continue
-			}
-			columnsClassified++
+		// Build DataHub URN for this datasource
+		platform := ds.Type
+		if platform == "postgresql" {
+			platform = "postgres"
+		}
+		
+		// Search for datasets from this datasource in DataHub
+		events.Emit("classification.progress", map[string]any{
+			"tenant_id":  job.TenantID,
+			"dataset_id": job.DatasetID,
+			"message":    "Fetching schema from DataHub...",
+		})
 
-			// Emit progress event
+		datasetURNs, err := datahub.SearchDatasets(ctx, platform, ds.Name)
+		
+		columnsClassified := 0
+		var allColumns []DatasetColumn
+
+		if err != nil || len(datasetURNs) == 0 {
+			log.Warn().Err(err).Str("datasource", ds.Name).Msg("Could not fetch datasets from DataHub, using pattern-based classification")
 			events.Emit("classification.progress", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
-				"message":    "Classified column: " + col.name + " as " + col.entityType,
-				"progress": map[string]int{
-					"current": columnsClassified,
-					"total":   len(commonColumns),
-				},
+				"message":    "DataHub schema not available, using pattern-based classification",
+			})
+		} else {
+			// Fetch schema for each dataset found
+			for _, urn := range datasetURNs {
+				columns, err := datahub.GetDatasetSchema(ctx, urn)
+				if err != nil {
+					log.Warn().Err(err).Str("urn", urn).Msg("Failed to get schema for dataset")
+					continue
+				}
+				allColumns = append(allColumns, columns...)
+			}
+			log.Info().Int("datasets", len(datasetURNs)).Int("columns", len(allColumns)).Msg("Fetched schema from DataHub")
+		}
+
+		// If we got real columns from DataHub, classify them
+		if len(allColumns) > 0 {
+			events.Emit("classification.progress", map[string]any{
+				"tenant_id":  job.TenantID,
+				"dataset_id": job.DatasetID,
+				"message":    fmt.Sprintf("Found %d columns to classify", len(allColumns)),
+			})
+
+			for i, col := range allColumns {
+				// Classify based on column name patterns
+				entityType, confidence := classifyColumnName(col.Name)
+				if entityType == "" {
+					continue
+				}
+
+				_, err := db.ExecContext(ctx,
+					`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, created_at)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+					 ON CONFLICT DO NOTHING`,
+					generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, entityType, col.Name, confidence,
+					fmt.Sprintf(`{"column_name": "%s", "data_type": "%s", "classification_source": "datahub_schema"}`, col.Name, col.Type))
+				if err != nil {
+					log.Error().Err(err).Str("column", col.Name).Msg("Failed to store classification")
+					continue
+				}
+				columnsClassified++
+
+				// Emit progress event
+				events.Emit("classification.progress", map[string]any{
+					"tenant_id":  job.TenantID,
+					"dataset_id": job.DatasetID,
+					"message":    fmt.Sprintf("Classified: %s → %s (%.0f%%)", col.Name, entityType, confidence*100),
+					"progress": map[string]int{
+						"current": i + 1,
+						"total":   len(allColumns),
+					},
+				})
+			}
+		} else {
+			// Fallback: No DataHub data, skip classification
+			log.Warn().Str("dataset_id", job.DatasetID).Msg("No schema available for classification")
+			events.Emit("classification.progress", map[string]any{
+				"tenant_id":  job.TenantID,
+				"dataset_id": job.DatasetID,
+				"message":    "No schema data available. Please run a scan first to discover the schema.",
 			})
 		}
 
@@ -253,9 +290,113 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			"dataset_id":         job.DatasetID,
 			"status":             "completed",
 			"columns_classified": columnsClassified,
-			"message":            "Classification completed successfully",
+			"message":            fmt.Sprintf("Classification completed - %d columns classified", columnsClassified),
 		})
 	}
+}
+
+// classifyColumnName determines the entity type based on column name patterns
+func classifyColumnName(name string) (entityType string, confidence float64) {
+	// Normalize column name to lowercase for matching
+	lowerName := strings.ToLower(name)
+	
+	// High confidence patterns (exact or near-exact matches)
+	highConfidence := map[string]string{
+		"email":           "EMAIL",
+		"email_address":   "EMAIL",
+		"e_mail":          "EMAIL",
+		"ssn":             "SSN",
+		"social_security": "SSN",
+		"social_security_number": "SSN",
+		"credit_card":     "CREDIT_CARD",
+		"credit_card_number": "CREDIT_CARD",
+		"card_number":     "CREDIT_CARD",
+		"cc_number":       "CREDIT_CARD",
+		"phone":           "PHONE",
+		"phone_number":    "PHONE",
+		"telephone":       "PHONE",
+		"mobile":          "PHONE",
+		"cell_phone":      "PHONE",
+		"date_of_birth":   "DATE_OF_BIRTH",
+		"birth_date":      "DATE_OF_BIRTH",
+		"dob":             "DATE_OF_BIRTH",
+		"birthdate":       "DATE_OF_BIRTH",
+		"ip_address":      "IP_ADDRESS",
+		"ipaddress":       "IP_ADDRESS",
+		"passport":        "PASSPORT",
+		"passport_number": "PASSPORT",
+		"driver_license":  "DRIVER_LICENSE",
+		"drivers_license": "DRIVER_LICENSE",
+		"license_number":  "DRIVER_LICENSE",
+	}
+	
+	if et, ok := highConfidence[lowerName]; ok {
+		return et, 0.95
+	}
+	
+	// Medium confidence patterns (contains keywords)
+	if strings.Contains(lowerName, "email") {
+		return "EMAIL", 0.85
+	}
+	if strings.Contains(lowerName, "ssn") || strings.Contains(lowerName, "social_sec") {
+		return "SSN", 0.85
+	}
+	if strings.Contains(lowerName, "credit") && strings.Contains(lowerName, "card") {
+		return "CREDIT_CARD", 0.85
+	}
+	if strings.Contains(lowerName, "phone") || strings.Contains(lowerName, "mobile") || strings.Contains(lowerName, "cell") {
+		return "PHONE", 0.80
+	}
+	if strings.Contains(lowerName, "birth") && (strings.Contains(lowerName, "date") || strings.Contains(lowerName, "day")) {
+		return "DATE_OF_BIRTH", 0.85
+	}
+	if strings.Contains(lowerName, "passport") {
+		return "PASSPORT", 0.80
+	}
+	if strings.Contains(lowerName, "license") && strings.Contains(lowerName, "driv") {
+		return "DRIVER_LICENSE", 0.80
+	}
+	
+	// Lower confidence patterns
+	if lowerName == "first_name" || lowerName == "firstname" || lowerName == "fname" {
+		return "PERSON_NAME", 0.80
+	}
+	if lowerName == "last_name" || lowerName == "lastname" || lowerName == "lname" || lowerName == "surname" {
+		return "PERSON_NAME", 0.80
+	}
+	if lowerName == "name" || lowerName == "full_name" || lowerName == "fullname" {
+		return "PERSON_NAME", 0.70
+	}
+	if lowerName == "address" || lowerName == "street_address" || lowerName == "street" {
+		return "ADDRESS", 0.75
+	}
+	if lowerName == "city" {
+		return "ADDRESS", 0.60
+	}
+	if lowerName == "state" || lowerName == "province" {
+		return "ADDRESS", 0.55
+	}
+	if lowerName == "zip" || lowerName == "zipcode" || lowerName == "zip_code" || lowerName == "postal_code" || lowerName == "postcode" {
+		return "ZIP_CODE", 0.85
+	}
+	if lowerName == "country" {
+		return "ADDRESS", 0.50
+	}
+	if lowerName == "ip" {
+		return "IP_ADDRESS", 0.70
+	}
+	if strings.Contains(lowerName, "salary") || strings.Contains(lowerName, "income") || strings.Contains(lowerName, "wage") {
+		return "FINANCIAL", 0.75
+	}
+	if strings.Contains(lowerName, "bank") && strings.Contains(lowerName, "account") {
+		return "BANK_ACCOUNT", 0.85
+	}
+	if strings.Contains(lowerName, "routing") && strings.Contains(lowerName, "number") {
+		return "ROUTING_NUMBER", 0.85
+	}
+	
+	// No match
+	return "", 0
 }
 
 // ScanJobMessage represents a scan job from Kafka

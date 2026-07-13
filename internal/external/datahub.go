@@ -104,3 +104,104 @@ func (d *DataHub) EmitLineage(ctx context.Context, event map[string]any) error {
 	}
 	return nil
 }
+
+// DatasetColumn represents a column in a dataset schema
+type DatasetColumn struct {
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Description string `json:"description,omitempty"`
+	Nullable    bool   `json:"nullable"`
+}
+
+// GetDatasetSchema fetches the schema (columns) for a dataset from DataHub
+func (d *DataHub) GetDatasetSchema(ctx context.Context, urn string) ([]DatasetColumn, error) {
+	query := `query getDatasetSchema($urn: String!) {
+		dataset(urn: $urn) {
+			schemaMetadata {
+				fields {
+					fieldPath
+					nativeDataType
+					description
+					nullable
+				}
+			}
+		}
+	}`
+	
+	var result struct {
+		Dataset struct {
+			SchemaMetadata struct {
+				Fields []struct {
+					FieldPath      string `json:"fieldPath"`
+					NativeDataType string `json:"nativeDataType"`
+					Description    string `json:"description"`
+					Nullable       bool   `json:"nullable"`
+				} `json:"fields"`
+			} `json:"schemaMetadata"`
+		} `json:"dataset"`
+	}
+	
+	err := d.GraphQL(ctx, query, map[string]any{"urn": urn}, &result)
+	if err != nil {
+		return nil, err
+	}
+	
+	columns := make([]DatasetColumn, 0, len(result.Dataset.SchemaMetadata.Fields))
+	for _, f := range result.Dataset.SchemaMetadata.Fields {
+		columns = append(columns, DatasetColumn{
+			Name:        f.FieldPath,
+			Type:        f.NativeDataType,
+			Description: f.Description,
+			Nullable:    f.Nullable,
+		})
+	}
+	
+	return columns, nil
+}
+
+// SearchDatasets searches for datasets in DataHub by platform/database
+func (d *DataHub) SearchDatasets(ctx context.Context, platform, database string) ([]string, error) {
+	query := `query searchDatasets($input: SearchInput!) {
+		search(input: $input) {
+			searchResults {
+				entity {
+					urn
+				}
+			}
+		}
+	}`
+	
+	searchQuery := fmt.Sprintf("platform:%s", platform)
+	if database != "" {
+		searchQuery += fmt.Sprintf(" AND database:%s", database)
+	}
+	
+	var result struct {
+		Search struct {
+			SearchResults []struct {
+				Entity struct {
+					URN string `json:"urn"`
+				} `json:"entity"`
+			} `json:"searchResults"`
+		} `json:"search"`
+	}
+	
+	err := d.GraphQL(ctx, query, map[string]any{
+		"input": map[string]any{
+			"type":  "DATASET",
+			"query": searchQuery,
+			"start": 0,
+			"count": 100,
+		},
+	}, &result)
+	if err != nil {
+		return nil, err
+	}
+	
+	urns := make([]string, 0, len(result.Search.SearchResults))
+	for _, r := range result.Search.SearchResults {
+		urns = append(urns, r.Entity.URN)
+	}
+	
+	return urns, nil
+}
