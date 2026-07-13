@@ -523,13 +523,25 @@ func (s *Server) healthReady(w http.ResponseWriter, r *http.Request) {
 // Middleware
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var tokenStr string
+		
+		// First check Authorization header
 		auth := r.Header.Get("Authorization")
-		if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+		if auth != "" && strings.HasPrefix(auth, "Bearer ") {
+			tokenStr = strings.TrimPrefix(auth, "Bearer ")
+		}
+		
+		// Fallback to query parameter (for SSE/EventSource which can't set headers)
+		if tokenStr == "" {
+			tokenStr = r.URL.Query().Get("token")
+		}
+		
+		if tokenStr == "" {
 			pkg.Error(w, pkg.ErrUnauthorized, http.StatusUnauthorized)
 			return
 		}
 
-		claims, err := pkg.ValidateToken(strings.TrimPrefix(auth, "Bearer "))
+		claims, err := pkg.ValidateToken(tokenStr)
 		if err != nil {
 			pkg.Error(w, pkg.ErrUnauthorized, http.StatusUnauthorized)
 			return
