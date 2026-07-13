@@ -2,7 +2,10 @@ module github.com/trustvault/classifier
 
 go 1.22
 
-require github.com/rs/zerolog v1.33.0
+require (
+	github.com/rs/zerolog v1.33.0
+	github.com/yalue/onnxruntime_go v1.13.0
+)
 
 require (
 	github.com/mattn/go-colorable v0.1.13 // indirect

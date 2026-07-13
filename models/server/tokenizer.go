@@ -5,21 +5,25 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"unicode/utf8"
 )
 
 // Tokenizer handles text tokenization for the GLiNER model
 type Tokenizer struct {
-	vocab       map[string]int
-	reverseVocab map[int]string
+	vocab         map[string]int
+	reverseVocab  map[int]string
 	specialTokens map[string]int
-	maxLength   int
+	maxLength     int
+	unkTokenID    int
+	padTokenID    int
+	clsTokenID    int
+	sepTokenID    int
 }
 
 // TokenizerConfig represents the tokenizer.json structure
 type TokenizerConfig struct {
 	Model struct {
 		Vocab map[string]int `json:"vocab"`
+		Type  string         `json:"type"`
 	} `json:"model"`
 	AddedTokens []struct {
 		ID      int    `json:"id"`
@@ -29,6 +33,9 @@ type TokenizerConfig struct {
 	Truncation struct {
 		MaxLength int `json:"max_length"`
 	} `json:"truncation"`
+	PreTokenizer struct {
+		Type string `json:"type"`
+	} `json:"pre_tokenizer"`
 }
 
 // NewTokenizer loads a tokenizer from a JSON file
@@ -48,6 +55,10 @@ func NewTokenizer(path string) (*Tokenizer, error) {
 		reverseVocab:  make(map[int]string),
 		specialTokens: make(map[string]int),
 		maxLength:     512,
+		unkTokenID:    0,
+		padTokenID:    0,
+		clsTokenID:    1,
+		sepTokenID:    2,
 	}
 
 	if config.Truncation.MaxLength > 0 {
@@ -61,8 +72,19 @@ func NewTokenizer(path string) (*Tokenizer, error) {
 
 	// Add special tokens
 	for _, st := range config.AddedTokens {
-		if st.Special {
-			t.specialTokens[st.Content] = st.ID
+		t.specialTokens[st.Content] = st.ID
+		t.reverseVocab[st.ID] = st.Content
+		
+		// Identify common special tokens
+		switch st.Content {
+		case "[UNK]", "<unk>":
+			t.unkTokenID = st.ID
+		case "[PAD]", "<pad>":
+			t.padTokenID = st.ID
+		case "[CLS]", "<s>":
+			t.clsTokenID = st.ID
+		case "[SEP]", "</s>":
+			t.sepTokenID = st.ID
 		}
 	}
 
@@ -77,12 +99,7 @@ func (t *Tokenizer) Encode(text string) ([]int, error) {
 	}
 
 	tokens := t.tokenize(text)
-	ids := make([]int, 0, len(tokens)+2)
-
-	// Add [CLS] token if exists
-	if clsID, ok := t.specialTokens["[CLS]"]; ok {
-		ids = append(ids, clsID)
-	}
+	ids := make([]int, 0, len(tokens))
 
 	for _, token := range tokens {
 		if id, ok := t.vocab[token]; ok {
@@ -90,16 +107,15 @@ func (t *Tokenizer) Encode(text string) ([]int, error) {
 		} else if id, ok := t.vocab[strings.ToLower(token)]; ok {
 			ids = append(ids, id)
 		} else {
-			// Unknown token - use [UNK] or skip
-			if unkID, ok := t.specialTokens["[UNK]"]; ok {
-				ids = append(ids, unkID)
+			// Try subword tokenization
+			subIDs := t.tokenizeSubword(token)
+			if len(subIDs) > 0 {
+				ids = append(ids, subIDs...)
+			} else {
+				// Unknown token
+				ids = append(ids, t.unkTokenID)
 			}
 		}
-	}
-
-	// Add [SEP] token if exists
-	if sepID, ok := t.specialTokens["[SEP]"]; ok {
-		ids = append(ids, sepID)
 	}
 
 	// Truncate if necessary
@@ -110,17 +126,83 @@ func (t *Tokenizer) Encode(text string) ([]int, error) {
 	return ids, nil
 }
 
-// tokenize splits text into tokens using WordPiece-like algorithm
+// EncodeWithSpecialTokens adds CLS and SEP tokens
+func (t *Tokenizer) EncodeWithSpecialTokens(text string) ([]int, error) {
+	ids, err := t.Encode(text)
+	if err != nil {
+		return nil, err
+	}
+
+	// Add [CLS] at start and [SEP] at end
+	result := make([]int, 0, len(ids)+2)
+	result = append(result, t.clsTokenID)
+	result = append(result, ids...)
+	result = append(result, t.sepTokenID)
+
+	return result, nil
+}
+
+// tokenize splits text into tokens
 func (t *Tokenizer) tokenize(text string) []string {
 	tokens := make([]string, 0)
 	words := strings.Fields(text)
 
 	for _, word := range words {
+		// Check if word is in vocab directly
+		if _, ok := t.vocab[word]; ok {
+			tokens = append(tokens, word)
+			continue
+		}
+		if _, ok := t.vocab[strings.ToLower(word)]; ok {
+			tokens = append(tokens, strings.ToLower(word))
+			continue
+		}
+
+		// Apply WordPiece/BPE tokenization
 		subTokens := t.wordPieceTokenize(word)
 		tokens = append(tokens, subTokens...)
 	}
 
 	return tokens
+}
+
+// tokenizeSubword attempts to break a word into subwords
+func (t *Tokenizer) tokenizeSubword(word string) []int {
+	ids := make([]int, 0)
+	remaining := word
+
+	for len(remaining) > 0 {
+		found := false
+		for end := len(remaining); end > 0; end-- {
+			subword := remaining[:end]
+			if len(ids) > 0 {
+				subword = "##" + subword
+			}
+
+			if id, ok := t.vocab[subword]; ok {
+				ids = append(ids, id)
+				remaining = remaining[end:]
+				found = true
+				break
+			}
+			if id, ok := t.vocab[strings.ToLower(subword)]; ok {
+				ids = append(ids, id)
+				remaining = remaining[end:]
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			// Skip one character
+			remaining = remaining[1:]
+			if len(remaining) == 0 {
+				ids = append(ids, t.unkTokenID)
+			}
+		}
+	}
+
+	return ids
 }
 
 // wordPieceTokenize applies WordPiece tokenization to a single word
@@ -131,20 +213,26 @@ func (t *Tokenizer) wordPieceTokenize(word string) []string {
 
 	tokens := make([]string, 0)
 	start := 0
-	wordLen := utf8.RuneCountInString(word)
+	wordRunes := []rune(word)
+	wordLen := len(wordRunes)
 
 	for start < wordLen {
 		end := wordLen
 		found := false
 
 		for end > start {
-			substr := string([]rune(word)[start:end])
+			substr := string(wordRunes[start:end])
 			if start > 0 {
 				substr = "##" + substr
 			}
 
 			if _, ok := t.vocab[substr]; ok {
 				tokens = append(tokens, substr)
+				found = true
+				break
+			}
+			if _, ok := t.vocab[strings.ToLower(substr)]; ok {
+				tokens = append(tokens, strings.ToLower(substr))
 				found = true
 				break
 			}
@@ -202,4 +290,67 @@ func (t *Tokenizer) Decode(ids []int) string {
 	}
 
 	return result.String()
+}
+
+// GetVocabSize returns the vocabulary size
+func (t *Tokenizer) GetVocabSize() int {
+	return len(t.vocab)
+}
+
+// GetSpecialTokenID returns the ID for a special token
+func (t *Tokenizer) GetSpecialTokenID(token string) (int, bool) {
+	id, ok := t.specialTokens[token]
+	return id, ok
+}
+
+// TokenizeWords tokenizes text and returns word boundaries
+func (t *Tokenizer) TokenizeWords(text string) ([]int, []int, []string) {
+	words := strings.Fields(text)
+	var allIDs []int
+	var wordsMask []int
+	
+	for _, word := range words {
+		wordTokens := t.wordPieceTokenize(word)
+		for i, token := range wordTokens {
+			if id, ok := t.vocab[token]; ok {
+				allIDs = append(allIDs, id)
+			} else {
+				allIDs = append(allIDs, t.unkTokenID)
+			}
+			
+			// First subword of each word gets mask = 1
+			if i == 0 {
+				wordsMask = append(wordsMask, 1)
+			} else {
+				wordsMask = append(wordsMask, 0)
+			}
+		}
+	}
+	
+	return allIDs, wordsMask, words
+}
+
+// PadSequence pads a sequence to the specified length
+func (t *Tokenizer) PadSequence(ids []int, length int) []int {
+	if len(ids) >= length {
+		return ids[:length]
+	}
+	
+	padded := make([]int, length)
+	copy(padded, ids)
+	for i := len(ids); i < length; i++ {
+		padded[i] = t.padTokenID
+	}
+	return padded
+}
+
+// CreateAttentionMask creates an attention mask for the given IDs
+func (t *Tokenizer) CreateAttentionMask(ids []int, paddedLength int) []int {
+	mask := make([]int, paddedLength)
+	for i := 0; i < len(ids) && i < paddedLength; i++ {
+		if ids[i] != t.padTokenID {
+			mask[i] = 1
+		}
+	}
+	return mask
 }

@@ -21,12 +21,16 @@ type Classifier interface {
 
 // ONNXClassifier uses ONNX Runtime for GLiNER model inference
 type ONNXClassifier struct {
-	modelPath     string
-	tokenizerPath string
-	tokenizer     *Tokenizer
-	ready         bool
-	mu            sync.RWMutex
-	modelType     string // "int8" or "fp16"
+	modelPath      string
+	tokenizerPath  string
+	tokenizer      *Tokenizer
+	session        *GLiNERSession
+	preprocessor   *GLiNERPreprocessor
+	postprocessor  *GLiNERPostprocessor
+	ready          bool
+	onnxAvailable  bool
+	mu             sync.RWMutex
+	modelType      string // "int8" or "fp16"
 }
 
 // NewClassifier creates a new classifier, attempting ONNX first, falling back to patterns
@@ -59,27 +63,45 @@ func NewClassifier(modelPath, tokenizerPath string) (Classifier, error) {
 		tokenizer:     tokenizer,
 		modelType:     modelType,
 		ready:         false,
+		onnxAvailable: false,
 	}
 
 	// Initialize ONNX Runtime session
 	if err := classifier.initONNX(); err != nil {
-		return nil, fmt.Errorf("failed to initialize ONNX: %w", err)
+		log.Warn().Err(err).Msg("ONNX Runtime initialization failed, will use pattern matching")
+		classifier.onnxAvailable = false
+	} else {
+		classifier.onnxAvailable = true
 	}
 
 	classifier.ready = true
 	log.Info().
 		Str("model_path", modelPath).
 		Str("model_type", modelType).
-		Msg("ONNX classifier initialized successfully")
+		Bool("onnx_available", classifier.onnxAvailable).
+		Msg("Classifier initialized")
 
 	return classifier, nil
 }
 
 func (c *ONNXClassifier) initONNX() error {
-	// ONNX Runtime initialization
-	// In production, this would use github.com/yalue/onnxruntime_go
-	// For now, we'll mark as ready and use pattern matching as fallback
-	log.Info().Msg("ONNX Runtime initialization (placeholder - use pattern matching)")
+	// Create ONNX session
+	session, err := NewGLiNERSession(c.modelPath)
+	if err != nil {
+		return fmt.Errorf("failed to create ONNX session: %w", err)
+	}
+	c.session = session
+
+	// Create preprocessor with default entity types
+	c.preprocessor = NewGLiNERPreprocessor(c.tokenizer, defaultEntityTypes)
+
+	// Create postprocessor with default threshold
+	c.postprocessor = NewGLiNERPostprocessor(0.5)
+
+	log.Info().
+		Str("model_path", c.modelPath).
+		Msg("ONNX Runtime initialized successfully")
+
 	return nil
 }
 
@@ -91,27 +113,105 @@ func (c *ONNXClassifier) Classify(ctx context.Context, text string, entityTypes 
 		return nil, fmt.Errorf("classifier not ready")
 	}
 
-	// Tokenize input
-	tokens, err := c.tokenizer.Encode(text)
-	if err != nil {
-		return nil, fmt.Errorf("tokenization failed: %w", err)
+	// Use entity types or defaults
+	if len(entityTypes) == 0 {
+		entityTypes = defaultEntityTypes
 	}
 
-	// Run inference (placeholder - would use ONNX Runtime)
-	entities := c.runInference(text, tokens, entityTypes, threshold)
+	// If ONNX is not available, fall back to pattern matching
+	if !c.onnxAvailable || c.session == nil {
+		log.Debug().Msg("Using pattern matching (ONNX not available)")
+		return runPatternMatching(text, entityTypes, threshold), nil
+	}
+
+	// Run ONNX inference
+	entities, err := c.runONNXInference(text, entityTypes, threshold)
+	if err != nil {
+		log.Warn().Err(err).Msg("ONNX inference failed, falling back to pattern matching")
+		return runPatternMatching(text, entityTypes, threshold), nil
+	}
+
+	// Combine ONNX results with pattern matching for high-confidence patterns
+	patternEntities := runPatternMatching(text, entityTypes, threshold)
+	entities = mergeEntities(entities, patternEntities)
 
 	return entities, nil
 }
 
-func (c *ONNXClassifier) runInference(text string, tokens []int, entityTypes []string, threshold float64) []Entity {
-	// Placeholder for ONNX inference
-	// In production, this would:
-	// 1. Prepare input tensors from tokens
-	// 2. Run ONNX session
-	// 3. Parse output tensors to extract entities
-	
-	// For now, fall back to pattern matching
-	return runPatternMatching(text, entityTypes, threshold)
+func (c *ONNXClassifier) runONNXInference(text string, entityTypes []string, threshold float64) ([]Entity, error) {
+	// Prepare inputs
+	inputs, err := c.preprocessor.PrepareInputs(text, entityTypes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare inputs: %w", err)
+	}
+
+	// Calculate number of spans
+	numSpans := len(inputs.SpanMask)
+
+	// Run inference
+	logits, shape, err := c.session.RunInference(
+		inputs.InputIDs,
+		inputs.AttentionMask,
+		inputs.WordsMask,
+		inputs.TextLengths,
+		inputs.SpanIdx,
+		inputs.SpanMask,
+		1, // batch size
+		len(inputs.InputIDs),
+		numSpans,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("inference failed: %w", err)
+	}
+
+	// Update postprocessor threshold
+	c.postprocessor.threshold = threshold
+
+	// Decode output
+	entities := c.postprocessor.DecodeOutput(logits, shape, inputs, text)
+
+	return entities, nil
+}
+
+// mergeEntities combines ONNX and pattern-based entities, preferring higher confidence
+func mergeEntities(onnxEntities, patternEntities []Entity) []Entity {
+	// Create a map of ONNX entities by position
+	onnxMap := make(map[string]Entity)
+	for _, e := range onnxEntities {
+		key := fmt.Sprintf("%d:%d", e.Start, e.End)
+		onnxMap[key] = e
+	}
+
+	// Add pattern entities that don't overlap with ONNX entities
+	for _, pe := range patternEntities {
+		key := fmt.Sprintf("%d:%d", pe.Start, pe.End)
+		if existing, ok := onnxMap[key]; ok {
+			// Keep the one with higher confidence
+			if pe.Confidence > existing.Confidence {
+				onnxMap[key] = pe
+			}
+		} else {
+			// Check for overlaps
+			overlaps := false
+			for _, oe := range onnxEntities {
+				if pe.Start < oe.End && pe.End > oe.Start {
+					overlaps = true
+					break
+				}
+			}
+			if !overlaps {
+				onnxMap[key] = pe
+			}
+		}
+	}
+
+	// Convert map back to slice
+	result := make([]Entity, 0, len(onnxMap))
+	for _, e := range onnxMap {
+		result = append(result, e)
+	}
+
+	return result
 }
 
 func (c *ONNXClassifier) IsReady() bool {
@@ -121,12 +221,18 @@ func (c *ONNXClassifier) IsReady() bool {
 }
 
 func (c *ONNXClassifier) ModelInfo() map[string]any {
+	inferenceMode := "pattern"
+	if c.onnxAvailable {
+		inferenceMode = "onnx"
+	}
 	return map[string]any{
 		"name":           "GLiNER PII " + strings.ToUpper(c.modelType),
 		"type":           "onnx",
 		"quantization":   c.modelType,
 		"path":           c.modelPath,
 		"tokenizer_path": c.tokenizerPath,
+		"inference_mode": inferenceMode,
+		"onnx_available": c.onnxAvailable,
 	}
 }
 
@@ -138,7 +244,13 @@ func (c *ONNXClassifier) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.ready = false
-	// Close ONNX session
+	
+	if c.session != nil {
+		if err := c.session.Close(); err != nil {
+			log.Error().Err(err).Msg("Error closing ONNX session")
+			return err
+		}
+	}
 	return nil
 }
 
