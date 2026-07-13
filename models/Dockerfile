@@ -1,10 +1,24 @@
-# TrustVault GLiNER Classification Service
-FROM golang:1.22-alpine AS builder
+# TrustVault GLiNER Classification Service with ONNX Runtime
+FROM golang:1.22-bookworm AS builder
 
 WORKDIR /build
 
-# Install build dependencies
-RUN apk add --no-cache gcc musl-dev
+# Install build dependencies including ONNX Runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    wget \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Download and install ONNX Runtime
+ARG ONNXRUNTIME_VERSION=1.17.1
+RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz \
+    && tar -xzf onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz \
+    && cp onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}/lib/* /usr/local/lib/ \
+    && cp -r onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}/include/* /usr/local/include/ \
+    && ldconfig \
+    && rm -rf onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}*
 
 # Copy go mod files
 COPY server/go.mod server/go.sum* ./
@@ -13,25 +27,35 @@ RUN go mod download
 # Copy source code
 COPY server/*.go ./
 
-# Build the binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o classifier .
+# Build the binary with CGO enabled for ONNX Runtime
+ENV CGO_ENABLED=1
+ENV CGO_LDFLAGS="-L/usr/local/lib -lonnxruntime"
+ENV CGO_CFLAGS="-I/usr/local/include"
+RUN go build -ldflags="-s -w" -o classifier .
 
 # Runtime image
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates wget
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy ONNX Runtime library from builder
+COPY --from=builder /usr/local/lib/libonnxruntime.so* /usr/local/lib/
+RUN ldconfig
 
 # Copy binary from builder
 COPY --from=builder /build/classifier /app/classifier
 
 # Create models directory
-RUN mkdir -p /models
+RUN mkdir -p /models /models/lib
 
-# Copy placeholder files (actual models mounted at runtime)
-COPY onnx/.gitkeep /models/
+# Set library path
+ENV LD_LIBRARY_PATH=/usr/local/lib:/models/lib
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
