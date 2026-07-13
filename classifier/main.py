@@ -35,42 +35,56 @@ DEFAULT_ENTITIES = [
     "BANK_ACCOUNT", "TAX_ID", "MEDICAL_RECORD", "HEALTH_INSURANCE_ID"
 ]
 
+def test_model(m) -> bool:
+    """Quick test to verify model works"""
+    try:
+        result = m.predict_entities("test@email.com", ["email"], threshold=0.1)
+        return len(result) > 0
+    except:
+        return False
+
 def load_model():
-    """Load GLiNER model - tries ONNX first, falls back to PyTorch"""
+    """Load GLiNER model - tries local first, falls back to HuggingFace"""
     global model, model_name
+    from gliner import GLiNER
     
     model_dir = os.getenv("MODEL_DIR", "/models")
-    onnx_path = os.path.join(model_dir, "gliner-pii-edge-int8.onnx")
+    hf_model = os.getenv("GLINER_MODEL", "urchade/gliner_small-v2.1")
     
-    # Try ONNX model first
+    # Try local ONNX model first
+    onnx_path = os.path.join(model_dir, "gliner-pii-edge-int8.onnx")
     if os.path.exists(onnx_path):
         try:
-            from gliner import GLiNER
-            model = GLiNER.from_pretrained(model_dir, load_onnx_model=True, onnx_model_file="gliner-pii-edge-int8.onnx")
-            model_name = "gliner-pii-onnx"
-            print(f"Loaded ONNX model from {onnx_path}")
-            return
+            m = GLiNER.from_pretrained(model_dir, load_onnx_model=True, onnx_model_file="gliner-pii-edge-int8.onnx")
+            if test_model(m):
+                model = m
+                model_name = "gliner-pii-onnx"
+                print(f"Loaded ONNX model from {onnx_path}")
+                return
+            print("ONNX model loaded but failed test, trying alternatives...")
         except Exception as e:
-            print(f"ONNX load failed: {e}, trying PyTorch...")
+            print(f"ONNX load failed: {e}")
     
-    # Fall back to PyTorch model
+    # Try local PyTorch model
     pytorch_path = os.path.join(model_dir, "pytorch_model.bin")
     if os.path.exists(pytorch_path):
         try:
-            from gliner import GLiNER
-            model = GLiNER.from_pretrained(model_dir)
-            model_name = "gliner-pii-pytorch"
-            print(f"Loaded PyTorch model from {model_dir}")
-            return
+            m = GLiNER.from_pretrained(model_dir)
+            if test_model(m):
+                model = m
+                model_name = "gliner-pii-pytorch"
+                print(f"Loaded PyTorch model from {model_dir}")
+                return
+            print("PyTorch model loaded but failed test, trying HuggingFace...")
         except Exception as e:
             print(f"PyTorch load failed: {e}")
     
-    # Try loading from HuggingFace as last resort
+    # Load from HuggingFace
     try:
-        from gliner import GLiNER
-        model = GLiNER.from_pretrained("urchade/gliner_small-v2.1")
-        model_name = "gliner-small-v2.1"
-        print("Loaded model from HuggingFace")
+        print(f"Loading model from HuggingFace: {hf_model}")
+        model = GLiNER.from_pretrained(hf_model)
+        model_name = hf_model.split("/")[-1]
+        print(f"Loaded model from HuggingFace: {hf_model}")
     except Exception as e:
         print(f"All model loading failed: {e}")
         model = None
