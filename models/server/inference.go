@@ -116,7 +116,7 @@ func (s *GLiNERSession) RunInference(
 	wordsMask []int64,
 	textLengths []int64,
 	spanIdx []int64,
-	spanMask []int64,
+	spanMask []bool,
 	batchSize int,
 	seqLen int,
 	numSpans int,
@@ -152,7 +152,16 @@ func (s *GLiNERSession) RunInference(
 	}
 	defer spanIdxTensor.Destroy()
 
-	spanMaskTensor, err := ort.NewTensor(ort.NewShape(int64(batchSize), int64(numSpans)), spanMask)
+	// span_mask needs to be bool type - use CustomDataTensor
+	spanMaskBytes := make([]byte, len(spanMask))
+	for i, v := range spanMask {
+		if v {
+			spanMaskBytes[i] = 1
+		} else {
+			spanMaskBytes[i] = 0
+		}
+	}
+	spanMaskTensor, err := ort.NewCustomDataTensor(ort.NewShape(int64(batchSize), int64(numSpans)), spanMaskBytes, ort.TensorElementDataTypeBool)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create span_mask tensor: %w", err)
 	}
@@ -320,19 +329,19 @@ func (p *GLiNERPreprocessor) PrepareInputs(text string, entityTypes []string) (*
 	}, nil
 }
 
-func (p *GLiNERPreprocessor) generateSpanIndices(numWords int) ([]int64, []int64) {
+func (p *GLiNERPreprocessor) generateSpanIndices(numWords int) ([]int64, []bool) {
 	var spanIdx []int64
-	var spanMask []int64
+	var spanMask []bool
 
 	for start := 0; start < numWords; start++ {
 		for width := 1; width <= p.maxWidth; width++ {
 			end := start + width
 			if end <= numWords {
 				spanIdx = append(spanIdx, int64(start), int64(end))
-				spanMask = append(spanMask, 1)
+				spanMask = append(spanMask, true)
 			} else {
 				spanIdx = append(spanIdx, 0, 0)
-				spanMask = append(spanMask, 0)
+				spanMask = append(spanMask, false)
 			}
 		}
 	}
@@ -347,7 +356,7 @@ type GLiNERInputs struct {
 	WordsMask     []int64
 	TextLengths   []int64
 	SpanIdx       []int64
-	SpanMask      []int64
+	SpanMask      []bool
 	SeqLen        int
 	NumWords      int
 	NumSpans      int
