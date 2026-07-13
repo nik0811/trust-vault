@@ -44,49 +44,20 @@ def test_model(m) -> bool:
         return False
 
 def load_model():
-    """Load GLiNER model - tries local first, falls back to HuggingFace"""
+    """Load GLiNER model - uses small model for memory efficiency"""
     global model, model_name
     from gliner import GLiNER
     
-    model_dir = os.getenv("MODEL_DIR", "/models")
+    # Use small model by default for memory efficiency
     hf_model = os.getenv("GLINER_MODEL", "urchade/gliner_small-v2.1")
     
-    # Try local ONNX model first
-    onnx_path = os.path.join(model_dir, "gliner-pii-edge-int8.onnx")
-    if os.path.exists(onnx_path):
-        try:
-            m = GLiNER.from_pretrained(model_dir, load_onnx_model=True, onnx_model_file="gliner-pii-edge-int8.onnx")
-            if test_model(m):
-                model = m
-                model_name = "gliner-pii-onnx"
-                print(f"Loaded ONNX model from {onnx_path}")
-                return
-            print("ONNX model loaded but failed test, trying alternatives...")
-        except Exception as e:
-            print(f"ONNX load failed: {e}")
-    
-    # Try local PyTorch model
-    pytorch_path = os.path.join(model_dir, "pytorch_model.bin")
-    if os.path.exists(pytorch_path):
-        try:
-            m = GLiNER.from_pretrained(model_dir)
-            if test_model(m):
-                model = m
-                model_name = "gliner-pii-pytorch"
-                print(f"Loaded PyTorch model from {model_dir}")
-                return
-            print("PyTorch model loaded but failed test, trying HuggingFace...")
-        except Exception as e:
-            print(f"PyTorch load failed: {e}")
-    
-    # Load from HuggingFace
     try:
-        print(f"Loading model from HuggingFace: {hf_model}")
+        print(f"Loading GLiNER model: {hf_model}")
         model = GLiNER.from_pretrained(hf_model)
         model_name = hf_model.split("/")[-1]
-        print(f"Loaded model from HuggingFace: {hf_model}")
+        print(f"Model loaded successfully: {model_name}")
     except Exception as e:
-        print(f"All model loading failed: {e}")
+        print(f"Model loading failed: {e}")
         model = None
 
 @app.on_event("startup")
