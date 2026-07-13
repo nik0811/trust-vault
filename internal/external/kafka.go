@@ -992,12 +992,14 @@ func (k *Kafka) executeLineageJob(ctx context.Context, db *store.DB, job JobExec
 }
 
 func generateUUID() string {
-	return fmt.Sprintf("%x-%x-%x-%x-%x",
-		time.Now().UnixNano()&0xFFFFFFFF,
-		time.Now().UnixNano()>>32&0xFFFF,
-		time.Now().UnixNano()>>48&0x0FFF|0x4000,
-		time.Now().UnixNano()&0x3FFF|0x8000,
-		time.Now().UnixNano()&0xFFFFFFFFFFFF)
+	// Generate a proper UUID v4 format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+	now := time.Now().UnixNano()
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		uint32(now&0xFFFFFFFF),
+		uint16((now>>32)&0xFFFF),
+		uint16((now>>48)&0x0FFF)|0x4000,
+		uint16(now&0x3FFF)|0x8000,
+		uint64(now)&0xFFFFFFFFFFFF)
 }
 
 func (k *Kafka) Close() {
