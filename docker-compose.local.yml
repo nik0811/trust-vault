@@ -332,26 +332,25 @@ services:
       - trustvault-network
 
   # ===========================================
-  # Classification Service (GLiNER ONNX)
+  # Classification Service (GLiNER Python)
   # ===========================================
 
   trustvault-classifier:
     build:
-      context: ./models
+      context: ./classifier
       dockerfile: Dockerfile
     container_name: trustvault-classifier
     ports:
       - "8085:8085"
     environment:
-      - MODEL_PATH=/models/gliner-pii-edge-int8.onnx
-      - TOKENIZER_PATH=/models/tokenizer.json
+      - MODEL_DIR=/models
       - LOG_LEVEL=info
     volumes:
       - ./models/onnx:/models
     networks:
       - trustvault-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
       interval: 30s
       timeout: 10s
       retries: 3

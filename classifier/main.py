@@ -1,249 +1,175 @@
-"""
-TrustVault GLiNER Classification Service
-
-A high-performance PII/NER classification service using GLiNER zero-shot NER model.
-Runs on CPU with ONNX Runtime for fast inference.
-"""
-
-import os
-import time
-import logging
-from typing import Optional
-from contextlib import asynccontextmanager
-
-import uvicorn
+"""TrustVault GLiNER Classification Service - Minimal Python sidecar"""
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from typing import Optional
+import time
+import os
 
-from classifier import GLiNERClassifier, Entity
+app = FastAPI(title="TrustVault GLiNER Classifier", version="1.0.0")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger("trustvault-classifier")
-
-classifier: Optional[GLiNERClassifier] = None
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Load model on startup, cleanup on shutdown."""
-    global classifier
-    
-    model_name = os.getenv("MODEL_NAME", "urchade/gliner_small-v2.1")
-    logger.info(f"Loading GLiNER model: {model_name}")
-    
-    start = time.time()
-    classifier = GLiNERClassifier(model_name)
-    load_time = time.time() - start
-    
-    logger.info(f"Model loaded in {load_time:.2f}s")
-    logger.info(f"Supported entity types: {len(classifier.entity_types)}")
-    
-    yield
-    
-    logger.info("Shutting down classifier service")
-    classifier = None
-
-
-app = FastAPI(
-    title="TrustVault Classifier",
-    description="GLiNER-based PII and entity classification service",
-    version="1.0.0",
-    lifespan=lifespan,
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
+# Global model instance
+model = None
+model_name = "gliner-pii"
 
 class ClassifyRequest(BaseModel):
-    """Request body for classification endpoint."""
-    text: str = Field(..., min_length=1, max_length=100000, description="Text to classify")
-    tenant_id: str = Field(..., description="Tenant identifier")
-    entity_types: Optional[list[str]] = Field(
-        default=None,
-        description="Specific entity types to detect. If empty, uses all supported types."
-    )
-    threshold: float = Field(
-        default=0.5,
-        ge=0.0,
-        le=1.0,
-        description="Minimum confidence threshold for entities"
-    )
-
-
-class EntityResponse(BaseModel):
-    """Single detected entity."""
     text: str
-    label: str
+    entity_types: Optional[list[str]] = None
+    threshold: float = 0.5
+
+class Entity(BaseModel):
+    type: str
+    value: str
     start: int
     end: int
     confidence: float
 
-
 class ClassifyResponse(BaseModel):
-    """Response from classification endpoint."""
-    entities: list[EntityResponse]
-    processing_time_ms: float
-    model: str
-    text_length: int
+    entities: list[Entity]
+    processing_ms: int
+    model_used: str
 
+# Default PII entity types
+DEFAULT_ENTITIES = [
+    "EMAIL", "PHONE", "SSN", "CREDIT_CARD", "IBAN", "IP_ADDRESS",
+    "PERSON", "ADDRESS", "DATE_OF_BIRTH", "PASSPORT", "DRIVER_LICENSE",
+    "BANK_ACCOUNT", "TAX_ID", "MEDICAL_RECORD", "HEALTH_INSURANCE_ID"
+]
 
-class HealthResponse(BaseModel):
-    """Health check response."""
-    status: str
-    model_loaded: bool
-    model_name: str
-    supported_entities: int
+def load_model():
+    """Load GLiNER model - tries ONNX first, falls back to PyTorch"""
+    global model, model_name
+    
+    model_dir = os.getenv("MODEL_DIR", "/models")
+    onnx_path = os.path.join(model_dir, "gliner-pii-edge-int8.onnx")
+    
+    # Try ONNX model first
+    if os.path.exists(onnx_path):
+        try:
+            from gliner import GLiNER
+            model = GLiNER.from_pretrained(model_dir, load_onnx_model=True, onnx_model_file="gliner-pii-edge-int8.onnx")
+            model_name = "gliner-pii-onnx"
+            print(f"Loaded ONNX model from {onnx_path}")
+            return
+        except Exception as e:
+            print(f"ONNX load failed: {e}, trying PyTorch...")
+    
+    # Fall back to PyTorch model
+    pytorch_path = os.path.join(model_dir, "pytorch_model.bin")
+    if os.path.exists(pytorch_path):
+        try:
+            from gliner import GLiNER
+            model = GLiNER.from_pretrained(model_dir)
+            model_name = "gliner-pii-pytorch"
+            print(f"Loaded PyTorch model from {model_dir}")
+            return
+        except Exception as e:
+            print(f"PyTorch load failed: {e}")
+    
+    # Try loading from HuggingFace as last resort
+    try:
+        from gliner import GLiNER
+        model = GLiNER.from_pretrained("urchade/gliner_small-v2.1")
+        model_name = "gliner-small-v2.1"
+        print("Loaded model from HuggingFace")
+    except Exception as e:
+        print(f"All model loading failed: {e}")
+        model = None
 
+@app.on_event("startup")
+async def startup():
+    load_model()
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint."""
-    return HealthResponse(
-        status="healthy" if classifier is not None else "unhealthy",
-        model_loaded=classifier is not None,
-        model_name=classifier.model_name if classifier else "not loaded",
-        supported_entities=len(classifier.entity_types) if classifier else 0,
-    )
+@app.get("/health")
+async def health():
+    return {"status": "ok" if model else "degraded", "model": model_name}
 
-
-@app.get("/ready")
-async def readiness_check():
-    """Readiness probe for Kubernetes/Docker."""
-    if classifier is None:
+@app.get("/health/ready")
+async def ready():
+    if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
-    return {"status": "ready"}
-
-
-@app.get("/entities")
-async def list_entities():
-    """List all supported entity types."""
-    if classifier is None:
-        raise HTTPException(status_code=503, detail="Model not loaded")
-    return {
-        "entity_types": classifier.entity_types,
-        "count": len(classifier.entity_types),
-    }
-
+    return {"status": "ready", "model": model_name}
 
 @app.post("/classify", response_model=ClassifyResponse)
-async def classify_text(request: ClassifyRequest):
-    """
-    Classify text for PII and named entities.
-    
-    Uses GLiNER zero-shot NER model to detect entities without requiring
-    training data for each entity type.
-    """
-    if classifier is None:
+async def classify(req: ClassifyRequest):
+    if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
-    start_time = time.time()
+    if not req.text:
+        raise HTTPException(status_code=400, detail="text field is required")
     
-    entity_types = request.entity_types
-    if not entity_types:
-        entity_types = classifier.entity_types
+    start = time.time()
     
-    entities = classifier.predict(
-        text=request.text,
-        labels=entity_types,
-        threshold=request.threshold,
-    )
+    # Use provided entity types or defaults
+    labels = req.entity_types if req.entity_types else DEFAULT_ENTITIES
     
-    processing_time = (time.time() - start_time) * 1000
+    # Run GLiNER prediction
+    try:
+        predictions = model.predict_entities(req.text, labels, threshold=req.threshold)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Classification failed: {e}")
     
-    response_entities = [
-        EntityResponse(
-            text=e.text,
-            label=e.label,
-            start=e.start,
-            end=e.end,
-            confidence=e.confidence,
+    # Convert to response format
+    entities = [
+        Entity(
+            type=p["label"],
+            value=p["text"],
+            start=p["start"],
+            end=p["end"],
+            confidence=round(p["score"], 4)
         )
-        for e in entities
+        for p in predictions
     ]
     
-    logger.info(
-        f"Classified {len(request.text)} chars, found {len(entities)} entities "
-        f"in {processing_time:.1f}ms (tenant={request.tenant_id})"
-    )
+    processing_ms = int((time.time() - start) * 1000)
     
     return ClassifyResponse(
-        entities=response_entities,
-        processing_time_ms=round(processing_time, 2),
-        model=classifier.model_name,
-        text_length=len(request.text),
+        entities=entities,
+        processing_ms=processing_ms,
+        model_used=model_name
     )
 
-
 @app.post("/classify/batch")
-async def classify_batch(requests: list[ClassifyRequest]):
-    """
-    Batch classification for multiple texts.
-    
-    More efficient than individual requests for processing multiple documents.
-    """
-    if classifier is None:
+async def classify_batch(items: list[ClassifyRequest]):
+    """Batch classification endpoint"""
+    if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
+    start = time.time()
     results = []
-    total_start = time.time()
     
-    for req in requests:
-        start_time = time.time()
-        
-        entity_types = req.entity_types or classifier.entity_types
-        entities = classifier.predict(
-            text=req.text,
-            labels=entity_types,
-            threshold=req.threshold,
-        )
-        
-        processing_time = (time.time() - start_time) * 1000
-        
-        results.append({
-            "tenant_id": req.tenant_id,
-            "entities": [
-                {
-                    "text": e.text,
-                    "label": e.label,
-                    "start": e.start,
-                    "end": e.end,
-                    "confidence": e.confidence,
-                }
-                for e in entities
-            ],
-            "processing_time_ms": round(processing_time, 2),
-            "text_length": len(req.text),
-        })
-    
-    total_time = (time.time() - total_start) * 1000
+    for req in items:
+        labels = req.entity_types if req.entity_types else DEFAULT_ENTITIES
+        try:
+            predictions = model.predict_entities(req.text, labels, threshold=req.threshold)
+            entities = [
+                Entity(
+                    type=p["label"],
+                    value=p["text"],
+                    start=p["start"],
+                    end=p["end"],
+                    confidence=round(p["score"], 4)
+                )
+                for p in predictions
+            ]
+            results.append({"entities": entities, "char_count": len(req.text)})
+        except Exception as e:
+            results.append({"entities": [], "error": str(e)})
     
     return {
         "results": results,
-        "total_processing_time_ms": round(total_time, 2),
-        "batch_size": len(requests),
+        "total_ms": int((time.time() - start) * 1000),
+        "item_count": len(items)
     }
 
+@app.get("/info")
+async def info():
+    return {
+        "version": "1.0.0",
+        "model": model_name,
+        "ready": model is not None,
+        "default_entities": DEFAULT_ENTITIES
+    }
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8085"))
-    host = os.getenv("HOST", "0.0.0.0")
-    
-    logger.info(f"Starting TrustVault Classifier on {host}:{port}")
-    
-    uvicorn.run(
-        "main:app",
-        host=host,
-        port=port,
-        reload=os.getenv("ENV", "production") == "development",
-        workers=1,
-    )
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8085)
