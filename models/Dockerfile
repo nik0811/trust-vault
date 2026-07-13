@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG ONNXRUNTIME_VERSION=1.20.1
 RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v${ONNXRUNTIME_VERSION}/onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz \
     && tar -xzf onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}.tgz \
-    && cp onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}/lib/* /usr/local/lib/ \
+    && cp -r onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}/lib/*.so* /usr/local/lib/ \
     && cp -r onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}/include/* /usr/local/include/ \
     && ldconfig \
     && rm -rf onnxruntime-linux-x64-${ONNXRUNTIME_VERSION}*
