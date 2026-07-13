@@ -62,7 +62,7 @@ models/onnx/*.bin
 !models/onnx/.gitkeep
 
 # Test artifacts
-coverage/
+/coverage/
 .nyc_output/
 playwright-report/
 test-results/
