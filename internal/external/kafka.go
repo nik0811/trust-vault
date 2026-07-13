@@ -198,6 +198,19 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			platform = "postgres"
 		}
 		
+		// Extract database name from config
+		var configMap map[string]any
+		if err := json.Unmarshal(ds.Config, &configMap); err != nil {
+			log.Warn().Err(err).Msg("Failed to parse datasource config")
+		}
+		databaseName := ""
+		if db, ok := configMap["database"].(string); ok {
+			databaseName = db
+		}
+		if databaseName == "" {
+			databaseName = ds.Name // fallback to datasource name
+		}
+		
 		// Search for datasets from this datasource in DataHub
 		events.Emit("classification.progress", map[string]any{
 			"tenant_id":  job.TenantID,
@@ -205,7 +218,8 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			"message":    "Fetching schema from DataHub...",
 		})
 
-		datasetURNs, err := datahub.SearchDatasets(ctx, platform, ds.Name)
+		log.Info().Str("platform", platform).Str("database", databaseName).Msg("Searching DataHub for datasets")
+		datasetURNs, err := datahub.SearchDatasets(ctx, platform, databaseName)
 		
 		columnsClassified := 0
 		var allColumns []DatasetColumn
