@@ -69,7 +69,7 @@ func (k *Kafka) ConsumeClassificationJobs(ctx context.Context, db *store.DB) {
 	reader := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        k.brokers,
 		GroupID:        "classification-workers",
-		Topic:          "raw-data-chunks",
+		Topic:          "classification-jobs",
 		MinBytes:       1,    // Read immediately
 		MaxBytes:       10e6,
 		MaxWait:        500 * time.Millisecond,

@@ -286,7 +286,13 @@ function ClassificationStatusCard({
         
         es.onopen = () => {
           setIsConnected(true)
-          setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connected to classification stream`])
+          setLogs(prev => {
+            const connectMsg = `Connected to classification stream`
+            if (prev.some(log => log.includes(connectMsg))) {
+              return prev
+            }
+            return [...prev, `[${new Date().toLocaleTimeString()}] ${connectMsg}`]
+          })
         }
         
         es.onmessage = (event) => {
