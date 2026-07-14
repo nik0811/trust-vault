@@ -170,6 +170,13 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
             </span>
             <span>v1.0.0</span>
           </div>
+          <div className="mt-3 text-[10px] text-muted-foreground/70 text-center">
+            Powered by{' '}
+            <a href="https://plainsurf.com/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors underline">
+              Plainsurf LLC FZ
+            </a>
+            {' '}Dubai, UAE © 2026
+          </div>
         </div>
       </aside>
     </>
