@@ -55,6 +55,10 @@ var HighSensitivityTypes = map[string]bool{
 
 // GenerateRecommendations creates rule-based compliance recommendations
 func GenerateRecommendations(advCtx *AdvisorContext) []Recommendation {
+	if advCtx == nil {
+		return []Recommendation{}
+	}
+	
 	var recs []Recommendation
 
 	recs = append(recs, checkUnprotectedPII(advCtx)...)
