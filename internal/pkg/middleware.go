@@ -24,6 +24,8 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		}
 		w.Header().Set("X-Request-ID", requestID)
 		ctx := context.WithValue(r.Context(), middleware.RequestIDKey, requestID)
+		// Also store client IP in context
+		ctx = context.WithValue(ctx, CtxClientIP, GetClientIP(r))
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

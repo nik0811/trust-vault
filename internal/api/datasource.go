@@ -114,6 +114,7 @@ func (s *Server) createDataSource(w http.ResponseWriter, r *http.Request) {
 		Resource:   "datasource",
 		ResourceID: ds.ID,
 		Details:    store.JSON(fmt.Sprintf(`{"name":"%s","type":"%s"}`, ds.Name, ds.Type)),
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 	
 	// Mask sensitive fields before returning
@@ -183,6 +184,7 @@ func (s *Server) updateDataSource(w http.ResponseWriter, r *http.Request) {
 		Resource:   "datasource",
 		ResourceID: ds.ID,
 		Details:    store.JSON(fmt.Sprintf(`{"name":"%s"}`, ds.Name)),
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 	
 	// Mask sensitive fields before returning
@@ -209,6 +211,7 @@ func (s *Server) deleteDataSource(w http.ResponseWriter, r *http.Request) {
 		Action:     "datasource.deleted",
 		Resource:   "datasource",
 		ResourceID: id,
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 	
 	pkg.JSON(w, map[string]string{"status": "deleted"})
@@ -263,6 +266,7 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 		Resource:   "datasource",
 		ResourceID: id,
 		Details:    store.JSON(fmt.Sprintf(`{"name":"%s","type":"%s"}`, ds.Name, ds.Type)),
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 
 	// Refetch to get clean config (avoid buffer reuse issues)

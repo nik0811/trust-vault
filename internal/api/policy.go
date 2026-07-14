@@ -51,6 +51,7 @@ func (s *Server) createPolicy(w http.ResponseWriter, r *http.Request) {
 		Resource:   "policy",
 		ResourceID: policy.ID,
 		Details:    store.JSON(fmt.Sprintf(`{"name":"%s","type":"%s"}`, policy.Name, policy.Type)),
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 	
 	pkg.JSON(w, policy, http.StatusCreated)
@@ -113,6 +114,7 @@ func (s *Server) updatePolicy(w http.ResponseWriter, r *http.Request) {
 		Resource:   "policy",
 		ResourceID: policy.ID,
 		Details:    store.JSON(fmt.Sprintf(`{"name":"%s"}`, policy.Name)),
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 	
 	pkg.JSON(w, policy)
@@ -137,6 +139,7 @@ func (s *Server) deletePolicy(w http.ResponseWriter, r *http.Request) {
 		Action:     "policy.deleted",
 		Resource:   "policy",
 		ResourceID: id,
+		IP:         pkg.ClientIPFromCtx(ctx),
 	})
 	
 	pkg.JSON(w, map[string]string{"status": "deleted"})

@@ -66,13 +66,15 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	s.db.ExecContext(r.Context(), "UPDATE users SET last_login_at = $1 WHERE id = $2", time.Now(), user.ID)
 	
 	// Audit log for login
+	clientIP := pkg.GetClientIP(r)
 	s.auditLogs.Create(r.Context(), &store.AuditLog{
 		TenantID:   user.TenantID,
 		UserID:     user.ID,
 		Action:     "user.login",
 		Resource:   "user",
 		ResourceID: user.ID,
-		Details:    store.JSON(fmt.Sprintf(`{"email":"%s","ip":"%s"}`, user.Email, r.RemoteAddr)),
+		Details:    store.JSON(fmt.Sprintf(`{"email":"%s"}`, user.Email)),
+		IP:         clientIP,
 	})
 
 	pkg.JSON(w, LoginResponse{
