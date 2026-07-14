@@ -190,17 +190,4 @@ INSERT INTO classification_models (id, name, size, accuracy, speed, is_default) 
     ('gliner-pii-edge-int8', 'GLiNER PII Edge (INT8)', '197MB', 0.96, '4M chars/sec', TRUE),
     ('gliner-pii-base-fp16', 'GLiNER PII Base (FP16)', '330MB', 0.98, '2M chars/sec', FALSE);
 
--- Insert default label rules
-INSERT INTO label_rules (tenant_id, classification, label, priority) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'PII', 'CONFIDENTIAL', 10),
-    ('00000000-0000-0000-0000-000000000001', 'PHI', 'RESTRICTED', 20),
-    ('00000000-0000-0000-0000-000000000001', 'PCI', 'HIGHLY_CONFIDENTIAL', 30);
-
--- Insert default playbooks
-INSERT INTO playbooks (tenant_id, issue_type, name, steps) VALUES
-    ('00000000-0000-0000-0000-000000000001', 'pii_exposure', 'PII Exposure Remediation', 
-     '["Identify affected datasets", "Assess exposure scope", "Apply redaction policies", "Notify stakeholders", "Document remediation"]'),
-    ('00000000-0000-0000-0000-000000000001', 'retention_violation', 'Retention Violation Remediation',
-     '["Review retention policy", "Identify overdue data", "Archive or delete as required", "Update retention schedules", "Verify compliance"]'),
-    ('00000000-0000-0000-0000-000000000001', 'compliance_gap', 'Compliance Gap Remediation',
-     '["Identify compliance requirement", "Assess current state", "Create remediation plan", "Implement controls", "Verify compliance"]');
+-- Note: Default label_rules and playbooks are created per-tenant during tenant setup
