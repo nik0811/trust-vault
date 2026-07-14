@@ -380,7 +380,8 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
           setIsConnected(true)
         }
         
-        es.onmessage = (event) => {
+        // Handler for processing scan events
+        const handleScanEvent = (event: MessageEvent) => {
           try {
             const data = JSON.parse(event.data)
             // Only process events for this datasource
@@ -408,6 +409,15 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
             // Ignore parse errors for non-JSON messages
           }
         }
+        
+        // Listen for named SSE events (backend sends event: datasource.scan.progress, etc.)
+        es.addEventListener('datasource.scan.progress', handleScanEvent)
+        es.addEventListener('datasource.scan.completed', handleScanEvent)
+        es.addEventListener('datasource.scan.failed', handleScanEvent)
+        es.addEventListener('datasource.scan.started', handleScanEvent)
+        
+        // Also listen for generic message events as fallback
+        es.onmessage = handleScanEvent
         
         es.onerror = () => {
           setIsConnected(false)
