@@ -550,13 +550,31 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	// Gather context for advisor
+	// Gather context for advisor - ensure non-nil slices
 	classifications, _ := s.classifications.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if classifications == nil {
+		classifications = []store.Classification{}
+	}
 	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if policies == nil {
+		policies = []store.Policy{}
+	}
 	labels, _ := s.labels.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if labels == nil {
+		labels = []store.Label{}
+	}
 	violations, _ := s.retentionViolations.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if violations == nil {
+		violations = []store.RetentionViolation{}
+	}
 	dataSources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if dataSources == nil {
+		dataSources = []store.DataSource{}
+	}
 	ropa, _ := s.ropa.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if ropa == nil {
+		ropa = []store.RoPA{}
+	}
 
 	var totalDatasets, labeledDatasets int
 	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
