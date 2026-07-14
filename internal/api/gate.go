@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -273,10 +274,21 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 	// 7. Call LLM
 	llmEndpoint := req.LLMEndpoint
 	if llmEndpoint == "" {
-		llmEndpoint = "http://localhost:11434/v1"
+		llmEndpoint = os.Getenv("LLM_ENDPOINT")
+		if llmEndpoint == "" {
+			llmEndpoint = "http://localhost:11434/v1"
+		}
+	}
+	
+	model := req.Model
+	if model == "" {
+		model = os.Getenv("LLM_MODEL")
+		if model == "" {
+			model = "llama3.2"
+		}
 	}
 
-	llm := external.NewLLM(llmEndpoint, "", req.Model)
+	llm := external.NewLLM(llmEndpoint, "", model)
 	llmResp, err := llm.Chat(ctx, messages)
 
 	var responseText string
