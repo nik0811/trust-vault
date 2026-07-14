@@ -297,7 +297,8 @@ function ClassificationStatusCard({
           })
         }
         
-        es.onmessage = (event) => {
+        // Handler for processing classification events
+        const handleClassificationEvent = (event: MessageEvent) => {
           try {
             const data = JSON.parse(event.data)
             // Only process classification events for this dataset
@@ -328,6 +329,16 @@ function ClassificationStatusCard({
             // Ignore parse errors for non-JSON messages
           }
         }
+        
+        // Listen for named SSE events (backend sends event: classification.progress, etc.)
+        es.addEventListener('classification.started', handleClassificationEvent)
+        es.addEventListener('classification.progress', handleClassificationEvent)
+        es.addEventListener('classification.completed', handleClassificationEvent)
+        es.addEventListener('classification.failed', handleClassificationEvent)
+        es.addEventListener('classification.queued', handleClassificationEvent)
+        
+        // Also listen for generic message events as fallback
+        es.onmessage = handleClassificationEvent
         
         es.onerror = () => {
           setIsConnected(false)
