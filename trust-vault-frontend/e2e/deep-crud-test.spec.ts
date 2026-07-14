@@ -2,8 +2,8 @@ import { test, expect, Page } from '@playwright/test'
 
 const BASE_URL = 'https://trust-vault.oortfy.com'
 const API_URL = 'https://trust-vault-api.oortfy.com'
-const ADMIN_EMAIL = 'admin@trustvault.local'
-const ADMIN_PASSWORD = 'TrustVault@2026!'
+const ADMIN_EMAIL = 'admin@securelens.local'
+const ADMIN_PASSWORD = 'SecureLens@2026!'
 const SCREENSHOT_DIR = 'screenshots/deep-test'
 
 interface TestResult {
@@ -33,7 +33,7 @@ async function login(page: Page) {
   await page.waitForURL('**/dashboard', { timeout: 15000 })
 }
 
-test.describe('TrustVault Deep CRUD Testing', () => {
+test.describe('SecureLens Deep CRUD Testing', () => {
   test.setTimeout(300000)
 
   test('DATA SOURCE FULL CRUD + SCAN', async ({ page }) => {

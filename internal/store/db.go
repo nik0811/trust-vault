@@ -23,7 +23,7 @@ type DB struct {
 
 func NewDB(url string) (*DB, error) {
 	if url == "" {
-		url = "postgres://trustvault:trustvault@localhost:5432/trustvault?sslmode=disable"
+		url = "postgres://securelens:securelens@localhost:5432/securelens?sslmode=disable"
 	}
 	db, err := sqlx.Connect("postgres", url)
 	if err != nil {

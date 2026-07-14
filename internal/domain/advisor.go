@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/store"
 )
 
 // EvidenceItem represents a verifiable piece of evidence supporting a compliance finding

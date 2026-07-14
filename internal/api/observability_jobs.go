@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func (s *Server) getSystemHealth(w http.ResponseWriter, r *http.Request) {
@@ -112,12 +112,12 @@ func (s *Server) getMetrics(w http.ResponseWriter, r *http.Request) {
 	s.db.GetContext(ctx, &totalClassifications, "SELECT COUNT(*) FROM classifications")
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(pkg.Sprintf(`# HELP trustvault_queries_total Total gate queries
-# TYPE trustvault_queries_total counter
-trustvault_queries_total %d
-# HELP trustvault_classifications_total Total classifications
-# TYPE trustvault_classifications_total counter
-trustvault_classifications_total %d
+	w.Write([]byte(pkg.Sprintf(`# HELP securelens_queries_total Total gate queries
+# TYPE securelens_queries_total counter
+securelens_queries_total %d
+# HELP securelens_classifications_total Total classifications
+# TYPE securelens_classifications_total counter
+securelens_classifications_total %d
 `, totalQueries, totalClassifications)))
 }
 

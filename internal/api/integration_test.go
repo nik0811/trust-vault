@@ -10,10 +10,10 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/external"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/external"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 var testServer *Server
@@ -22,7 +22,7 @@ var testDB *store.DB
 func TestMain(m *testing.M) {
 	dbURL := os.Getenv("TEST_DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://politica:politica_dev_pass@localhost:5432/trustvault_test?sslmode=disable"
+		dbURL = "postgres://politica:politica_dev_pass@localhost:5432/securelens_test?sslmode=disable"
 	}
 
 	var err error

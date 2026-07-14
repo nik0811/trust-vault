@@ -3,7 +3,7 @@ package domain
 import (
 	"encoding/json"
 
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/store"
 )
 
 type PolicyConditions struct {

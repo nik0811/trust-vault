@@ -1,8 +1,8 @@
 import { test, expect, Page } from '@playwright/test'
 
 const API_BASE = 'http://localhost:8080/api/v1'
-const ADMIN_EMAIL = 'admin@trustvault.local'
-const ADMIN_PASSWORD = 'TrustVault@2026!'
+const ADMIN_EMAIL = 'admin@securelens.local'
+const ADMIN_PASSWORD = 'SecureLens@2026!'
 
 let authToken: string
 
@@ -59,7 +59,7 @@ function recordResult(feature: string, status: 'pass' | 'fail' | 'partial', deta
   console.log(`${status === 'pass' ? '✅' : status === 'fail' ? '❌' : '⚠️'} ${feature}: ${details}`)
 }
 
-test.describe('TrustVault Comprehensive E2E Tests', () => {
+test.describe('SecureLens Comprehensive E2E Tests', () => {
   
   test.describe('1. Authentication', () => {
     test('login with superadmin credentials', async ({ page }) => {

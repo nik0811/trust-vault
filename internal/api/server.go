@@ -11,9 +11,9 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog/log"
-	"github.com/trustvault/trustvault/internal/external"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/external"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 type Server struct {
@@ -649,7 +649,7 @@ const swaggerUIHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>TrustVault API Documentation</title>
+  <title>SecureLens API Documentation</title>
   <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
   <style>
     html { box-sizing: border-box; overflow-y: scroll; }

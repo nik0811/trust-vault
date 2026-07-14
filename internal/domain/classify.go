@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/store"
 )
 
 type ClassificationResult struct {

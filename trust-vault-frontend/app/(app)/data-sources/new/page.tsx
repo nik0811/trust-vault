@@ -213,7 +213,7 @@ export default function NewDataSourcePage() {
           </Link>
           <div>
             <h1 className="text-3xl font-bold text-foreground">Add Data Source</h1>
-            <p className="text-sm text-muted-foreground mt-1">Connect a new data source to TrustVault</p>
+            <p className="text-sm text-muted-foreground mt-1">Connect a new data source to SecureLens</p>
           </div>
         </div>
       </div>

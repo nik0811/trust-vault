@@ -184,7 +184,7 @@ func (d *DataHub) SearchDatasets(ctx context.Context, platform, database string)
 	}`
 	
 	// Search by platform and database name in the URN pattern
-	// DataHub URNs look like: urn:li:dataset:(urn:li:dataPlatform:postgres,trustvault.public.tablename,PROD)
+	// DataHub URNs look like: urn:li:dataset:(urn:li:dataPlatform:postgres,securelens.public.tablename,PROD)
 	searchQuery := fmt.Sprintf("platform:%s", platform)
 	if database != "" {
 		// Search for datasets that contain the database name in their URN

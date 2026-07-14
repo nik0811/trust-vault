@@ -4,8 +4,8 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 // Internal/Super Admin handlers

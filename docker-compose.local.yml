@@ -1,33 +1,33 @@
-# TrustVault Full Stack with DataHub - Development Environment
+# SecureLens Full Stack with DataHub - Development Environment
 # For Apple Silicon (M1/M2), DataHub runs via Rosetta emulation
 
 services:
   # ===========================================
-  # TrustVault Core Services
+  # SecureLens Core Services
   # ===========================================
   
-  # TrustVault Frontend (Next.js)
-  trustvault-frontend:
+  # SecureLens Frontend (Next.js)
+  securelens-frontend:
     build:
       context: ./trust-vault-frontend
       dockerfile: Dockerfile
       args:
         - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
-    container_name: trustvault-frontend
+    container_name: securelens-frontend
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080/api/v1}
     depends_on:
-      trustvault-gateway:
+      securelens-gateway:
         condition: service_healthy
     networks:
-      - trustvault-network
+      - securelens-network
 
-  # TrustVault API Gateway
-  trustvault-gateway:
+  # SecureLens API Gateway
+  securelens-gateway:
     build: .
-    container_name: trustvault-gateway
+    container_name: securelens-gateway
     ports:
       - "8080:8080"
       - "8099:8099"
@@ -39,13 +39,13 @@ services:
       - QDRANT_URL=http://qdrant:6333
       # Security Configuration
       - JWT_SECRET=trustvault-dev-secret-change-in-prod-min-32-chars
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://trustvault-frontend:3000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://securelens-frontend:3000
       # Super admin IP whitelist (empty = allow all for dev)
       - SUPERADMIN_ALLOWED_IPS=
       - LOG_LEVEL=debug
       # Superadmin bootstrap credentials (CHANGE IN PRODUCTION!)
-      - SUPERADMIN_EMAIL=admin@trustvault.local
-      - SUPERADMIN_PASSWORD=TrustVault@2026!
+      - SUPERADMIN_EMAIL=admin@securelens.local
+      - SUPERADMIN_PASSWORD=SecureLens@2026!
       - SUPERADMIN_NAME=Super Admin
       # LLM Configuration
       - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
@@ -67,12 +67,12 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - trustvault-network
+      - securelens-network
 
-  # TrustVault Classification Worker
-  trustvault-worker:
+  # SecureLens Classification Worker
+  securelens-worker:
     build: .
-    container_name: trustvault-worker
+    container_name: securelens-worker
     environment:
       - DATABASE_URL=postgres://trustvault:trustvault@postgres:5432/trustvault?sslmode=disable
       - KAFKA_BROKERS=kafka:29092
@@ -85,16 +85,16 @@ services:
         condition: service_healthy
     command: ["./server", "--mode=worker"]
     networks:
-      - trustvault-network
+      - securelens-network
 
   # ===========================================
   # Data Infrastructure
   # ===========================================
 
-  # PostgreSQL - TrustVault primary database
+  # PostgreSQL - SecureLens primary database
   postgres:
     image: postgres:16-alpine
-    container_name: trustvault-postgres
+    container_name: securelens-postgres
     ports:
       - "5434:5432"
     environment:
@@ -102,19 +102,19 @@ services:
       - POSTGRES_PASSWORD=trustvault
       - POSTGRES_DB=trustvault
     volumes:
-      - trustvault_postgres_data:/var/lib/postgresql/data
+      - securelens_postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U trustvault"]
       interval: 5s
       timeout: 5s
       retries: 5
     networks:
-      - trustvault-network
+      - securelens-network
 
   # Kafka with KRaft (no Zookeeper)
   kafka:
     image: confluentinc/cp-kafka:7.6.0
-    container_name: trustvault-kafka
+    container_name: securelens-kafka
     ports:
       - "9092:9092"
       - "29092:29092"
@@ -134,7 +134,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
     volumes:
-      - trustvault_kafka_data:/var/lib/kafka/data
+      - securelens_kafka_data:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list || exit 1"]
       interval: 10s
@@ -142,21 +142,21 @@ services:
       retries: 10
       start_period: 45s
     networks:
-      - trustvault-network
+      - securelens-network
 
   # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:v1.8.4
-    container_name: trustvault-qdrant
+    container_name: securelens-qdrant
     ports:
       - "6335:6333"
       - "6336:6334"
     volumes:
-      - trustvault_qdrant_data:/qdrant/storage
+      - securelens_qdrant_data:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     networks:
-      - trustvault-network
+      - securelens-network
 
   # ===========================================
   # DataHub Stack (Metadata + OpenLineage)
@@ -167,7 +167,7 @@ services:
   mysql:
     image: mysql:8.0
     platform: linux/amd64
-    container_name: trustvault-mysql
+    container_name: securelens-mysql
     environment:
       MYSQL_ROOT_PASSWORD: datahub
       MYSQL_DATABASE: datahub
@@ -175,7 +175,7 @@ services:
       MYSQL_PASSWORD: datahub
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_bin --default-authentication-plugin=mysql_native_password
     volumes:
-      - trustvault_mysql_data:/var/lib/mysql
+      - securelens_mysql_data:/var/lib/mysql
       - ./docker/mysql-init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "datahub", "-pdatahub"]
@@ -184,19 +184,19 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - trustvault-network
+      - securelens-network
 
   # Elasticsearch for DataHub search (internal only)
   elasticsearch:
     image: elasticsearch:7.17.18
     platform: linux/amd64
-    container_name: trustvault-elasticsearch
+    container_name: securelens-elasticsearch
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     volumes:
-      - trustvault_elasticsearch_data:/usr/share/elasticsearch/data
+      - securelens_elasticsearch_data:/usr/share/elasticsearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -qE '\"status\":\"(green|yellow)\"'"]
       interval: 10s
@@ -204,13 +204,13 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      - trustvault-network
+      - securelens-network
 
   # Schema Registry for Kafka (required by DataHub)
   # Schema Registry for Kafka (internal only - required by DataHub)
   schema-registry:
     image: confluentinc/cp-schema-registry:7.6.0
-    container_name: trustvault-schema-registry
+    container_name: securelens-schema-registry
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: kafka:29092
@@ -225,13 +225,13 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - trustvault-network
+      - securelens-network
 
   # DataHub System Update (runs once to initialize database)
   datahub-upgrade:
     image: acryldata/datahub-upgrade:v0.14.0
     platform: linux/amd64
-    container_name: trustvault-datahub-upgrade
+    container_name: securelens-datahub-upgrade
     user: root
     entrypoint: ["/bin/sh", "-c"]
     command:
@@ -263,15 +263,15 @@ services:
       schema-registry:
         condition: service_healthy
     networks:
-      - trustvault-network
+      - securelens-network
 
   # DataHub GMS (Generalized Metadata Service)
-  # Internal only - accessed via TrustVault gateway proxy
+  # Internal only - accessed via SecureLens gateway proxy
   # OpenLineage endpoint: POST /openapi/openlineage/api/v1/lineage
   datahub-gms:
     image: acryldata/datahub-gms:v0.14.0
     platform: linux/amd64
-    container_name: trustvault-datahub-gms
+    container_name: securelens-datahub-gms
     environment:
       DATAHUB_GMS_PORT: 8080
       EBEAN_DATASOURCE_URL: jdbc:mysql://mysql:3306/datahub?verifyServerCertificate=false&useSSL=false&useUnicode=yes&characterEncoding=UTF-8&allowPublicKeyRetrieval=true
@@ -286,7 +286,7 @@ services:
       GRAPH_SERVICE_IMPL: elasticsearch
       ENTITY_REGISTRY_CONFIG_PATH: /datahub/datahub-gms/resources/entity-registry.yml
       ELASTIC_ID_HASH_ALGO: MD5
-      OPENLINEAGE_DEFAULT_FLOW_PLATFORM: trustvault
+      OPENLINEAGE_DEFAULT_FLOW_PLATFORM: securelens
       MAE_CONSUMER_ENABLED: "true"
       MCE_CONSUMER_ENABLED: "true"
       PE_CONSUMER_ENABLED: "true"
@@ -302,13 +302,13 @@ services:
       retries: 10
       start_period: 120s
     networks:
-      - trustvault-network
+      - securelens-network
 
   # DataHub Frontend (for debugging/admin - optional)
   datahub-frontend:
     image: acryldata/datahub-frontend-react:v0.14.0
     platform: linux/amd64
-    container_name: trustvault-datahub-frontend
+    container_name: securelens-datahub-frontend
     ports:
       - "9002:9002"
     environment:
@@ -335,17 +335,17 @@ services:
       elasticsearch:
         condition: service_healthy
     networks:
-      - trustvault-network
+      - securelens-network
 
   # ===========================================
   # Classification Service (GLiNER Python)
   # ===========================================
 
-  trustvault-classifier:
+  securelens-classifier:
     build:
       context: ./classifier
       dockerfile: Dockerfile
-    container_name: trustvault-classifier
+    container_name: securelens-classifier
     ports:
       - "8085:8085"
     environment:
@@ -356,7 +356,7 @@ services:
         limits:
           memory: 4G
     networks:
-      - trustvault-network
+      - securelens-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8085/health"]
       interval: 30s
@@ -369,21 +369,21 @@ services:
   # ===========================================
 
   # Ingestion Sidecar (DataHub CLI wrapper)
-  trustvault-ingestion:
+  securelens-ingestion:
     build:
       context: ./ingestion
       dockerfile: Dockerfile
-    container_name: trustvault-ingestion
+    container_name: securelens-ingestion
     ports:
       - "8090:8090"
     environment:
       - DATAHUB_URL=http://datahub-gms:8080
-      - CALLBACK_URL=http://trustvault-gateway:8080/api/v1/datasources/callback
+      - CALLBACK_URL=http://securelens-gateway:8080/api/v1/datasources/callback
     depends_on:
       datahub-gms:
         condition: service_healthy
     networks:
-      - trustvault-network
+      - securelens-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
       interval: 30s
@@ -391,11 +391,11 @@ services:
       retries: 3
 
   # Document Processing Service (Python OCR)
-  trustvault-docservice:
+  securelens-docservice:
     build:
       context: ./docservice
       dockerfile: Dockerfile
-    container_name: trustvault-docservice
+    container_name: securelens-docservice
     ports:
       - "8088:8088"
     environment:
@@ -407,15 +407,15 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - trustvault-network
+      - securelens-network
 
 networks:
-  trustvault-network:
+  securelens-network:
     driver: bridge
 
 volumes:
-  trustvault_postgres_data:
-  trustvault_kafka_data:
-  trustvault_qdrant_data:
-  trustvault_mysql_data:
-  trustvault_elasticsearch_data:
+  securelens_postgres_data:
+  securelens_kafka_data:
+  securelens_qdrant_data:
+  securelens_mysql_data:
+  securelens_elasticsearch_data:

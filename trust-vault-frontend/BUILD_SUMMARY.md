@@ -1,4 +1,4 @@
-# TrustVault Frontend - Complete Build Summary
+# SecureLens Frontend - Complete Build Summary
 
 ## Project Status: ✅ COMPLETE
 

@@ -600,7 +600,7 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
               </div>
               {status === 'error' && (
                 <p className="mt-3 text-sm text-muted-foreground">
-                  For detailed error logs, check: <code className="bg-muted px-1 rounded">docker logs trustvault-ingestion</code>
+                  For detailed error logs, check: <code className="bg-muted px-1 rounded">docker logs securelens-ingestion</code>
                 </p>
               )}
             </div>

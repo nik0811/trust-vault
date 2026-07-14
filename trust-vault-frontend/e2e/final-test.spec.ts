@@ -1,8 +1,8 @@
 import { test, expect, Page } from '@playwright/test'
 
 const BASE_URL = 'https://trust-vault.oortfy.com'
-const ADMIN_EMAIL = 'admin@trustvault.local'
-const ADMIN_PASSWORD = 'TrustVault@2026!'
+const ADMIN_EMAIL = 'admin@securelens.local'
+const ADMIN_PASSWORD = 'SecureLens@2026!'
 const SCREENSHOT_DIR = 'screenshots/deep-test'
 
 interface TestResult {
@@ -32,7 +32,7 @@ async function login(page: Page) {
   await page.waitForURL('**/dashboard', { timeout: 15000 })
 }
 
-test.describe('TrustVault Final Deep Testing', () => {
+test.describe('SecureLens Final Deep Testing', () => {
   test.setTimeout(300000)
 
   test('AI GATE PLAYGROUND: Full Test', async ({ page }) => {

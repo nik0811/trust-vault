@@ -6,8 +6,8 @@ const API_BASE = process.env.E2E_ENV === 'production'
   ? 'https://trust-vault-api.oortfy.com/api/v1'
   : 'http://localhost:8080/api/v1'
 
-const ADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'admin@trustvault.local'
-const ADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'TrustVault@2026!'
+const ADMIN_EMAIL = process.env.SUPERADMIN_EMAIL || 'admin@securelens.local'
+const ADMIN_PASSWORD = process.env.SUPERADMIN_PASSWORD || 'SecureLens@2026!'
 
 const SCREENSHOTS_DIR = path.join(__dirname, '..', 'screenshots')
 
@@ -64,7 +64,7 @@ async function loginViaUI(page: Page) {
   await expect(page).toHaveURL(/.*dashboard/, { timeout: 30000 })
 }
 
-test.describe('TrustVault Production E2E Tests', () => {
+test.describe('SecureLens Production E2E Tests', () => {
   
   test.describe('1. Authentication', () => {
     test('1.1 Login with superadmin credentials', async ({ page }) => {

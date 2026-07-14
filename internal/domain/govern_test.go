@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func TestEvaluatePolicies(t *testing.T) {

@@ -11,7 +11,7 @@ export default function SettingsPage() {
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs items={[{ label: 'Settings', active: true }]} />
         <h1 className="text-3xl font-bold text-foreground mt-4">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage your TrustVault configuration</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage your SecureLens configuration</p>
       </div>
 
       {/* Content */}

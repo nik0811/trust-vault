@@ -39,7 +39,7 @@ export function TopBar({ onMenuClick }: TopBarProps) {
             <Menu className="h-5 w-5 text-foreground" />
           </button>
           <Link href="/dashboard" className="font-bold text-foreground text-lg">
-            TrustVault
+            SecureLens
           </Link>
         </div>
 

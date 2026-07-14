@@ -3,12 +3,12 @@ package api
 const openAPISpecJSON = `{
   "openapi": "3.0.3",
   "info": {
-    "title": "TrustVault API",
-    "description": "TrustVault is an enterprise-grade Data & AI Trust Platform that provides classification, governance, and audit capabilities for data flowing to/from AI systems.",
+    "title": "SecureLens API",
+    "description": "SecureLens is an enterprise-grade Data & AI Trust Platform that provides classification, governance, and audit capabilities for data flowing to/from AI systems.",
     "version": "1.0.0",
     "contact": {
-      "name": "TrustVault Support",
-      "email": "support@trustvault.io"
+      "name": "SecureLens Support",
+      "email": "support@securelens.io"
     },
     "license": {
       "name": "Proprietary"

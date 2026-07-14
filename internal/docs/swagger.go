@@ -1,6 +1,6 @@
-// Package docs TrustVault API Documentation
+// Package docs SecureLens API Documentation
 //
-// TrustVault is an enterprise-grade Data & AI Trust Platform that provides
+// SecureLens is an enterprise-grade Data & AI Trust Platform that provides
 // classification, governance, and audit capabilities for data flowing to/from AI systems.
 //
 //	Schemes: http, https
@@ -8,7 +8,7 @@
 //	BasePath: /api/v1
 //	Version: 1.0.0
 //	License: Proprietary
-//	Contact: TrustVault Support<support@trustvault.io>
+//	Contact: SecureLens Support<support@securelens.io>
 //
 //	Consumes:
 //	- application/json
@@ -34,7 +34,7 @@
 // swagger:meta
 package docs
 
-import "github.com/trustvault/trustvault/internal/store"
+import "github.com/securelens/securelens/internal/store"
 
 // Generic error response
 // swagger:response errorResponse

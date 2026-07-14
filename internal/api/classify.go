@@ -8,9 +8,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func (s *Server) classifyText(w http.ResponseWriter, r *http.Request) {
@@ -431,8 +431,8 @@ func (s *Server) createClassificationRule(w http.ResponseWriter, r *http.Request
 // builtInModels are the default classification models available
 var builtInModels = []map[string]any{
 	{
-		"id":          "trustvault-pii-edge",
-		"name":        "TrustVault PII Edge",
+		"id":          "securelens-pii-edge",
+		"name":        "SecureLens PII Edge",
 		"description": "Fast, lightweight PII detection using pattern matching and heuristics. Optimized for edge deployment.",
 		"size":        "197MB",
 		"accuracy":    0.96,
@@ -449,8 +449,8 @@ var builtInModels = []map[string]any{
 		},
 	},
 	{
-		"id":          "trustvault-pii-pro",
-		"name":        "TrustVault PII Pro",
+		"id":          "securelens-pii-pro",
+		"name":        "SecureLens PII Pro",
 		"description": "High-accuracy PII detection using advanced ML model. Best for comprehensive classification.",
 		"size":        "330MB",
 		"accuracy":    0.98,
@@ -469,8 +469,8 @@ var builtInModels = []map[string]any{
 		},
 	},
 	{
-		"id":          "trustvault-phi-detector",
-		"name":        "TrustVault PHI Detector",
+		"id":          "securelens-phi-detector",
+		"name":        "SecureLens PHI Detector",
 		"description": "Specialized model for Protected Health Information (PHI) detection. HIPAA compliant.",
 		"size":        "280MB",
 		"accuracy":    0.97,

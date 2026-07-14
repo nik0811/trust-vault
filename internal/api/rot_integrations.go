@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func (s *Server) getROTSummary(w http.ResponseWriter, r *http.Request) {
@@ -367,7 +367,7 @@ func testSlackIntegration(ctx context.Context, config map[string]any) (string, s
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	payload := `{"text": "TrustVault integration test - please ignore"}`
+	payload := `{"text": "SecureLens integration test - please ignore"}`
 	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, strings.NewReader(payload))
 	if err != nil {
 		return "error", "Failed to create request: " + err.Error(), nil
@@ -471,7 +471,7 @@ func testSplunkIntegration(ctx context.Context, config map[string]any) (string, 
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
-	payload := `{"event": "TrustVault integration test", "sourcetype": "trustvault"}`
+	payload := `{"event": "SecureLens integration test", "sourcetype": "securelens"}`
 	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(payload))
 	if err != nil {
 		return "error", "Failed to create request: " + err.Error(), nil
@@ -540,11 +540,11 @@ func testPagerDutyIntegration(ctx context.Context, config map[string]any) (strin
 	payload := map[string]any{
 		"routing_key":  routingKey,
 		"event_action": "trigger",
-		"dedup_key":    "trustvault-test-" + time.Now().Format("20060102150405"),
+		"dedup_key":    "securelens-test-" + time.Now().Format("20060102150405"),
 		"payload": map[string]any{
-			"summary":  "TrustVault integration test - please ignore",
+			"summary":  "SecureLens integration test - please ignore",
 			"severity": "info",
-			"source":   "trustvault",
+			"source":   "securelens",
 		},
 	}
 	payloadBytes, _ := json.Marshal(payload)

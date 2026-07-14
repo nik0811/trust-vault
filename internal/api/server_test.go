@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/pkg"
+	"github.com/securelens/securelens/internal/pkg"
 )
 
 func TestHealthCheck(t *testing.T) {

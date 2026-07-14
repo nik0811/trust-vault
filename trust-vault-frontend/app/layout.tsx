@@ -4,7 +4,7 @@ import './globals.css'
 import { Providers } from '@/components/providers'
 
 export const metadata: Metadata = {
-  title: 'TrustVault - Enterprise Data Governance Platform',
+  title: 'SecureLens - Enterprise Data Governance Platform',
   description: 'Comprehensive data governance, classification, and compliance platform',
   generator: 'v0.app',
   icons: {

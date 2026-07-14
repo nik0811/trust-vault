@@ -191,7 +191,7 @@ export default function APIKeysPage() {
           <h3 className="text-lg font-semibold text-foreground mb-4">About API Keys</h3>
           <p className="text-sm text-muted-foreground mb-4">
             API keys are used for service-to-service authentication. They provide programmatic access
-            to the TrustVault API without requiring user credentials.
+            to the SecureLens API without requiring user credentials.
           </p>
           <div className="space-y-3">
             <div className="flex items-start gap-3">
@@ -227,7 +227,7 @@ export default function APIKeysPage() {
         <div className="rounded-lg border border-border bg-card p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">Usage Example</h3>
           <pre className="p-4 rounded-lg bg-muted text-sm font-mono overflow-auto">
-{`curl -X GET "https://api.trustvault.io/v1/datasources" \\
+{`curl -X GET "https://api.securelens.io/v1/datasources" \\
   -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json"`}
           </pre>

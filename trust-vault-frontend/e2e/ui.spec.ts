@@ -20,7 +20,7 @@ async function checkPageLoads(page: Page, path: string) {
   expect(content.length).toBeGreaterThan(500)
 }
 
-test.describe('TrustVault UI Feature Tests', () => {
+test.describe('SecureLens UI Feature Tests', () => {
   
   test.beforeEach(async ({ page }) => {
     await loginViaUI(page)

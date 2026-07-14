@@ -43,7 +43,7 @@ async function apiRequest(page: Page, method: string, endpoint: string, data?: a
   }
 }
 
-test.describe('TrustVault E2E Tests', () => {
+test.describe('SecureLens E2E Tests', () => {
   
   test.describe('Authentication', () => {
     test('should login with valid credentials', async ({ page }) => {

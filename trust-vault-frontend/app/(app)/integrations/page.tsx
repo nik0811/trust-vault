@@ -73,7 +73,7 @@ export default function IntegrationsPage() {
         <div>
           <Breadcrumbs items={[{ label: 'Integrations', active: true }]} />
           <h1 className="text-3xl font-bold text-foreground mt-4">Integrations</h1>
-          <p className="text-sm text-muted-foreground mt-1">Connect TrustVault with external systems</p>
+          <p className="text-sm text-muted-foreground mt-1">Connect SecureLens with external systems</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -107,7 +107,7 @@ export default function IntegrationsPage() {
           <EmptyState
             icon={<Plug className="h-12 w-12" />}
             title="No integrations"
-            description="Connect TrustVault with DLP, privacy platforms, data catalogs, and more."
+            description="Connect SecureLens with DLP, privacy platforms, data catalogs, and more."
             action={
               <Link
                 href="/integrations/new"

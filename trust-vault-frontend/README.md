@@ -1,4 +1,4 @@
-# TrustVault - Enterprise Data Governance Platform
+# SecureLens - Enterprise Data Governance Platform
 
 A comprehensive Next.js-based frontend for an enterprise data governance platform that handles classification, compliance, privacy management, and AI governance.
 

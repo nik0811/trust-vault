@@ -1,4 +1,4 @@
-# TrustVault Frontend - Setup Guide
+# SecureLens Frontend - Setup Guide
 
 ## Quick Start
 
@@ -11,7 +11,7 @@
 1. **Clone the repository**
 ```bash
 git clone <repository-url>
-cd trustvault-frontend
+cd trust-vault-frontend
 ```
 
 2. **Install dependencies**

@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 type LoginRequest struct {

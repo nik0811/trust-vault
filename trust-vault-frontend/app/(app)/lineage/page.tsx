@@ -79,10 +79,10 @@ export default function LineagePage() {
                 
                 <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
                 
-                {/* TrustVault */}
+                {/* SecureLens */}
                 <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 min-w-[140px]">
                   <Shield className="h-6 w-6 text-primary mx-auto mb-2" />
-                  <p className="text-sm font-medium text-primary text-center">TrustVault</p>
+                  <p className="text-sm font-medium text-primary text-center">SecureLens</p>
                   <p className="text-xs text-muted-foreground text-center">Classification & Governance</p>
                 </div>
                 
@@ -194,7 +194,7 @@ export default function LineagePage() {
         <div className="rounded-lg border border-border bg-card p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">About Data Lineage</h3>
           <p className="text-sm text-muted-foreground">
-            Data lineage tracks the complete journey of your data from its source through TrustVault&apos;s
+            Data lineage tracks the complete journey of your data from its source through SecureLens&apos;s
             governance layer to AI consumption. This provides full auditability and helps ensure compliance
             with regulations like GDPR and the EU AI Act.
           </p>

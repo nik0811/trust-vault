@@ -16,8 +16,8 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"github.com/segmentio/kafka-go"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/store"
 )
 
 type Kafka struct {
@@ -86,7 +86,7 @@ func (k *Kafka) ConsumeClassificationJobs(ctx context.Context, db *store.DB) {
 	// Initialize classifier client
 	classifierURL := os.Getenv("CLASSIFIER_URL")
 	if classifierURL == "" {
-		classifierURL = "http://trustvault-classifier:8085"
+		classifierURL = "http://securelens-classifier:8085"
 	}
 	classifier := NewClassifierClient(classifierURL)
 
@@ -436,7 +436,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 
 // sendClassificationCallback sends a completion callback to the gateway for SSE broadcast
 func sendClassificationCallback(tenantID, datasetID, status string, columnsClassified int, message, errMsg string) {
-	gatewayURL := envOr("GATEWAY_URL", "http://trustvault-gateway:8080")
+	gatewayURL := envOr("GATEWAY_URL", "http://securelens-gateway:8080")
 	callbackURL := gatewayURL + "/api/v1/classification/callback"
 
 	payload := map[string]any{
@@ -465,7 +465,7 @@ func sendClassificationCallback(tenantID, datasetID, status string, columnsClass
 
 // sendClassificationProgress sends a progress update to the gateway for SSE broadcast
 func sendClassificationProgress(tenantID, datasetID, message string, current, total int) {
-	gatewayURL := envOr("GATEWAY_URL", "http://trustvault-gateway:8080")
+	gatewayURL := envOr("GATEWAY_URL", "http://securelens-gateway:8080")
 	progressURL := gatewayURL + "/api/v1/classification/progress"
 
 	payload := map[string]any{
@@ -837,7 +837,7 @@ func isTextColumn(colType string) bool {
 	return false
 }
 
-// mapGLiNEREntityType maps GLiNER entity types to TrustVault classification types
+// mapGLiNEREntityType maps GLiNER entity types to SecureLens classification types
 func mapGLiNEREntityType(glinerType string) string {
 	mapping := map[string]string{
 		"email":                  "EMAIL",
@@ -1237,22 +1237,22 @@ func (k *Kafka) executeClassificationJob(ctx context.Context, db *store.DB, job 
 			"runId": generateUUID(),
 		},
 		"job": map[string]any{
-			"namespace": "trustvault",
+			"namespace": "securelens",
 			"name":      "classify_" + datasetID,
 		},
 		"inputs": []map[string]any{
 			{
-				"namespace": "trustvault",
+				"namespace": "securelens",
 				"name":      datasetID,
 			},
 		},
 		"outputs": []map[string]any{
 			{
-				"namespace": "trustvault",
+				"namespace": "securelens",
 				"name":      "classifications_" + datasetID,
 			},
 		},
-		"producer": "trustvault-worker",
+		"producer": "securelens-worker",
 	}
 	if err := k.datahub.EmitLineage(ctx, lineageEvent); err != nil {
 		log.Warn().Err(err).Str("dataset_id", datasetID).Msg("Failed to emit classification lineage")

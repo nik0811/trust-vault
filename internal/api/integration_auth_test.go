@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
-	"github.com/trustvault/trustvault/internal/pkg"
+	"github.com/securelens/securelens/internal/pkg"
 )
 
 func TestIntegration_Auth_Login(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/trustvault/trustvault
+module github.com/securelens/securelens
 
 go 1.23
 

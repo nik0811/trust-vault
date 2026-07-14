@@ -76,7 +76,7 @@ export default function ClassificationModelsPage() {
         <div className="rounded-lg border border-border bg-card p-6">
           <h3 className="text-lg font-semibold text-foreground mb-4">Active Models</h3>
           <p className="text-sm text-muted-foreground mb-6">
-            TrustVault uses proprietary AI models for zero-shot NER classification, capable of detecting 60+ PII types
+            SecureLens uses proprietary AI models for zero-shot NER classification, capable of detecting 60+ PII types
             at 4M+ characters per second on CPU.
           </p>
 

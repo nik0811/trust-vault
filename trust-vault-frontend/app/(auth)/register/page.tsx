@@ -132,7 +132,7 @@ function RegisterForm() {
       <div className="w-full max-w-sm">
         <div className="rounded-lg border border-border bg-card p-8 shadow-lg">
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-foreground">TrustVault</h1>
+            <h1 className="text-3xl font-bold text-foreground">SecureLens</h1>
             <p className="text-sm text-muted-foreground mt-2">Complete your registration</p>
           </div>
 

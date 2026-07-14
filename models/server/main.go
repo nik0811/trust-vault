@@ -58,7 +58,7 @@ func main() {
 		Str("model_path", mPath).
 		Str("tokenizer_path", tPath).
 		Int("port", *port).
-		Msg("Starting TrustVault Classifier Service")
+		Msg("Starting SecureLens Classifier Service")
 
 	// Initialize the classifier
 	classifier, err := NewClassifier(mPath, tPath)

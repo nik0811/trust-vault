@@ -1,4 +1,4 @@
-module github.com/trustvault/classifier
+module github.com/securelens/classifier
 
 go 1.22
 

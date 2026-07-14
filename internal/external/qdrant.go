@@ -23,7 +23,7 @@ func NewQdrant(baseURL, collection string) *Qdrant {
 		baseURL = envOr("QDRANT_URL", "http://localhost:6333")
 	}
 	if collection == "" {
-		collection = "trustvault"
+		collection = "securelens"
 	}
 	return &Qdrant{
 		baseURL:    baseURL,

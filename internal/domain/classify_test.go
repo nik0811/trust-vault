@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func TestClassifyText(t *testing.T) {

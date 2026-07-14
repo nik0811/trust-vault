@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/domain"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/external"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/domain"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/external"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 type GateQueryRequest struct {
@@ -338,13 +338,13 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 	var inputDatasets []map[string]any
 	for _, chunk := range contextChunks {
 		inputDatasets = append(inputDatasets, map[string]any{
-			"namespace": "trustvault",
+			"namespace": "securelens",
 			"name":      chunk.Source,
 		})
 	}
 	if len(inputDatasets) == 0 {
 		inputDatasets = []map[string]any{
-			{"namespace": "trustvault", "name": "query_context"},
+			{"namespace": "securelens", "name": "query_context"},
 		}
 	}
 
@@ -355,7 +355,7 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 			"runId": gateQuery.ID,
 		},
 		"job": map[string]any{
-			"namespace": "trustvault",
+			"namespace": "securelens",
 			"name":      "ai_gate_query",
 		},
 		"inputs": inputDatasets,
@@ -365,7 +365,7 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 				"name":      req.Model,
 			},
 		},
-		"producer": "trustvault-gateway",
+		"producer": "securelens-gateway",
 	}
 	if err := s.datahub.EmitLineage(ctx, lineageEvent); err != nil {
 		_ = err

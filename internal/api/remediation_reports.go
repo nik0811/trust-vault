@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/trustvault/trustvault/internal/domain"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/domain"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func (s *Server) listRemediationActions(w http.ResponseWriter, r *http.Request) {

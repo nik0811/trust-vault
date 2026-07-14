@@ -12,9 +12,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 // sensitiveFields are config keys that should be masked in API responses
@@ -355,7 +355,7 @@ func (s *Server) ingestionSidecarURL() string {
 	if url := os.Getenv("INGESTION_SIDECAR_URL"); url != "" {
 		return url
 	}
-	return "http://trustvault-ingestion:8090"
+	return "http://securelens-ingestion:8090"
 }
 
 // ingestionCallbackURL returns the callback URL for ingestion completion
@@ -363,7 +363,7 @@ func (s *Server) ingestionCallbackURL() string {
 	if url := os.Getenv("INGESTION_CALLBACK_URL"); url != "" {
 		return url
 	}
-	return "http://trustvault-gateway:8080/api/v1/datasources/callback"
+	return "http://securelens-gateway:8080/api/v1/datasources/callback"
 }
 
 // callIngestionSidecar makes an HTTP POST to the ingestion sidecar
@@ -494,7 +494,7 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 		dataFlow := store.DataFlow{
 			TenantID:        tenantID,
 			SourceDatasetID: datasourceID,
-			TargetDatasetID: "trustvault-classification",
+			TargetDatasetID: "securelens-classification",
 			FlowType:        "ingestion",
 		}
 		s.dataFlows.Create(ctx, &dataFlow)

@@ -1,8 +1,8 @@
-# TrustVault E2E Test Report
+# SecureLens E2E Test Report
 
 **Date:** July 10, 2026  
 **Test Environment:** localhost:3000 (Frontend), localhost:8080 (Backend)  
-**Credentials:** admin@trustvault.local / TrustVault@2026!
+**Credentials:** admin@securelens.local / SecureLens@2026!
 
 ## Summary
 

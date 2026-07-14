@@ -14,7 +14,7 @@ var testDB *DB
 func TestMain(m *testing.M) {
 	dbURL := os.Getenv("TEST_DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgres://politica:politica_dev_pass@localhost:5432/trustvault_test?sslmode=disable"
+		dbURL = "postgres://politica:politica_dev_pass@localhost:5432/securelens_test?sslmode=disable"
 	}
 
 	var err error

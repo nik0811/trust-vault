@@ -10,11 +10,11 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/trustvault/trustvault/internal/api"
-	"github.com/trustvault/trustvault/internal/events"
-	"github.com/trustvault/trustvault/internal/external"
-	"github.com/trustvault/trustvault/internal/pkg"
-	"github.com/trustvault/trustvault/internal/store"
+	"github.com/securelens/securelens/internal/api"
+	"github.com/securelens/securelens/internal/events"
+	"github.com/securelens/securelens/internal/external"
+	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/store"
 )
 
 func main() {
@@ -32,7 +32,7 @@ func main() {
 		pkg.MustInitJWTSecret()
 	}
 
-	log.Info().Str("mode", *mode).Msg("Starting TrustVault")
+	log.Info().Str("mode", *mode).Msg("Starting SecureLens")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -159,7 +159,7 @@ func runGateway(ctx context.Context, db *store.DB, kafka *external.Kafka, port, 
 }
 
 func runWorker(ctx context.Context, db *store.DB, kafka *external.Kafka) {
-	log.Info().Msg("Starting TrustVault worker")
+	log.Info().Msg("Starting SecureLens worker")
 
 	// Create cancellable context for worker
 	workerCtx, workerCancel := context.WithCancel(ctx)
