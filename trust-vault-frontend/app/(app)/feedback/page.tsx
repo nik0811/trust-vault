@@ -10,8 +10,8 @@ import { useCorrections, useCorrectionTrend, useFeedbackStats, type Correction }
 import { toast } from 'sonner'
 
 const columns: Column<Correction>[] = [
-  { id: 'text', header: 'Text Sample', cell: (row) => <span className="font-mono text-sm">{row.text}</span> },
-  { id: 'from', header: 'Was Classified', cell: (row) => <span className="text-red-600 dark:text-red-400">{row.from}</span> },
+  { id: 'text', header: 'Text Sample', cell: (row) => <span className="font-mono text-sm">{row.text || '—'}</span> },
+  { id: 'from', header: 'Was Classified', cell: (row) => <span className="text-red-600 dark:text-red-400">{row.from || 'Unknown'}</span> },
   { id: 'to', header: 'Corrected To', cell: (row) => <span className="text-green-600 dark:text-green-400">{row.to}</span> },
   { id: 'user', header: 'By', accessorKey: 'user' },
   { id: 'created_at', header: 'When', cell: (row) => {
