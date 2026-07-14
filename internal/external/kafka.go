@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"github.com/segmentio/kafka-go"
 	"github.com/trustvault/trustvault/internal/events"
@@ -252,9 +254,67 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				"message":    fmt.Sprintf("Found %d columns to classify", len(allColumns)),
 			})
 
+			// Parse datasource config for data sampling
+			var dsConfig map[string]any
+			if err := json.Unmarshal(ds.Config, &dsConfig); err != nil {
+				log.Warn().Err(err).Msg("Failed to parse datasource config for sampling")
+			}
+
+			// Check if classifier is available
+			classifierAvailable := classifier.IsHealthy(ctx)
+			if classifierAvailable {
+				log.Info().Msg("GLiNER classifier available, will use ML classification")
+			} else {
+				log.Warn().Msg("GLiNER classifier unavailable, falling back to pattern matching")
+			}
+
 			for i, col := range allColumns {
-				// Classify based on column name patterns
-				entityType, confidence := classifyColumnName(col.Name)
+				var entityType string
+				var confidence float64
+				var classificationSource string
+
+				// Try ML classification first if classifier is available and column is text type
+				if classifierAvailable && isTextColumn(col.Type) && dsConfig != nil {
+					// Sample actual data from the column
+					samples, err := sampleColumnData(ctx, ds.Type, dsConfig, col.TableName, col.Name, 10)
+					if err != nil {
+						log.Debug().Err(err).Str("column", col.Name).Msg("Failed to sample column data, using pattern matching")
+					} else if len(samples) > 0 {
+						// Concatenate samples for classification
+						sampleText := strings.Join(samples, " | ")
+						
+						// Send to GLiNER classifier
+						result, err := classifier.Classify(ctx, sampleText, defaultEntityTypes, 0.3)
+						if err != nil {
+							log.Debug().Err(err).Str("column", col.Name).Msg("ML classification failed, using pattern matching")
+						} else if len(result.Entities) > 0 {
+							// Use the highest confidence entity
+							var bestEntity ClassifiedEntity
+							for _, e := range result.Entities {
+								if e.Confidence > bestEntity.Confidence {
+									bestEntity = e
+								}
+							}
+							entityType = mapGLiNEREntityType(bestEntity.Type)
+							confidence = bestEntity.Confidence
+							classificationSource = "gliner_ml"
+							
+							log.Debug().
+								Str("column", col.Name).
+								Str("entity_type", entityType).
+								Float64("confidence", confidence).
+								Int("samples", len(samples)).
+								Msg("ML classification result")
+						}
+					}
+				}
+
+				// Fall back to pattern matching if ML didn't produce results
+				if entityType == "" {
+					entityType, confidence = classifyColumnName(col.Name)
+					classificationSource = "pattern_matching"
+				}
+
 				if entityType == "" {
 					continue
 				}
@@ -270,7 +330,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 					 ON CONFLICT DO NOTHING`,
 					generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, entityType, columnFullName, confidence,
-					fmt.Sprintf(`{"column_name": "%s", "table_name": "%s", "data_type": "%s", "classification_source": "datahub_schema"}`, col.Name, col.TableName, col.Type))
+					fmt.Sprintf(`{"column_name": "%s", "table_name": "%s", "data_type": "%s", "classification_source": "%s"}`, col.Name, col.TableName, col.Type, classificationSource))
 				if err != nil {
 					log.Error().Err(err).Str("column", col.Name).Msg("Failed to store classification")
 					continue
@@ -278,10 +338,14 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				columnsClassified++
 
 				// Emit progress event
+				sourceLabel := "pattern"
+				if classificationSource == "gliner_ml" {
+					sourceLabel = "ML"
+				}
 				events.Emit("classification.progress", map[string]any{
 					"tenant_id":  job.TenantID,
 					"dataset_id": job.DatasetID,
-					"message":    fmt.Sprintf("Classified: %s → %s (%.0f%%)", col.Name, entityType, confidence*100),
+					"message":    fmt.Sprintf("Classified: %s → %s (%.0f%% via %s)", col.Name, entityType, confidence*100, sourceLabel),
 					"progress": map[string]int{
 						"current": i + 1,
 						"total":   len(allColumns),
@@ -313,6 +377,139 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			"message":            fmt.Sprintf("Classification completed - %d columns classified", columnsClassified),
 		})
 	}
+}
+
+// Default entity types for GLiNER classification
+var defaultEntityTypes = []string{
+	"email", "phone number", "social security number", "credit card number",
+	"person", "address", "date of birth", "ip address",
+	"bank account", "passport number", "driver license",
+}
+
+// sampleColumnData connects to the datasource and samples data from a column
+func sampleColumnData(ctx context.Context, dsType string, config map[string]any, tableName, columnName string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	// Build connection string based on datasource type
+	connStr, err := buildConnectionString(dsType, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build connection string: %w", err)
+	}
+
+	// Connect to the database
+	db, err := sql.Open(getDriverName(dsType), connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to database: %w", err)
+	}
+	defer db.Close()
+
+	// Set connection timeout
+	db.SetConnMaxLifetime(30 * time.Second)
+	db.SetMaxOpenConns(1)
+
+	// Query distinct values from the column
+	query := fmt.Sprintf("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL AND %s != '' LIMIT %d",
+		quoteIdentifier(columnName, dsType),
+		quoteIdentifier(tableName, dsType),
+		quoteIdentifier(columnName, dsType),
+		quoteIdentifier(columnName, dsType),
+		limit)
+
+	rows, err := db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query column data: %w", err)
+	}
+	defer rows.Close()
+
+	var samples []string
+	for rows.Next() {
+		var value sql.NullString
+		if err := rows.Scan(&value); err != nil {
+			continue
+		}
+		if value.Valid && value.String != "" {
+			samples = append(samples, value.String)
+		}
+	}
+
+	return samples, nil
+}
+
+// buildConnectionString creates a database connection string from config
+func buildConnectionString(dsType string, config map[string]any) (string, error) {
+	host := getConfigString(config, "host", "localhost")
+	port := getConfigInt(config, "port", 5432)
+	database := getConfigString(config, "database", "")
+	username := getConfigString(config, "username", "")
+	password := getConfigString(config, "password", "")
+	sslMode := getConfigString(config, "ssl_mode", "disable")
+
+	switch dsType {
+	case "postgresql", "postgres":
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+			host, port, username, password, database, sslMode), nil
+	case "mysql":
+		return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s", username, password, host, port, database), nil
+	default:
+		return "", fmt.Errorf("unsupported datasource type: %s", dsType)
+	}
+}
+
+// getDriverName returns the SQL driver name for a datasource type
+func getDriverName(dsType string) string {
+	switch dsType {
+	case "postgresql", "postgres":
+		return "postgres"
+	case "mysql":
+		return "mysql"
+	default:
+		return "postgres"
+	}
+}
+
+// quoteIdentifier quotes a SQL identifier based on database type
+func quoteIdentifier(name, dsType string) string {
+	switch dsType {
+	case "mysql":
+		return "`" + strings.ReplaceAll(name, "`", "``") + "`"
+	default:
+		return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+	}
+}
+
+// isTextColumn checks if a column type is suitable for text sampling
+func isTextColumn(colType string) bool {
+	colType = strings.ToLower(colType)
+	textTypes := []string{"varchar", "char", "text", "string", "nvarchar", "nchar", "clob"}
+	for _, t := range textTypes {
+		if strings.Contains(colType, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// mapGLiNEREntityType maps GLiNER entity types to TrustVault classification types
+func mapGLiNEREntityType(glinerType string) string {
+	mapping := map[string]string{
+		"email":                  "EMAIL",
+		"phone number":           "PHONE",
+		"social security number": "SSN",
+		"credit card number":     "CREDIT_CARD",
+		"person":                 "PERSON_NAME",
+		"address":                "ADDRESS",
+		"date of birth":          "DATE_OF_BIRTH",
+		"ip address":             "IP_ADDRESS",
+		"bank account":           "BANK_ACCOUNT",
+		"passport number":        "PASSPORT",
+		"driver license":         "DRIVER_LICENSE",
+	}
+	if mapped, ok := mapping[strings.ToLower(glinerType)]; ok {
+		return mapped
+	}
+	return strings.ToUpper(strings.ReplaceAll(glinerType, " ", "_"))
 }
 
 // classifyColumnName determines the entity type based on column name patterns
