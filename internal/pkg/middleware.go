@@ -216,7 +216,7 @@ func ErrorWithRequestID(w http.ResponseWriter, r *http.Request, err error, statu
 func GetCORSOrigins() []string {
 	origins := os.Getenv("CORS_ORIGINS")
 	if origins == "" {
-		return []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:3002"}
+		return []string{"http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "https://app.securelens.ai", "https://trust-vault.oortfy.com"}
 	}
 	var result []string
 	for _, o := range strings.Split(origins, ",") {

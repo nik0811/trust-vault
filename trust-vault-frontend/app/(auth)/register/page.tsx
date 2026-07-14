@@ -210,6 +210,13 @@ function RegisterForm() {
             </p>
           </div>
         </div>
+        <p className="text-center text-[11px] text-muted-foreground/60 mt-6">
+          Powered by{' '}
+          <a href="https://plainsurf.com/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors underline">
+            Plainsurf LLC FZ
+          </a>
+          {' '}Dubai, UAE · © 2026
+        </p>
       </div>
     </div>
   )

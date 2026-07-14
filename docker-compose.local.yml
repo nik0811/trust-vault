@@ -39,7 +39,7 @@ services:
       - QDRANT_URL=http://qdrant:6333
       # Security Configuration
       - JWT_SECRET=trustvault-dev-secret-change-in-prod-min-32-chars
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://securelens-frontend:3000
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://securelens-frontend:3000,https://app.securelens.ai,https://trust-vault.oortfy.com
       # Super admin IP whitelist (empty = allow all for dev)
       - SUPERADMIN_ALLOWED_IPS=
       - LOG_LEVEL=debug

@@ -131,7 +131,7 @@ export default function LoginPage() {
           <a href="https://plainsurf.com/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors underline">
             Plainsurf LLC FZ
           </a>
-          {' '}Dubai, UAE © 2026
+          {' '}Dubai, UAE · © 2026
         </p>
       </div>
     </div>
