@@ -248,6 +248,14 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 
 		// If we got real columns from DataHub, classify them
 		if len(allColumns) > 0 {
+			// Clear existing classifications for this dataset before re-classifying
+			_, err := db.ExecContext(ctx,
+				`DELETE FROM classifications WHERE tenant_id = $1 AND dataset_id = $2`,
+				job.TenantID, job.DatasetID)
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to clear existing classifications")
+			}
+
 			events.Emit("classification.progress", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
