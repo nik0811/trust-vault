@@ -16,7 +16,7 @@ export default function AdvisorPage() {
   const stats = useMemo(() => {
     const recsCount = Array.isArray(recommendations) ? recommendations.length : 0
     const gapsCount = Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0
-    const score = riskScore?.overall_score ? Math.round((1 - riskScore.overall_score) * 100) : 0
+    const score = riskScore?.overall_score ? Math.round(riskScore.overall_score * 100) : 0
 
     return { recsCount, gapsCount, score }
   }, [recommendations, gaps, riskScore])
