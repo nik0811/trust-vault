@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 )
 
 type LLMProvider string
@@ -201,69 +202,75 @@ func (l *LLM) chatBedrock(ctx context.Context, messages []ChatMessage) (*ChatRes
 		return nil, fmt.Errorf("bedrock client not initialized")
 	}
 
-	var systemPrompt string
-	var bedrockMessages []BedrockMessage
-
-	for _, msg := range messages {
-		if msg.Role == "system" {
-			systemPrompt = msg.Content
-			continue
-		}
-		bedrockMessages = append(bedrockMessages, BedrockMessage{
-			Role: msg.Role,
-			Content: []BedrockContent{
-				{Type: "text", Text: msg.Content},
-			},
-		})
-	}
-
-	bedrockReq := BedrockRequest{
-		AnthropicVersion: "bedrock-2023-05-31",
-		MaxTokens:        4096,
-		System:           systemPrompt,
-		Messages:         bedrockMessages,
-	}
-
-	body, err := json.Marshal(bedrockReq)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal bedrock request: %w", err)
-	}
-
 	modelID := l.model
 	if strings.HasPrefix(modelID, "bedrock/") {
 		modelID = strings.TrimPrefix(modelID, "bedrock/")
 	}
 
-	output, err := l.bedrockClient.InvokeModel(ctx, &bedrockruntime.InvokeModelInput{
-		ModelId:     aws.String(modelID),
-		ContentType: aws.String("application/json"),
-		Body:        body,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("bedrock invoke error: %w", err)
+	// Build Converse API messages
+	var converseMessages []types.Message
+	var systemPrompts []types.SystemContentBlock
+
+	for _, msg := range messages {
+		if msg.Role == "system" {
+			systemPrompts = append(systemPrompts, &types.SystemContentBlockMemberText{
+				Value: msg.Content,
+			})
+			continue
+		}
+		
+		role := types.ConversationRoleUser
+		if msg.Role == "assistant" {
+			role = types.ConversationRoleAssistant
+		}
+		
+		converseMessages = append(converseMessages, types.Message{
+			Role: role,
+			Content: []types.ContentBlock{
+				&types.ContentBlockMemberText{Value: msg.Content},
+			},
+		})
 	}
 
-	var bedrockResp BedrockResponse
-	if err := json.Unmarshal(output.Body, &bedrockResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal bedrock response: %w", err)
+	// Use Converse API which supports cross-region inference profiles
+	output, err := l.bedrockClient.Converse(ctx, &bedrockruntime.ConverseInput{
+		ModelId:  aws.String(modelID),
+		Messages: converseMessages,
+		System:   systemPrompts,
+		InferenceConfig: &types.InferenceConfiguration{
+			MaxTokens: aws.Int32(4096),
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bedrock converse error: %w", err)
 	}
 
 	var responseText string
-	for _, content := range bedrockResp.Content {
-		if content.Type == "text" {
-			responseText += content.Text
+	if output.Output != nil {
+		if msgOutput, ok := output.Output.(*types.ConverseOutputMemberMessage); ok {
+			for _, content := range msgOutput.Value.Content {
+				if textContent, ok := content.(*types.ContentBlockMemberText); ok {
+					responseText += textContent.Value
+				}
+			}
 		}
 	}
 
+	var inputTokens, outputTokens int
+	if output.Usage != nil {
+		inputTokens = int(aws.ToInt32(output.Usage.InputTokens))
+		outputTokens = int(aws.ToInt32(output.Usage.OutputTokens))
+	}
+
 	return &ChatResponse{
-		ID: bedrockResp.ID,
+		ID: "bedrock-" + modelID,
 		Choices: []struct {
 			Message      ChatMessage `json:"message"`
 			FinishReason string      `json:"finish_reason"`
 		}{
 			{
 				Message:      ChatMessage{Role: "assistant", Content: responseText},
-				FinishReason: bedrockResp.StopReason,
+				FinishReason: string(output.StopReason),
 			},
 		},
 		Usage: struct {
@@ -271,9 +278,9 @@ func (l *LLM) chatBedrock(ctx context.Context, messages []ChatMessage) (*ChatRes
 			CompletionTokens int `json:"completion_tokens"`
 			TotalTokens      int `json:"total_tokens"`
 		}{
-			PromptTokens:     bedrockResp.Usage.InputTokens,
-			CompletionTokens: bedrockResp.Usage.OutputTokens,
-			TotalTokens:      bedrockResp.Usage.InputTokens + bedrockResp.Usage.OutputTokens,
+			PromptTokens:     inputTokens,
+			CompletionTokens: outputTokens,
+			TotalTokens:      inputTokens + outputTokens,
 		},
 	}, nil
 }
