@@ -1,24 +1,156 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { StatCard } from '@/components/base/stat-card'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import Link from 'next/link'
-import { Lightbulb, AlertTriangle, FileText, TrendingUp } from 'lucide-react'
-import { useRecommendations, useComplianceGaps, useRiskScore } from '@/hooks/use-advisor'
+import {
+  Lightbulb, AlertTriangle, FileText, TrendingUp, Shield,
+  ChevronDown, ChevronRight, RefreshCw, Clock, Database
+} from 'lucide-react'
+import {
+  useRecommendations, useComplianceGaps, useRiskScore,
+  useRunComplianceAssessment, type Recommendation
+} from '@/hooks/use-advisor'
+
+function RecommendationCard({ rec }: { rec: Recommendation }) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-start gap-4 p-4 hover:bg-muted/50 transition-colors text-left"
+      >
+        <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
+          rec.priority === 'high' ? 'bg-red-500' :
+          rec.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
+        }`} />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-medium text-foreground">{rec.title}</p>
+            {rec.evidence_count > 0 && (
+              <span className="flex items-center gap-1 px-1.5 py-0 rounded bg-primary/10 text-primary text-xs">
+                <FileText className="h-3 w-3" />
+                {rec.evidence_count}
+              </span>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`px-2 py-0.5 rounded text-xs ${
+            rec.priority === 'high' ? 'bg-red-500/10 text-red-600' :
+            rec.priority === 'medium' ? 'bg-yellow-500/10 text-yellow-600' : 'bg-green-500/10 text-green-600'
+          }`}>
+            {rec.priority}
+          </span>
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border bg-background p-4 space-y-3">
+          {rec.regulation_article && (
+            <div>
+              <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Regulation Reference
+              </h5>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 text-xs font-mono">
+                <FileText className="h-3 w-3" />
+                {rec.regulation_article.split(' - ')[0]}
+              </span>
+              <p className="text-xs text-muted-foreground mt-1">{rec.regulation_article}</p>
+            </div>
+          )}
+
+          {rec.severity_reason && (
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1 flex items-center gap-1">
+                <Shield className="h-3 w-3" /> Severity Justification
+              </h5>
+              <p className="text-xs text-foreground">{rec.severity_reason}</p>
+            </div>
+          )}
+
+          {rec.evidence_summary && (
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Evidence Summary
+              </h5>
+              <p className="text-xs text-foreground">{rec.evidence_summary}</p>
+            </div>
+          )}
+
+          {rec.evidence && rec.evidence.length > 0 && (
+            <div className="rounded-md border border-border bg-muted/30 p-3">
+              <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                Supporting Evidence ({rec.evidence.length})
+              </h5>
+              <div className="space-y-2">
+                {rec.evidence.slice(0, 3).map((ev) => (
+                  <div key={ev.id} className="flex items-start gap-2 text-xs">
+                    <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-foreground">{ev.description}</p>
+                      <span className="text-muted-foreground flex items-center gap-1 mt-0.5">
+                        <Clock className="h-3 w-3" />
+                        {new Date(ev.detected_at).toLocaleDateString()} via {ev.source}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {rec.affected_assets && rec.affected_assets.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {rec.affected_assets.slice(0, 5).map((asset) => (
+                <span
+                  key={asset.id}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-xs"
+                >
+                  <Database className="h-3 w-3 text-muted-foreground" />
+                  {asset.name}
+                </span>
+              ))}
+              {rec.affected_assets.length > 5 && (
+                <span className="text-xs text-muted-foreground">
+                  +{rec.affected_assets.length - 5} more
+                </span>
+              )}
+            </div>
+          )}
+
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+            <h5 className="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+              Recommended Action
+            </h5>
+            <p className="text-sm text-foreground">{rec.action}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function AdvisorPage() {
   const { data: recommendations, isLoading: recsLoading } = useRecommendations()
   const { data: gaps, isLoading: gapsLoading } = useComplianceGaps()
   const { data: riskScore, isLoading: riskLoading } = useRiskScore()
+  const assessment = useRunComplianceAssessment()
 
   const stats = useMemo(() => {
     const recsCount = Array.isArray(recommendations) ? recommendations.length : 0
     const gapsCount = Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0
     const score = riskScore?.overall_score ? Math.round(riskScore.overall_score * 100) : 0
+    const totalEvidence = Array.isArray(recommendations)
+      ? recommendations.reduce((sum: number, r: any) => sum + (r.evidence_count || 0), 0)
+      : 0
 
-    return { recsCount, gapsCount, score }
+    return { recsCount, gapsCount, score, totalEvidence }
   }, [recommendations, gaps, riskScore])
 
   const isLoading = recsLoading || gapsLoading || riskLoading
@@ -28,8 +160,49 @@ export default function AdvisorPage() {
       {/* Header */}
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs items={[{ label: 'Compliance Advisor', active: true }]} />
-        <h1 className="text-3xl font-bold text-foreground mt-4">Compliance Advisor</h1>
-        <p className="text-sm text-muted-foreground mt-1">AI-powered compliance recommendations and gap analysis</p>
+        <div className="flex items-center justify-between mt-4">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Compliance Advisor</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Evidence-backed compliance recommendations and audit-grade gap analysis
+            </p>
+          </div>
+          <button
+            onClick={() => assessment.mutate()}
+            disabled={assessment.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${assessment.isPending ? 'animate-spin' : ''}`} />
+            {assessment.isPending ? 'Running Assessment...' : 'Run Assessment'}
+          </button>
+        </div>
+
+        {/* Assessment result banner */}
+        {assessment.data && (
+          <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-foreground">
+                    {Math.round(assessment.data.compliance_score * 100)}%
+                  </p>
+                  <p className="text-xs text-muted-foreground">Compliance Score</p>
+                </div>
+                <div className="h-8 w-px bg-border" />
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>{assessment.data.data_sources_checked} sources checked</span>
+                  <span>{assessment.data.classifications_checked} classifications</span>
+                  <span>{assessment.data.policies_evaluated} policies evaluated</span>
+                  <span>{assessment.data.total_evidence} evidence items</span>
+                </div>
+              </div>
+              <div className="text-xs text-muted-foreground text-right">
+                <p>Assessed: {new Date(assessment.data.assessed_at).toLocaleString()}</p>
+                <p>Regulations: {assessment.data.regulations_covered?.join(', ')}</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -63,8 +236,8 @@ export default function AdvisorPage() {
                 icon={<AlertTriangle className="h-6 w-6" />}
               />
               <StatCard
-                label="Defense Dockets"
-                value="Ready"
+                label="Evidence Items"
+                value={stats.totalEvidence.toString()}
                 icon={<FileText className="h-6 w-6" />}
               />
             </>
@@ -80,9 +253,9 @@ export default function AdvisorPage() {
             <AlertTriangle className="h-8 w-8 text-yellow-500 mb-4" />
             <h3 className="text-lg font-semibold text-foreground">Compliance Gaps</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              View and address compliance gaps across regulations
+              View evidence-backed gaps across regulations
             </p>
-            <p className="text-sm text-primary mt-4">{stats.gapsCount} gaps to address</p>
+            <p className="text-sm text-primary mt-4">{stats.gapsCount} gaps with evidence trails</p>
           </Link>
 
           <Link
@@ -110,9 +283,16 @@ export default function AdvisorPage() {
           </Link>
         </div>
 
-        {/* Recommendations */}
+        {/* Recommendations with Evidence */}
         <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="text-lg font-semibold text-foreground mb-4">Top Recommendations</h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-foreground">Top Recommendations</h3>
+            {stats.totalEvidence > 0 && (
+              <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                {stats.totalEvidence} evidence items supporting {stats.recsCount} findings
+              </span>
+            )}
+          </div>
           {recsLoading ? (
             <div className="space-y-3">
               <Skeleton className="h-16 w-full" />
@@ -120,26 +300,8 @@ export default function AdvisorPage() {
             </div>
           ) : recommendations && Array.isArray(recommendations) && recommendations.length > 0 ? (
             <div className="space-y-3">
-              {recommendations.slice(0, 5).map((rec: any) => (
-                <div
-                  key={rec.id}
-                  className="flex items-start gap-4 p-4 rounded-lg bg-muted/50"
-                >
-                  <div className={`w-2 h-2 rounded-full mt-2 ${
-                    rec.priority === 'high' ? 'bg-red-500' : 
-                    rec.priority === 'medium' ? 'bg-yellow-500' : 'bg-green-500'
-                  }`} />
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{rec.title}</p>
-                    <p className="text-sm text-muted-foreground mt-1">{rec.description}</p>
-                  </div>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    rec.priority === 'high' ? 'bg-red-500/10 text-red-600' : 
-                    rec.priority === 'medium' ? 'bg-yellow-500/10 text-yellow-600' : 'bg-green-500/10 text-green-600'
-                  }`}>
-                    {rec.priority}
-                  </span>
-                </div>
+              {recommendations.slice(0, 7).map((rec: Recommendation) => (
+                <RecommendationCard key={rec.id} rec={rec} />
               ))}
             </div>
           ) : (
@@ -147,7 +309,7 @@ export default function AdvisorPage() {
               <Lightbulb className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <p className="text-muted-foreground">No recommendations at this time</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Recommendations will appear as the system analyzes your data
+                Click "Run Assessment" to analyze your compliance posture
               </p>
             </div>
           )}

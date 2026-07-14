@@ -291,6 +291,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/gaps", s.getComplianceGaps)
 				r.Get("/report", s.getComplianceReport)
 				r.Get("/risk-score", s.getRiskScore)
+				r.Post("/assess", s.runComplianceAssessment)
 			})
 
 			// Observability
@@ -380,6 +381,7 @@ func (s *Server) setupRoutes() {
 				r.Post("/defense-docket", s.generateDefenseDocket)
 				r.Get("/playbook/{issue_type}", s.getPlaybook)
 				r.Get("/risk-score", s.getRiskScore)
+				r.Post("/assess", s.runComplianceAssessment)
 			})
 
 			// ROT

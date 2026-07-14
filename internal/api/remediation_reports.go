@@ -688,12 +688,21 @@ func (s *Server) getCorrectionTrend(w http.ResponseWriter, r *http.Request) {
 
 // FrontendRecommendation matches the frontend's expected format
 type FrontendRecommendation struct {
-	ID          string `json:"id"`
-	Type        string `json:"type"`
-	Priority    string `json:"priority"` // Frontend expects "priority" not "severity"
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Action      string `json:"action"`
+	ID                string                `json:"id"`
+	Type              string                `json:"type"`
+	Priority          string                `json:"priority"`
+	Title             string                `json:"title"`
+	Description       string                `json:"description"`
+	Action            string                `json:"action"`
+	Regulation        string                `json:"regulation,omitempty"`
+	RegulationArticle string                `json:"regulation_article,omitempty"`
+	Evidence          []domain.EvidenceItem `json:"evidence"`
+	AffectedAssets    []domain.AffectedAsset `json:"affected_assets"`
+	EvidenceCount     int                   `json:"evidence_count"`
+	DetectedAt        time.Time             `json:"detected_at"`
+	EvidenceSummary   string                `json:"evidence_summary"`
+	SeverityReason    string                `json:"severity_reason"`
+	AffectedCount     int                   `json:"affected_count"`
 }
 
 func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
@@ -726,6 +735,10 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 		ropa = []store.RoPA{}
 	}
 
+	var auditLogs []store.AuditLog
+	s.db.SelectContext(ctx, &auditLogs,
+		"SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100", tenantID)
+
 	var totalDatasets, labeledDatasets int
 	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
 	s.db.GetContext(ctx, &labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", tenantID)
@@ -740,11 +753,12 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 		RoPA:                ropa,
 		TotalDatasets:       totalDatasets,
 		LabeledDatasets:     labeledDatasets,
+		AuditLogs:           auditLogs,
+		AssessmentTime:      time.Now(),
 	}
 
 	recommendations := domain.GenerateRecommendations(advCtx)
 
-	// Convert to frontend format (severity -> priority, map to lowercase)
 	result := make([]FrontendRecommendation, 0, len(recommendations))
 	for _, rec := range recommendations {
 		priority := "low"
@@ -758,30 +772,58 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 		case "LOW":
 			priority = "low"
 		}
+
+		evidence := rec.Evidence
+		if evidence == nil {
+			evidence = []domain.EvidenceItem{}
+		}
+		assets := rec.AffectedAssets
+		if assets == nil {
+			assets = []domain.AffectedAsset{}
+		}
+
 		result = append(result, FrontendRecommendation{
-			ID:          rec.ID,
-			Type:        rec.Category,
-			Priority:    priority,
-			Title:       rec.Title,
-			Description: rec.Description,
-			Action:      rec.Action,
+			ID:                rec.ID,
+			Type:              rec.Category,
+			Priority:          priority,
+			Title:             rec.Title,
+			Description:       rec.Description,
+			Action:            rec.Action,
+			Regulation:        rec.Regulation,
+			RegulationArticle: rec.RegulationArticle,
+			Evidence:          evidence,
+			AffectedAssets:    assets,
+			EvidenceCount:     len(evidence),
+			DetectedAt:        rec.DetectedAt,
+			EvidenceSummary:   rec.EvidenceSummary,
+			SeverityReason:    rec.SeverityReason,
+			AffectedCount:     rec.AffectedCount,
 		})
 	}
 
 	pkg.JSON(w, result)
 }
 
-// FrontendComplianceGap matches the frontend's expected format
+// FrontendComplianceGap matches the frontend's expected format with evidence
 type FrontendComplianceGap struct {
-	Regulation  string `json:"regulation"`
-	Requirement string `json:"requirement"`
-	Status      string `json:"status"`
-	Remediation string `json:"remediation"`
+	Regulation        string                `json:"regulation"`
+	Requirement       string                `json:"requirement"`
+	Status            string                `json:"status"`
+	Remediation       string                `json:"remediation"`
+	RegulationArticle string                `json:"regulation_article"`
+	Evidence          []domain.EvidenceItem `json:"evidence"`
+	AffectedAssets    []domain.AffectedAsset `json:"affected_assets"`
+	EvidenceCount     int                   `json:"evidence_count"`
+	DetectedAt        time.Time             `json:"detected_at"`
+	LastAssessed      time.Time             `json:"last_assessed"`
+	Severity          string                `json:"severity"`
+	SeverityReason    string                `json:"severity_reason"`
 }
 
 func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
+	now := time.Now()
 
 	var totalDatasets, labeledDatasets, policyCount int
 	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
@@ -791,116 +833,321 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 	var ropaCount int
 	s.db.GetContext(ctx, &ropaCount, "SELECT COUNT(*) FROM ropa WHERE tenant_id = $1", tenantID)
 
-	// Check for specific policy types
 	var consentPolicyCount, localizationPolicyCount, crossBorderPolicyCount int
 	s.db.GetContext(ctx, &consentPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('consent', 'lawful_basis')", tenantID)
 	s.db.GetContext(ctx, &localizationPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('localization', 'data_localization')", tenantID)
 	s.db.GetContext(ctx, &crossBorderPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('cross_border', 'transfer')", tenantID)
 
-	// Build gaps array in the format frontend expects
+	// Get unscanned data sources for evidence
+	var unscannedSources []store.DataSource
+	s.db.SelectContext(ctx, &unscannedSources,
+		"SELECT * FROM datasources WHERE tenant_id = $1 AND (last_scan IS NULL) LIMIT 5", tenantID)
+
+	// Get sample classifications for evidence
+	var sampleClassifications []store.Classification
+	s.db.SelectContext(ctx, &sampleClassifications,
+		"SELECT * FROM classifications WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 5", tenantID)
+
 	gaps := []FrontendComplianceGap{}
 
 	// GDPR gaps
 	if labeledDatasets < totalDatasets && totalDatasets > 0 {
+		unlabeled := totalDatasets - labeledDatasets
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-gdpr-classification",
+			Type:        "coverage_gap",
+			Source:      "label_engine",
+			Description: fmt.Sprintf("%d of %d datasets lack sensitivity labels required for Art. 5 compliance", unlabeled, totalDatasets),
+			DetectedAt:  now,
+			Metadata:    map[string]any{"total": totalDatasets, "labeled": labeledDatasets, "unlabeled": unlabeled},
+		}}
+		var assets []domain.AffectedAsset
+		for _, c := range sampleClassifications {
+			assets = append(assets, domain.AffectedAsset{ID: c.SourceID, Name: c.DatasetID, Type: "dataset"})
+		}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "GDPR",
-			Requirement: "Data Classification (Art. 5)",
-			Status:      "open",
-			Remediation: "Complete data classification for all datasets",
+			Regulation:        "GDPR",
+			Requirement:       "Data Classification (Art. 5)",
+			Status:            "open",
+			Remediation:       "Complete data classification for all datasets",
+			RegulationArticle: "GDPR Art. 5(1)(d) - Accuracy: personal data must be accurate and kept up to date",
+			Evidence:          evidence,
+			AffectedAssets:    assets,
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    fmt.Sprintf("%d datasets without labels means data handling cannot be governed appropriately", unlabeled),
 		})
 	}
 	if ropaCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-gdpr-ropa",
+			Type:        "absence_of_record",
+			Source:      "ropa_registry",
+			Description: "Zero Records of Processing Activities exist in the system",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"ropa_count": 0, "requirement": "mandatory for all controllers"},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "GDPR",
-			Requirement: "Records of Processing Activities (Art. 30)",
-			Status:      "open",
-			Remediation: "Create RoPA entries documenting all data processing activities",
+			Regulation:        "GDPR",
+			Requirement:       "Records of Processing Activities (Art. 30)",
+			Status:            "open",
+			Remediation:       "Create RoPA entries documenting all data processing activities",
+			RegulationArticle: "GDPR Art. 30(1) - Each controller and processor shall maintain a record of processing activities",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "CRITICAL",
+			SeverityReason:    "Art. 30 is a mandatory obligation for all data controllers; auditors will flag this immediately",
 		})
 	}
 	if policyCount < 3 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-gdpr-policies",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: fmt.Sprintf("Only %d active policies found; minimum 3 (access, retention, redaction) expected for GDPR", policyCount),
+			DetectedAt:  now,
+			Metadata:    map[string]any{"active_policies": policyCount, "minimum_expected": 3},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "GDPR",
-			Requirement: "Governance Policies (Art. 25, 32)",
-			Status:      "open",
-			Remediation: "Define access, retention, and redaction policies",
+			Regulation:        "GDPR",
+			Requirement:       "Governance Policies (Art. 25, 32)",
+			Status:            "open",
+			Remediation:       "Define access, retention, and redaction policies",
+			RegulationArticle: "GDPR Art. 25 - Data protection by design and by default; Art. 32 - Security of processing",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    fmt.Sprintf("Only %d policies exist; comprehensive governance requires access, retention, and protection policies", policyCount),
 		})
 	}
 
 	// CCPA gaps
 	if labeledDatasets < totalDatasets && totalDatasets > 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-ccpa-inventory",
+			Type:        "coverage_gap",
+			Source:      "classification_engine",
+			Description: fmt.Sprintf("Data inventory incomplete: %d of %d datasets not fully classified", totalDatasets-labeledDatasets, totalDatasets),
+			DetectedAt:  now,
+			Metadata:    map[string]any{"total": totalDatasets, "classified": labeledDatasets},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "CCPA",
-			Requirement: "Data Inventory (1798.100)",
-			Status:      "open",
-			Remediation: "Complete data inventory and classification",
+			Regulation:        "CCPA",
+			Requirement:       "Data Inventory (1798.100)",
+			Status:            "open",
+			Remediation:       "Complete data inventory and classification",
+			RegulationArticle: "CCPA 1798.100(a) - Consumer right to know what personal information is collected",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "MEDIUM",
+			SeverityReason:    "Incomplete inventory limits ability to fulfill consumer access requests",
 		})
 	}
 
-	// PDPB (India DPDP Act 2023) gaps
+	// DPDP Act 2023 (India) gaps
 	if consentPolicyCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-dpdp-consent",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: "No consent management policy configured; DPDP Act requires explicit consent before processing",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"consent_policies": 0},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "DPDP",
-			Requirement: "Consent Management (Section 6)",
-			Status:      "open",
-			Remediation: "Implement explicit consent collection with clear purpose specification",
+			Regulation:        "DPDP",
+			Requirement:       "Consent Management (Section 6)",
+			Status:            "open",
+			Remediation:       "Implement explicit consent collection with clear purpose specification",
+			RegulationArticle: "DPDP Act 2023 S.6(1) - Personal data shall be processed only for lawful purpose for which Data Principal has given consent",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "CRITICAL",
+			SeverityReason:    "Processing without consent is a fundamental violation; penalties up to INR 250 crore",
 		})
 	}
 	if localizationPolicyCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-dpdp-localization",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: "No data localization policy defined for critical personal data",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"localization_policies": 0},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "DPDP",
-			Requirement: "Data Localization (Section 16)",
-			Status:      "open",
-			Remediation: "Define data localization policies for critical personal data stored in India",
+			Regulation:        "DPDP",
+			Requirement:       "Data Localization (Section 16)",
+			Status:            "open",
+			Remediation:       "Define data localization policies for critical personal data stored in India",
+			RegulationArticle: "DPDP Act 2023 S.16 - Central Government may restrict transfer of personal data to certain countries",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    "Government may issue notification restricting transfers at any time; must be prepared",
 		})
 	}
 	if ropaCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-dpdp-sdf",
+			Type:        "absence_of_record",
+			Source:      "ropa_registry",
+			Description: "No documentation to assess Significant Data Fiduciary status or obligations",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"ropa_count": 0},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "DPDP",
-			Requirement: "Significant Data Fiduciary Obligations (Section 10)",
-			Status:      "open",
-			Remediation: "Appoint Data Protection Officer and conduct Data Protection Impact Assessments",
+			Regulation:        "DPDP",
+			Requirement:       "Significant Data Fiduciary Obligations (Section 10)",
+			Status:            "open",
+			Remediation:       "Appoint Data Protection Officer and conduct Data Protection Impact Assessments",
+			RegulationArticle: "DPDP Act 2023 S.10 - SDF shall appoint DPO, conduct periodic DPIA, and audit compliance",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "CRITICAL",
+			SeverityReason:    "SDF obligations include DPO appointment and DPIA; highest penalty tier for non-compliance",
 		})
 	}
 	if policyCount < 3 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-dpdp-rights",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: fmt.Sprintf("Only %d policies exist; Data Principal rights require access, correction, and erasure mechanisms", policyCount),
+			DetectedAt:  now,
+			Metadata:    map[string]any{"policy_count": policyCount},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "DPDP",
-			Requirement: "Data Principal Rights (Section 11-14)",
-			Status:      "open",
-			Remediation: "Implement mechanisms for access, correction, and erasure requests",
+			Regulation:        "DPDP",
+			Requirement:       "Data Principal Rights (Section 11-14)",
+			Status:            "open",
+			Remediation:       "Implement mechanisms for access, correction, and erasure requests",
+			RegulationArticle: "DPDP Act 2023 S.11-14 - Rights of Data Principal including access, correction, erasure, and grievance redressal",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    "Unable to fulfill Data Principal requests without proper access control mechanisms",
 		})
 	}
 
 	// UAE PDPL gaps
 	if consentPolicyCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-uae-lawful",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: "No lawful basis documentation for personal data processing",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"lawful_basis_policies": 0},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "UAE PDPL",
-			Requirement: "Lawful Basis for Processing (Art. 4)",
-			Status:      "open",
-			Remediation: "Document lawful basis for all personal data processing activities",
+			Regulation:        "UAE PDPL",
+			Requirement:       "Lawful Basis for Processing (Art. 4)",
+			Status:            "open",
+			Remediation:       "Document lawful basis for all personal data processing activities",
+			RegulationArticle: "UAE Federal Decree-Law No. 45/2021, Art. 4 - Personal data shall only be processed based on a lawful basis",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "CRITICAL",
+			SeverityReason:    "Processing without lawful basis is the most fundamental PDPL violation",
 		})
 	}
 	if crossBorderPolicyCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-uae-crossborder",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: "No cross-border transfer controls configured",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"cross_border_policies": 0},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "UAE PDPL",
-			Requirement: "Cross-Border Transfer Restrictions (Art. 22)",
-			Status:      "open",
-			Remediation: "Define cross-border transfer policies ensuring adequate protection level",
+			Regulation:        "UAE PDPL",
+			Requirement:       "Cross-Border Transfer Restrictions (Art. 22)",
+			Status:            "open",
+			Remediation:       "Define cross-border transfer policies ensuring adequate protection level",
+			RegulationArticle: "UAE Federal Decree-Law No. 45/2021, Art. 22 - Transfer outside UAE requires adequate protection or explicit consent",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    "Data transfers to countries without adequate protection level are prohibited",
 		})
 	}
 	if ropaCount == 0 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-uae-records",
+			Type:        "absence_of_record",
+			Source:      "ropa_registry",
+			Description: "No records of processing activities maintained as required by UAE PDPL",
+			DetectedAt:  now,
+			Metadata:    map[string]any{"ropa_count": 0},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "UAE PDPL",
-			Requirement: "Records of Processing Activities (Art. 8)",
-			Status:      "open",
-			Remediation: "Maintain records of all personal data processing activities",
+			Regulation:        "UAE PDPL",
+			Requirement:       "Records of Processing Activities (Art. 8)",
+			Status:            "open",
+			Remediation:       "Maintain records of all personal data processing activities",
+			RegulationArticle: "UAE Federal Decree-Law No. 45/2021, Art. 8 - Controller shall maintain record of processing activities",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    "Cannot demonstrate accountability without processing records",
 		})
 	}
 	if policyCount < 3 {
+		evidence := []domain.EvidenceItem{{
+			ID:          "ev-gap-uae-rights",
+			Type:        "policy_absence",
+			Source:      "policy_engine",
+			Description: fmt.Sprintf("Only %d policies; data subject rights require comprehensive access controls", policyCount),
+			DetectedAt:  now,
+			Metadata:    map[string]any{"policy_count": policyCount},
+		}}
 		gaps = append(gaps, FrontendComplianceGap{
-			Regulation:  "UAE PDPL",
-			Requirement: "Data Subject Rights (Art. 13-18)",
-			Status:      "open",
-			Remediation: "Implement access, rectification, erasure, and portability request mechanisms",
+			Regulation:        "UAE PDPL",
+			Requirement:       "Data Subject Rights (Art. 13-18)",
+			Status:            "open",
+			Remediation:       "Implement access, rectification, erasure, and portability request mechanisms",
+			RegulationArticle: "UAE Federal Decree-Law No. 45/2021, Art. 13-18 - Rights including access, correction, erasure, restriction, portability",
+			Evidence:          evidence,
+			AffectedAssets:    []domain.AffectedAsset{},
+			EvidenceCount:     1,
+			DetectedAt:        now,
+			LastAssessed:      now,
+			Severity:          "HIGH",
+			SeverityReason:    "Cannot process data subject requests without proper mechanisms in place",
 		})
 	}
 
@@ -1010,4 +1257,125 @@ func (s *Server) getRiskScore(w http.ResponseWriter, r *http.Request) {
 			"compliance_gaps": complianceGaps,
 		},
 	})
+}
+
+func (s *Server) runComplianceAssessment(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	userID := pkg.UserFromCtx(ctx)
+	now := time.Now()
+
+	classifications, _ := s.classifications.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if classifications == nil {
+		classifications = []store.Classification{}
+	}
+	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if policies == nil {
+		policies = []store.Policy{}
+	}
+	labels, _ := s.labels.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if labels == nil {
+		labels = []store.Label{}
+	}
+	violations, _ := s.retentionViolations.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if violations == nil {
+		violations = []store.RetentionViolation{}
+	}
+	dataSources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if dataSources == nil {
+		dataSources = []store.DataSource{}
+	}
+	ropa, _ := s.ropa.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if ropa == nil {
+		ropa = []store.RoPA{}
+	}
+
+	var auditLogs []store.AuditLog
+	s.db.SelectContext(ctx, &auditLogs,
+		"SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 200", tenantID)
+
+	var totalDatasets, labeledDatasets int
+	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", tenantID)
+
+	advCtx := &domain.AdvisorContext{
+		TenantID:            tenantID,
+		Classifications:     classifications,
+		Policies:            policies,
+		Labels:              labels,
+		RetentionViolations: violations,
+		DataSources:         dataSources,
+		RoPA:                ropa,
+		TotalDatasets:       totalDatasets,
+		LabeledDatasets:     labeledDatasets,
+		AuditLogs:           auditLogs,
+		AssessmentTime:      now,
+	}
+
+	recommendations := domain.GenerateRecommendations(advCtx)
+
+	criticalCount := 0
+	highCount := 0
+	mediumCount := 0
+	lowCount := 0
+	totalEvidence := 0
+	for _, rec := range recommendations {
+		switch rec.Severity {
+		case "CRITICAL":
+			criticalCount++
+		case "HIGH":
+			highCount++
+		case "MEDIUM":
+			mediumCount++
+		case "LOW":
+			lowCount++
+		}
+		totalEvidence += len(rec.Evidence)
+	}
+
+	overallScore := 1.0
+	if len(recommendations) > 0 {
+		overallScore = max(0.0, 1.0-float64(criticalCount)*0.2-float64(highCount)*0.1-float64(mediumCount)*0.05-float64(lowCount)*0.02)
+	}
+
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     userID,
+		Action:     "compliance.assessment.run",
+		Resource:   "compliance_assessment",
+		ResourceID: "assessment-" + now.Format("20060102-150405"),
+		IP:         r.RemoteAddr,
+	})
+
+	pkg.JSON(w, map[string]any{
+		"assessed_at":        now,
+		"assessed_by":       userID,
+		"compliance_score":  overallScore,
+		"total_findings":    len(recommendations),
+		"critical_findings": criticalCount,
+		"high_findings":     highCount,
+		"medium_findings":   mediumCount,
+		"low_findings":      lowCount,
+		"total_evidence":    totalEvidence,
+		"data_sources_checked":   len(dataSources),
+		"classifications_checked": len(classifications),
+		"policies_evaluated":      len(policies),
+		"regulations_covered":     []string{"GDPR", "CCPA", "DPDP Act 2023", "UAE PDPL", "EU AI Act", "HIPAA", "PCI-DSS"},
+		"summary": map[string]any{
+			"ropa_count":          len(ropa),
+			"retention_violations": len(violations),
+			"unscanned_sources":   countUnscanned(dataSources),
+			"unlabeled_datasets":  totalDatasets - labeledDatasets,
+		},
+	})
+}
+
+func countUnscanned(sources []store.DataSource) int {
+	count := 0
+	for _, ds := range sources {
+		if ds.LastScan == nil || ds.LastScan.IsZero() {
+			count++
+		}
+	}
+	return count
 }

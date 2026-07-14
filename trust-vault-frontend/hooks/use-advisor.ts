@@ -2,6 +2,24 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
 
+// Evidence types for compliance audit trails
+export interface EvidenceItem {
+  id: string
+  type: string
+  source: string
+  description: string
+  resource_id?: string
+  resource_ref?: string
+  detected_at: string
+  metadata?: Record<string, any>
+}
+
+export interface AffectedAsset {
+  id: string
+  name: string
+  type: string
+}
+
 // Advisor hooks
 export interface Recommendation {
   id: string
@@ -10,6 +28,15 @@ export interface Recommendation {
   title: string
   description: string
   action: string
+  regulation?: string
+  regulation_article?: string
+  evidence: EvidenceItem[]
+  affected_assets: AffectedAsset[]
+  evidence_count: number
+  detected_at: string
+  evidence_summary: string
+  severity_reason: string
+  affected_count: number
 }
 
 export interface ComplianceGap {
@@ -17,6 +44,36 @@ export interface ComplianceGap {
   requirement: string
   status: string
   remediation: string
+  regulation_article: string
+  evidence: EvidenceItem[]
+  affected_assets: AffectedAsset[]
+  evidence_count: number
+  detected_at: string
+  last_assessed: string
+  severity: string
+  severity_reason: string
+}
+
+export interface AssessmentResult {
+  assessed_at: string
+  assessed_by: string
+  compliance_score: number
+  total_findings: number
+  critical_findings: number
+  high_findings: number
+  medium_findings: number
+  low_findings: number
+  total_evidence: number
+  data_sources_checked: number
+  classifications_checked: number
+  policies_evaluated: number
+  regulations_covered: string[]
+  summary: {
+    ropa_count: number
+    retention_violations: number
+    unscanned_sources: number
+    unlabeled_datasets: number
+  }
 }
 
 export function useRecommendations() {
@@ -35,6 +92,26 @@ export function useComplianceGaps() {
     queryFn: async () => {
       const response = await api.get<ComplianceGap[]>('/advisor/gaps')
       return response.data
+    },
+  })
+}
+
+export function useRunComplianceAssessment() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.post<AssessmentResult>('/advisor/assess')
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['recommendations'] })
+      queryClient.invalidateQueries({ queryKey: ['compliance-gaps'] })
+      queryClient.invalidateQueries({ queryKey: ['risk-score'] })
+      toast.success('Compliance assessment completed')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to run compliance assessment')
     },
   })
 }
