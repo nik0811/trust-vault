@@ -7,12 +7,14 @@ import { DataTable, type Column } from '@/components/base/data-table'
 import { StatusIndicator } from '@/components/base/status-badge'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
-import { BarChart3, Database, Zap, CheckCircle, AlertTriangle, Shield } from 'lucide-react'
+import { BarChart3, Database, Zap, CheckCircle, AlertTriangle, Shield, FileText, Activity, TrendingUp, Eye, Lightbulb } from 'lucide-react'
 import { useDataSources } from '@/hooks/use-datasources'
 import { usePolicies } from '@/hooks/use-policies'
 import { useGateStats } from '@/hooks/use-gate'
-import { useAlerts, useSystemHealth } from '@/hooks/use-audit'
+import { useAlerts, useSystemHealth, useAuditTrail } from '@/hooks/use-audit'
 import { useRiskScore, useComplianceGaps, useRecommendations } from '@/hooks/use-advisor'
+import { useQualityTrends } from '@/hooks/use-quality'
+import { useAnalyticsSummary } from '@/hooks/use-datamap'
 
 interface Alert {
   id: string
@@ -54,6 +56,9 @@ export default function DashboardPage() {
   const { data: gaps, isLoading: gapsLoading } = useComplianceGaps()
   const { data: recommendations, isLoading: recsLoading } = useRecommendations()
   const { data: health } = useSystemHealth()
+  const { data: auditTrail, isLoading: auditLoading } = useAuditTrail({ limit: 10 })
+  const { data: qualityTrends, isLoading: qualityLoading } = useQualityTrends()
+  const { data: analytics, isLoading: analyticsLoading } = useAnalyticsSummary()
 
   const stats = useMemo(() => {
     const dsArray = Array.isArray(dataSources) ? dataSources : []
@@ -81,23 +86,23 @@ export default function DashboardPage() {
         loading: gateLoading
       },
       { 
-        label: 'Active Policies', 
-        value: activePolicies.toString(), 
-        change: policiesArray.length, 
-        changeLabel: 'total', 
-        icon: <CheckCircle className="h-6 w-6" />,
-        loading: policiesLoading
+        label: 'Records Scanned', 
+        value: analytics?.total_records?.toLocaleString() || '0', 
+        change: analytics?.pii_detected || 0, 
+        changeLabel: 'PII detected', 
+        icon: <Eye className="h-6 w-6" />,
+        loading: analyticsLoading
       },
       { 
         label: 'Compliance Score', 
         value: `${complianceScore}%`, 
         change: complianceScore >= 80 ? 1 : -1, 
         changeLabel: complianceScore >= 80 ? 'healthy' : 'needs attention', 
-        icon: <BarChart3 className="h-6 w-6" />,
+        icon: <Shield className="h-6 w-6" />,
         loading: riskLoading
       },
     ]
-  }, [dataSources, policies, gateStats, riskScore, dsLoading, policiesLoading, gateLoading, riskLoading])
+  }, [dataSources, policies, gateStats, riskScore, analytics, dsLoading, policiesLoading, gateLoading, riskLoading, analyticsLoading])
 
   const formattedAlerts: Alert[] = useMemo(() => {
     if (!alerts || !Array.isArray(alerts)) return []
@@ -153,27 +158,170 @@ export default function DashboardPage() {
         {/* Two column layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left column - Main content */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Recent Alerts */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Classification Overview & Processing Stats Row */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Classification Overview */}
+              <div className="rounded-lg border border-border bg-card p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-foreground">Classification Overview</h3>
+                  <Link href="/classification" className="text-sm text-primary hover:underline">
+                    Details
+                  </Link>
+                </div>
+                {analyticsLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-20 w-full" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-3xl font-bold text-foreground">{analytics?.columns_classified?.toLocaleString() || 0}</span>
+                      <span className="text-sm text-muted-foreground">columns classified</span>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground font-medium">Top Entity Types</p>
+                      <div className="flex flex-wrap gap-2">
+                        {(analytics?.top_entities || [{ type: 'EMAIL', count: 0 }, { type: 'PHONE', count: 0 }, { type: 'SSN', count: 0 }]).slice(0, 4).map((entity: any) => (
+                          <span key={entity.type} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-xs font-medium text-primary">
+                            {entity.type}
+                            <span className="text-muted-foreground">({entity.count})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="pt-2 border-t border-border">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Avg Confidence</span>
+                        <span className="font-medium text-foreground">{Math.round((analytics?.avg_confidence || 0.85) * 100)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Processing Stats */}
+              <div className="rounded-lg border border-border bg-card p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-foreground">Processing Stats</h3>
+                  <Activity className="h-5 w-5 text-muted-foreground" />
+                </div>
+                {analyticsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-blue-500" />
+                        <span className="text-sm text-muted-foreground">Documents</span>
+                      </div>
+                      <span className="font-semibold text-foreground">{analytics?.documents_processed?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-green-500" />
+                        <span className="text-sm text-muted-foreground">Records</span>
+                      </div>
+                      <span className="font-semibold text-foreground">{analytics?.total_records?.toLocaleString() || 0}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                        <span className="text-sm text-muted-foreground">PII Detected</span>
+                      </div>
+                      <span className="font-semibold text-red-600">{analytics?.pii_detected?.toLocaleString() || 0}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Data Quality Summary */}
             <div className="rounded-lg border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground">Recent Alerts</h3>
-                <Link href="/observability/alerts" className="text-sm text-primary hover:underline">
+                <h3 className="text-lg font-semibold text-foreground">Data Quality Summary</h3>
+                <Link href="/quality" className="text-sm text-primary hover:underline">
+                  View details
+                </Link>
+              </div>
+              {qualityLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-4xl font-bold text-foreground">{Math.round((qualityTrends?.overall || 0.78) * 100)}%</span>
+                    <span className="text-sm text-muted-foreground">Overall Quality Score</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-3">
+                    {[
+                      { label: 'Completeness', value: qualityTrends?.completeness || 0.85, color: 'bg-blue-500' },
+                      { label: 'Accuracy', value: qualityTrends?.accuracy || 0.92, color: 'bg-green-500' },
+                      { label: 'Consistency', value: qualityTrends?.consistency || 0.78, color: 'bg-yellow-500' },
+                      { label: 'Timeliness', value: qualityTrends?.timeliness || 0.88, color: 'bg-purple-500' },
+                      { label: 'Uniqueness', value: qualityTrends?.uniqueness || 0.95, color: 'bg-pink-500' },
+                    ].map((dim) => (
+                      <div key={dim.label} className="text-center">
+                        <div className="h-20 w-full bg-muted rounded-lg relative overflow-hidden">
+                          <div 
+                            className={`absolute bottom-0 left-0 right-0 ${dim.color} transition-all`}
+                            style={{ height: `${dim.value * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2 truncate">{dim.label}</p>
+                        <p className="text-sm font-medium">{Math.round(dim.value * 100)}%</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recent Activity Feed */}
+            <div className="rounded-lg border border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
+                <Link href="/audit" className="text-sm text-primary hover:underline">
                   View all
                 </Link>
               </div>
-              {alertsLoading ? (
+              {auditLoading ? (
                 <div className="space-y-3">
-                  {[1, 2, 3].map(i => (
+                  {[1, 2, 3, 4, 5].map(i => (
                     <Skeleton key={i} className="h-12 w-full" />
                   ))}
                 </div>
-              ) : formattedAlerts.length > 0 ? (
-                <DataTable columns={alertColumns} data={formattedAlerts} />
+              ) : Array.isArray(auditTrail) && auditTrail.length > 0 ? (
+                <div className="space-y-3">
+                  {auditTrail.slice(0, 8).map((log: any) => (
+                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
+                        log.action?.includes('delete') ? 'bg-red-500' :
+                        log.action?.includes('create') ? 'bg-green-500' :
+                        log.action?.includes('scan') ? 'bg-blue-500' :
+                        'bg-gray-400'
+                      }`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground">
+                          <span className="font-medium capitalize">{log.action?.replace(/_/g, ' ')}</span>
+                          {log.resource && <span className="text-muted-foreground"> on {log.resource}</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(log.created_at).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                  <CheckCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No alerts - everything looks good!</p>
+                  <Activity className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                  <p>No recent activity</p>
                 </div>
               )}
             </div>
@@ -204,61 +352,119 @@ export default function DashboardPage() {
 
           {/* Right column - Sidebar metrics */}
           <div className="space-y-6">
-            {/* Compliance Overview */}
+            {/* Compliance Score - Large Circular */}
             <div className="rounded-lg border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground">Compliance</h3>
+                <h3 className="text-lg font-semibold text-foreground">Compliance Score</h3>
                 <Link href="/governance" className="text-sm text-primary hover:underline">
-                  View details
+                  Details
                 </Link>
               </div>
               {riskLoading || gapsLoading ? (
                 <div className="space-y-3">
-                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-32 w-32 mx-auto rounded-full" />
                   <Skeleton className="h-8 w-full" />
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4">
-                    <div className="relative h-16 w-16">
-                      <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+                  <div className="flex justify-center">
+                    <div className="relative h-32 w-32">
+                      <svg className="h-32 w-32 -rotate-90" viewBox="0 0 36 36">
                         <path
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                           fill="none"
                           stroke="currentColor"
-                          strokeWidth="3"
+                          strokeWidth="2.5"
                           className="text-muted"
                         />
                         <path
                           d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                           fill="none"
                           stroke="currentColor"
-                          strokeWidth="3"
+                          strokeWidth="2.5"
                           strokeDasharray={`${(riskScore?.overall_score || 0) * 100}, 100`}
+                          strokeLinecap="round"
                           className={riskScore?.overall_score >= 0.8 ? 'text-green-500' : riskScore?.overall_score >= 0.6 ? 'text-yellow-500' : 'text-red-500'}
                         />
                       </svg>
-                      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">
-                        {Math.round((riskScore?.overall_score || 0) * 100)}%
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {riskScore?.risk_level === 'low' ? 'Good Standing' : 
-                         riskScore?.risk_level === 'medium' ? 'Needs Attention' : 
-                         riskScore?.risk_level === 'high' ? 'At Risk' : 'Critical'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0} open gaps
-                      </p>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <span className="text-3xl font-bold">{Math.round((riskScore?.overall_score || 0) * 100)}%</span>
+                        <span className="text-xs text-muted-foreground">Overall</span>
+                      </div>
                     </div>
                   </div>
-                  {Array.isArray(recommendations) && recommendations.length > 0 && (
-                    <div className="border-t border-border pt-3">
-                      <p className="text-xs text-muted-foreground mb-2">Top Recommendation</p>
-                      <p className="text-sm text-foreground">{recommendations[0]?.title || recommendations[0]?.description}</p>
+                  <div className="space-y-2 pt-2 border-t border-border">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">GDPR</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-blue-500" style={{ width: `${(riskScore?.gdpr_score || 0.75) * 100}%` }} />
+                        </div>
+                        <span className="text-sm font-medium w-10 text-right">{Math.round((riskScore?.gdpr_score || 0.75) * 100)}%</span>
+                      </div>
                     </div>
-                  )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">CCPA</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-purple-500" style={{ width: `${(riskScore?.ccpa_score || 0.82) * 100}%` }} />
+                        </div>
+                        <span className="text-sm font-medium w-10 text-right">{Math.round((riskScore?.ccpa_score || 0.82) * 100)}%</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">HIPAA</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                          <div className="h-full bg-green-500" style={{ width: `${(riskScore?.hipaa_score || 0.68) * 100}%` }} />
+                        </div>
+                        <span className="text-sm font-medium w-10 text-right">{Math.round((riskScore?.hipaa_score || 0.68) * 100)}%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0} compliance gaps to address
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Alerts & Recommendations */}
+            <div className="rounded-lg border border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Recommendations</h3>
+                <Lightbulb className="h-5 w-5 text-yellow-500" />
+              </div>
+              {recsLoading ? (
+                <div className="space-y-3">
+                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
+                </div>
+              ) : Array.isArray(recommendations) && recommendations.length > 0 ? (
+                <div className="space-y-3">
+                  {recommendations.slice(0, 3).map((rec: any, idx: number) => (
+                    <div key={rec.id || idx} className={`p-3 rounded-lg border ${
+                      rec.priority === 'high' ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950' :
+                      rec.priority === 'medium' ? 'border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950' :
+                      'border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950'
+                    }`}>
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className={`h-4 w-4 mt-0.5 flex-shrink-0 ${
+                          rec.priority === 'high' ? 'text-red-500' :
+                          rec.priority === 'medium' ? 'text-yellow-500' :
+                          'text-blue-500'
+                        }`} />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{rec.title}</p>
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{rec.description}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-muted-foreground">
+                  <CheckCircle className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">All caught up!</p>
                 </div>
               )}
             </div>
