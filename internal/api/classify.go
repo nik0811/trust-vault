@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
@@ -392,24 +393,39 @@ func (s *Server) createClassificationRule(w http.ResponseWriter, r *http.Request
 	tenantID := pkg.TenantFromCtx(ctx)
 
 	var req struct {
-		Name       string         `json:"name" validate:"required"`
-		Conditions map[string]any `json:"conditions"`
-		Actions    map[string]any `json:"actions"`
+		Name          string  `json:"name" validate:"required"`
+		Type          string  `json:"type" validate:"required,oneof=override pattern whitelist threshold"`
+		ColumnPattern string  `json:"column_pattern"`
+		ValuePattern  string  `json:"value_pattern"`
+		EntityType    string  `json:"entity_type"`
+		Confidence    float64 `json:"confidence"`
+		Priority      int     `json:"priority"`
+		Active        bool    `json:"active"`
 	}
 	if err := pkg.Bind(r, &req); err != nil {
 		pkg.Error(w, err, http.StatusBadRequest)
 		return
 	}
 
-	policy := store.Policy{
-		TenantID: tenantID,
-		Name:     req.Name,
-		Type:     "classification",
-		Active:   true,
+	// Default confidence to 0.95 if not provided
+	if req.Confidence == 0 {
+		req.Confidence = 0.95
 	}
-	s.policies.Create(ctx, &policy)
 
-	pkg.JSON(w, policy, http.StatusCreated)
+	rule := store.ClassificationRule{
+		TenantID:      tenantID,
+		Name:          req.Name,
+		Type:          req.Type,
+		ColumnPattern: req.ColumnPattern,
+		ValuePattern:  req.ValuePattern,
+		EntityType:    req.EntityType,
+		Confidence:    req.Confidence,
+		Priority:      req.Priority,
+		Active:        req.Active,
+	}
+	s.classificationRules.Create(ctx, &rule)
+
+	pkg.JSON(w, rule, http.StatusCreated)
 }
 
 // builtInModels are the default classification models available
@@ -502,12 +518,130 @@ func (s *Server) listClassificationRules(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var rules []store.Policy
+	var rules []store.ClassificationRule
 	s.db.SelectContext(ctx, &rules,
-		"SELECT * FROM policies WHERE tenant_id = $1 AND type = 'classification' ORDER BY created_at DESC",
+		"SELECT * FROM classification_rules WHERE tenant_id = $1 ORDER BY priority DESC, created_at DESC",
 		tenantID)
 
 	pkg.JSON(w, rules)
+}
+
+func (s *Server) getClassificationRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	ruleID := chi.URLParam(r, "id")
+
+	var rule store.ClassificationRule
+	err := s.db.GetContext(ctx, &rule,
+		"SELECT * FROM classification_rules WHERE tenant_id = $1 AND id = $2",
+		tenantID, ruleID)
+	if err != nil {
+		pkg.Error(w, err, http.StatusNotFound)
+		return
+	}
+
+	pkg.JSON(w, rule)
+}
+
+func (s *Server) updateClassificationRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	ruleID := chi.URLParam(r, "id")
+
+	var req struct {
+		Name          string  `json:"name"`
+		Type          string  `json:"type"`
+		ColumnPattern string  `json:"column_pattern"`
+		ValuePattern  string  `json:"value_pattern"`
+		EntityType    string  `json:"entity_type"`
+		Confidence    float64 `json:"confidence"`
+		Priority      int     `json:"priority"`
+		Active        *bool   `json:"active"`
+	}
+	if err := pkg.Bind(r, &req); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// Build dynamic update query
+	updates := []string{"updated_at = NOW()"}
+	args := []any{}
+	argIdx := 1
+
+	if req.Name != "" {
+		updates = append(updates, fmt.Sprintf("name = $%d", argIdx))
+		args = append(args, req.Name)
+		argIdx++
+	}
+	if req.Type != "" {
+		updates = append(updates, fmt.Sprintf("type = $%d", argIdx))
+		args = append(args, req.Type)
+		argIdx++
+	}
+	if req.ColumnPattern != "" {
+		updates = append(updates, fmt.Sprintf("column_pattern = $%d", argIdx))
+		args = append(args, req.ColumnPattern)
+		argIdx++
+	}
+	if req.ValuePattern != "" {
+		updates = append(updates, fmt.Sprintf("value_pattern = $%d", argIdx))
+		args = append(args, req.ValuePattern)
+		argIdx++
+	}
+	if req.EntityType != "" {
+		updates = append(updates, fmt.Sprintf("entity_type = $%d", argIdx))
+		args = append(args, req.EntityType)
+		argIdx++
+	}
+	if req.Confidence > 0 {
+		updates = append(updates, fmt.Sprintf("confidence = $%d", argIdx))
+		args = append(args, req.Confidence)
+		argIdx++
+	}
+	if req.Priority != 0 {
+		updates = append(updates, fmt.Sprintf("priority = $%d", argIdx))
+		args = append(args, req.Priority)
+		argIdx++
+	}
+	if req.Active != nil {
+		updates = append(updates, fmt.Sprintf("active = $%d", argIdx))
+		args = append(args, *req.Active)
+		argIdx++
+	}
+
+	args = append(args, tenantID, ruleID)
+	query := fmt.Sprintf("UPDATE classification_rules SET %s WHERE tenant_id = $%d AND id = $%d",
+		strings.Join(updates, ", "), argIdx, argIdx+1)
+
+	_, err := s.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	// Fetch updated rule
+	var rule store.ClassificationRule
+	s.db.GetContext(ctx, &rule,
+		"SELECT * FROM classification_rules WHERE tenant_id = $1 AND id = $2",
+		tenantID, ruleID)
+
+	pkg.JSON(w, rule)
+}
+
+func (s *Server) deleteClassificationRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	ruleID := chi.URLParam(r, "id")
+
+	_, err := s.db.ExecContext(ctx,
+		"DELETE FROM classification_rules WHERE tenant_id = $1 AND id = $2",
+		tenantID, ruleID)
+	if err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	pkg.JSON(w, map[string]string{"status": "deleted"})
 }
 
 // ColumnClassification represents classification results for a single column

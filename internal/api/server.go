@@ -57,6 +57,7 @@ type Server struct {
 	retentionPolicies   *store.Repository[store.RetentionPolicy]
 	retentionViolations *store.Repository[store.RetentionViolation]
 	scanLogs            *store.Repository[store.ScanLog]
+	classificationRules *store.Repository[store.ClassificationRule]
 }
 
 func NewServer(db *store.DB, kafka *external.Kafka) *Server {
@@ -98,6 +99,7 @@ func NewServer(db *store.DB, kafka *external.Kafka) *Server {
 		retentionPolicies:   store.NewRepo[store.RetentionPolicy](db, "retention_policies"),
 		retentionViolations: store.NewRepo[store.RetentionViolation](db, "retention_violations"),
 		scanLogs:            store.NewRepo[store.ScanLog](db, "scan_logs"),
+		classificationRules: store.NewRepo[store.ClassificationRule](db, "classification_rules"),
 	}
 
 	s.setupRoutes()
@@ -223,6 +225,9 @@ func (s *Server) setupRoutes() {
 				r.Get("/results/{dataset_id}", s.getClassificationResults)
 				r.Get("/rules", s.listClassificationRules)
 				r.Post("/rules", s.createClassificationRule)
+				r.Get("/rules/{id}", s.getClassificationRule)
+				r.Put("/rules/{id}", s.updateClassificationRule)
+				r.Delete("/rules/{id}", s.deleteClassificationRule)
 				r.Get("/models", s.listModels)
 				// Dataset-specific classification endpoints
 				r.Get("/datasets/{id}", s.getDatasetClassification)

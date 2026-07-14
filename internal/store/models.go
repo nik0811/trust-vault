@@ -487,3 +487,19 @@ type ScanLog struct {
 	DatasetsDiscovered int        `db:"datasets_discovered" json:"datasets_discovered"`
 	CreatedAt          time.Time  `db:"created_at" json:"created_at"`
 }
+
+// ClassificationRule defines rules for classification overrides and patterns
+type ClassificationRule struct {
+	ID            string    `db:"id" json:"id"`
+	TenantID      string    `db:"tenant_id" json:"-"`
+	Name          string    `db:"name" json:"name" validate:"required"`
+	Type          string    `db:"type" json:"type" validate:"required,oneof=override pattern whitelist threshold"`
+	ColumnPattern string    `db:"column_pattern" json:"column_pattern"`
+	ValuePattern  string    `db:"value_pattern" json:"value_pattern"`
+	EntityType    string    `db:"entity_type" json:"entity_type"`
+	Confidence    float64   `db:"confidence" json:"confidence"`
+	Priority      int       `db:"priority" json:"priority"`
+	Active        bool      `db:"active" json:"active"`
+	CreatedAt     time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
+}

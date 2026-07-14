@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -270,6 +271,10 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				log.Warn().Err(err).Msg("Failed to parse datasource config for sampling")
 			}
 
+			// Fetch classification rules for this tenant (ordered by priority DESC)
+			classificationRules := fetchClassificationRules(ctx, db, job.TenantID)
+			log.Info().Int("rules_count", len(classificationRules)).Msg("Loaded classification rules")
+
 			// Check if classifier is available
 			classifierAvailable := classifier.IsHealthy(ctx)
 			if classifierAvailable {
@@ -282,23 +287,44 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				var entityType string
 				var confidence float64
 				var classificationSource string
+				var appliedRuleID string
 
-				// Try ML classification first if classifier is available and column is text type
-				if classifierAvailable && isTextColumn(col.Type) && dsConfig != nil {
-					// Sample actual data from the column
+				// Use table.column as the unique value to avoid duplicates
+				columnFullName := col.Name
+				if col.TableName != "" {
+					columnFullName = col.TableName + "." + col.Name
+				}
+
+				// STEP 1: Check classification rules first (highest priority)
+				ruleResult := applyClassificationRules(classificationRules, col.Name, columnFullName, "")
+				if ruleResult.Skip {
+					// Whitelist rule matched - skip this column
+					log.Debug().Str("column", col.Name).Str("rule", ruleResult.RuleName).Msg("Column whitelisted, skipping")
+					sendClassificationProgress(job.TenantID, job.DatasetID,
+						fmt.Sprintf("Skipped: %s (whitelisted by rule: %s)", col.Name, ruleResult.RuleName),
+						i+1, len(allColumns))
+					continue
+				}
+				if ruleResult.Override {
+					// Override rule matched - use rule's entity type
+					entityType = ruleResult.EntityType
+					confidence = ruleResult.Confidence
+					classificationSource = "rule_override"
+					appliedRuleID = ruleResult.RuleID
+					log.Debug().Str("column", col.Name).Str("entity_type", entityType).Str("rule", ruleResult.RuleName).Msg("Rule override applied")
+				}
+
+				// STEP 2: Try ML classification if no override rule matched
+				if entityType == "" && classifierAvailable && isTextColumn(col.Type) && dsConfig != nil {
 					samples, err := sampleColumnData(ctx, ds.Type, dsConfig, col.TableName, col.Name, 10)
 					if err != nil {
 						log.Debug().Err(err).Str("column", col.Name).Msg("Failed to sample column data, using pattern matching")
 					} else if len(samples) > 0 {
-						// Concatenate samples for classification
 						sampleText := strings.Join(samples, " | ")
-						
-						// Send to GLiNER classifier
 						result, err := classifier.Classify(ctx, sampleText, defaultEntityTypes, 0.3)
 						if err != nil {
 							log.Debug().Err(err).Str("column", col.Name).Msg("ML classification failed, using pattern matching")
 						} else if len(result.Entities) > 0 {
-							// Use the highest confidence entity
 							var bestEntity ClassifiedEntity
 							for _, e := range result.Entities {
 								if e.Confidence > bestEntity.Confidence {
@@ -308,7 +334,16 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 							entityType = mapGLiNEREntityType(bestEntity.Type)
 							confidence = bestEntity.Confidence
 							classificationSource = "gliner_ml"
-							
+
+							// Check if any pattern rule matches the value
+							valueRuleResult := applyClassificationRules(classificationRules, col.Name, columnFullName, sampleText)
+							if valueRuleResult.Override && valueRuleResult.EntityType != "" {
+								entityType = valueRuleResult.EntityType
+								confidence = valueRuleResult.Confidence
+								classificationSource = "rule_pattern"
+								appliedRuleID = valueRuleResult.RuleID
+							}
+
 							log.Debug().
 								Str("column", col.Name).
 								Str("entity_type", entityType).
@@ -319,28 +354,40 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					}
 				}
 
-				// Fall back to pattern matching if ML didn't produce results
+				// STEP 3: Fall back to pattern matching if ML didn't produce results
 				if entityType == "" {
 					entityType, confidence = classifyColumnName(col.Name)
 					classificationSource = "pattern_matching"
+				}
+
+				// STEP 4: Apply threshold rules - mark low confidence for review
+				if entityType != "" {
+					thresholdResult := applyThresholdRules(classificationRules, entityType, confidence)
+					if thresholdResult.NeedsReview {
+						classificationSource = classificationSource + "_needs_review"
+						log.Debug().Str("column", col.Name).Float64("confidence", confidence).Msg("Marked for review due to threshold rule")
+					}
 				}
 
 				if entityType == "" {
 					continue
 				}
 
-				// Use table.column as the unique value to avoid duplicates
-				columnFullName := col.Name
-				if col.TableName != "" {
-					columnFullName = col.TableName + "." + col.Name
+				// Store classification with rule reference
+				contextJSON := fmt.Sprintf(`{"column_name": "%s", "table_name": "%s", "data_type": "%s", "classification_source": "%s"}`,
+					col.Name, col.TableName, col.Type, classificationSource)
+
+				var ruleIDParam interface{} = nil
+				if appliedRuleID != "" {
+					ruleIDParam = appliedRuleID
 				}
 
 				_, err := db.ExecContext(ctx,
-					`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, created_at)
-					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+					`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, rule_id, classification_source, created_at)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 					 ON CONFLICT DO NOTHING`,
 					generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, entityType, columnFullName, confidence,
-					fmt.Sprintf(`{"column_name": "%s", "table_name": "%s", "data_type": "%s", "classification_source": "%s"}`, col.Name, col.TableName, col.Type, classificationSource))
+					contextJSON, ruleIDParam, classificationSource)
 				if err != nil {
 					log.Error().Err(err).Str("column", col.Name).Msg("Failed to store classification")
 					continue
@@ -351,15 +398,27 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				sourceLabel := "pattern"
 				if classificationSource == "gliner_ml" {
 					sourceLabel = "ML"
+				} else if strings.HasPrefix(classificationSource, "rule_") {
+					sourceLabel = "rule"
 				}
-				sendClassificationProgress(job.TenantID, job.DatasetID, 
+				sendClassificationProgress(job.TenantID, job.DatasetID,
 					fmt.Sprintf("Classified: %s → %s (%.0f%% via %s)", col.Name, entityType, confidence*100, sourceLabel),
 					i+1, len(allColumns))
+			}
+
+			// STEP 5: Apply label rules after all columns are classified
+			assignedLabel := applyLabelRulesAndAssign(ctx, db, job.TenantID, job.DatasetID)
+			if assignedLabel != "" {
+				log.Info().Str("dataset_id", job.DatasetID).Str("label", assignedLabel).Msg("Sensitivity label assigned")
+				// Update datasource with sensitivity label
+				db.ExecContext(ctx,
+					`UPDATE datasources SET sensitivity_label = $1, updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+					assignedLabel, job.DatasetID, job.TenantID)
 			}
 		} else {
 			// Fallback: No DataHub data, skip classification
 			log.Warn().Str("dataset_id", job.DatasetID).Msg("No schema available for classification")
-			sendClassificationProgress(job.TenantID, job.DatasetID, 
+			sendClassificationProgress(job.TenantID, job.DatasetID,
 				"No schema data available. Please run a scan first to discover the schema.", 0, 0)
 		}
 
@@ -426,6 +485,244 @@ func sendClassificationProgress(tenantID, datasetID, message string, current, to
 		return
 	}
 	defer resp.Body.Close()
+}
+
+// ClassificationRuleDB represents a classification rule from the database
+type ClassificationRuleDB struct {
+	ID            string  `db:"id"`
+	TenantID      string  `db:"tenant_id"`
+	Name          string  `db:"name"`
+	Type          string  `db:"type"`
+	ColumnPattern string  `db:"column_pattern"`
+	ValuePattern  string  `db:"value_pattern"`
+	EntityType    string  `db:"entity_type"`
+	Confidence    float64 `db:"confidence"`
+	Priority      int     `db:"priority"`
+	Active        bool    `db:"active"`
+}
+
+// RuleResult represents the result of applying classification rules
+type RuleResult struct {
+	Skip        bool
+	Override    bool
+	NeedsReview bool
+	EntityType  string
+	Confidence  float64
+	RuleID      string
+	RuleName    string
+}
+
+// fetchClassificationRules loads active classification rules for a tenant
+func fetchClassificationRules(ctx context.Context, db *store.DB, tenantID string) []ClassificationRuleDB {
+	var rules []ClassificationRuleDB
+	err := db.SelectContext(ctx, &rules,
+		`SELECT id, tenant_id, name, type, column_pattern, value_pattern, entity_type, confidence, priority, active
+		 FROM classification_rules WHERE tenant_id = $1 AND active = true ORDER BY priority DESC`,
+		tenantID)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch classification rules")
+		return nil
+	}
+	return rules
+}
+
+// applyClassificationRules evaluates rules against a column and returns the result
+func applyClassificationRules(rules []ClassificationRuleDB, columnName, columnFullName, sampleValue string) RuleResult {
+	result := RuleResult{}
+
+	for _, rule := range rules {
+		switch rule.Type {
+		case "whitelist":
+			// Whitelist: if column matches pattern, skip classification
+			if rule.ColumnPattern != "" {
+				matched, err := matchPattern(rule.ColumnPattern, columnName)
+				if err == nil && matched {
+					return RuleResult{Skip: true, RuleName: rule.Name, RuleID: rule.ID}
+				}
+				matched, err = matchPattern(rule.ColumnPattern, columnFullName)
+				if err == nil && matched {
+					return RuleResult{Skip: true, RuleName: rule.Name, RuleID: rule.ID}
+				}
+			}
+
+		case "override":
+			// Override: if column matches pattern, use rule's entity type
+			if rule.ColumnPattern != "" {
+				matched, err := matchPattern(rule.ColumnPattern, columnName)
+				if err == nil && matched {
+					return RuleResult{
+						Override:   true,
+						EntityType: rule.EntityType,
+						Confidence: rule.Confidence,
+						RuleID:     rule.ID,
+						RuleName:   rule.Name,
+					}
+				}
+				matched, err = matchPattern(rule.ColumnPattern, columnFullName)
+				if err == nil && matched {
+					return RuleResult{
+						Override:   true,
+						EntityType: rule.EntityType,
+						Confidence: rule.Confidence,
+						RuleID:     rule.ID,
+						RuleName:   rule.Name,
+					}
+				}
+			}
+
+		case "pattern":
+			// Pattern: if value matches pattern, use rule's entity type
+			if rule.ValuePattern != "" && sampleValue != "" {
+				matched, err := matchPattern(rule.ValuePattern, sampleValue)
+				if err == nil && matched {
+					return RuleResult{
+						Override:   true,
+						EntityType: rule.EntityType,
+						Confidence: rule.Confidence,
+						RuleID:     rule.ID,
+						RuleName:   rule.Name,
+					}
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// applyThresholdRules checks if confidence is below threshold rules
+func applyThresholdRules(rules []ClassificationRuleDB, entityType string, confidence float64) RuleResult {
+	for _, rule := range rules {
+		if rule.Type == "threshold" {
+			// If entity type matches (or rule applies to all) and confidence is below threshold
+			if (rule.EntityType == "" || rule.EntityType == entityType) && confidence < rule.Confidence {
+				return RuleResult{NeedsReview: true, RuleID: rule.ID, RuleName: rule.Name}
+			}
+		}
+	}
+	return RuleResult{}
+}
+
+// matchPattern matches a string against a regex pattern
+func matchPattern(pattern, value string) (bool, error) {
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return false, err
+	}
+	return re.MatchString(value), nil
+}
+
+// LabelRuleDB represents a label rule from the database
+type LabelRuleDB struct {
+	ID             string `db:"id"`
+	TenantID       string `db:"tenant_id"`
+	Classification string `db:"classification"`
+	Label          string `db:"label"`
+	Priority       int    `db:"priority"`
+	Active         bool   `db:"active"`
+}
+
+// applyLabelRulesAndAssign determines and assigns the sensitivity label for a dataset
+func applyLabelRulesAndAssign(ctx context.Context, db *store.DB, tenantID, datasetID string) string {
+	// Fetch all classifications for this dataset
+	var classifications []struct {
+		EntityType string  `db:"entity_type"`
+		Confidence float64 `db:"confidence"`
+	}
+	err := db.SelectContext(ctx, &classifications,
+		`SELECT entity_type, confidence FROM classifications WHERE tenant_id = $1 AND dataset_id = $2`,
+		tenantID, datasetID)
+	if err != nil || len(classifications) == 0 {
+		return ""
+	}
+
+	// Fetch label rules ordered by priority
+	var labelRules []LabelRuleDB
+	err = db.SelectContext(ctx, &labelRules,
+		`SELECT id, tenant_id, classification, label, priority, active
+		 FROM label_rules WHERE tenant_id = $1 AND active = true ORDER BY priority DESC`,
+		tenantID)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to fetch label rules")
+	}
+
+	// Determine the highest sensitivity label based on rules
+	var assignedLabel string
+	var highestPriority int = -1
+
+	// Build a set of entity types found in this dataset
+	entityTypes := make(map[string]bool)
+	for _, c := range classifications {
+		entityTypes[c.EntityType] = true
+	}
+
+	// Apply label rules (highest priority matching rule wins)
+	for _, rule := range labelRules {
+		if entityTypes[rule.Classification] && rule.Priority > highestPriority {
+			assignedLabel = rule.Label
+			highestPriority = rule.Priority
+		}
+	}
+
+	// Fallback to hardcoded sensitivity mapping if no rule matched
+	if assignedLabel == "" {
+		assignedLabel = determineDefaultLabel(entityTypes)
+	}
+
+	if assignedLabel == "" {
+		return ""
+	}
+
+	// Store the label
+	_, err = db.ExecContext(ctx,
+		`INSERT INTO labels (id, tenant_id, dataset_id, label, auto_assigned, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, true, NOW(), NOW())
+		 ON CONFLICT (tenant_id, dataset_id) DO UPDATE SET label = $4, auto_assigned = true, updated_at = NOW()`,
+		generateUUID(), tenantID, datasetID, assignedLabel)
+	if err != nil {
+		log.Warn().Err(err).Str("dataset_id", datasetID).Str("label", assignedLabel).Msg("Failed to store label")
+	}
+
+	return assignedLabel
+}
+
+// determineDefaultLabel returns a default sensitivity label based on entity types found
+func determineDefaultLabel(entityTypes map[string]bool) string {
+	// RESTRICTED: Most sensitive data types
+	restricted := []string{"SSN", "CREDIT_CARD", "CREDIT_CARD_FORMATTED", "BANK_ACCOUNT", "ROUTING_NUMBER",
+		"AWS_ACCESS_KEY", "AWS_SECRET_KEY", "API_KEY", "JWT_TOKEN"}
+	for _, et := range restricted {
+		if entityTypes[et] {
+			return "RESTRICTED"
+		}
+	}
+
+	// HIGHLY_CONFIDENTIAL: Health and financial data
+	highlyConfidential := []string{"MEDICAL_RECORD", "HEALTH_INSURANCE_ID", "IBAN"}
+	for _, et := range highlyConfidential {
+		if entityTypes[et] {
+			return "HIGHLY_CONFIDENTIAL"
+		}
+	}
+
+	// CONFIDENTIAL: Personal identifiers
+	confidential := []string{"EMAIL", "PHONE", "DATE_OF_BIRTH", "PASSPORT", "DRIVER_LICENSE", "VIN", "PERSON_NAME"}
+	for _, et := range confidential {
+		if entityTypes[et] {
+			return "CONFIDENTIAL"
+		}
+	}
+
+	// INTERNAL: Location and IP data
+	internal := []string{"ADDRESS", "IP_ADDRESS", "MAC_ADDRESS", "IPV6_ADDRESS", "US_ZIP", "UK_POSTCODE", "ZIP_CODE"}
+	for _, et := range internal {
+		if entityTypes[et] {
+			return "INTERNAL"
+		}
+	}
+
+	// PUBLIC: No sensitive data found
+	return "PUBLIC"
 }
 
 // Default entity types for GLiNER classification
