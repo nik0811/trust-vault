@@ -9,7 +9,7 @@ services:
       - "8099:8099"
     environment:
       - DATABASE_URL=postgres://trustvault:trustvault@postgres:5432/trustvault?sslmode=disable
-      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_BROKERS=kafka:29092
       - DATAHUB_URL=http://datahub-gms:8080
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=change-me-in-production
@@ -26,7 +26,7 @@ services:
       replicas: 2
     environment:
       - DATABASE_URL=postgres://trustvault:trustvault@postgres:5432/trustvault?sslmode=disable
-      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_BROKERS=kafka:29092
       - MODEL_PATH=/models/gliner-pii-edge-int8.onnx
     depends_on:
       - postgres
