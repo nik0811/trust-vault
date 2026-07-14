@@ -342,13 +342,16 @@ function ClassificationStatusCard({
       eventSourceRef.current.close()
       eventSourceRef.current = null
       setIsConnected(false)
-      
-      // If job didn't complete via SSE, simulate completion after a delay
-      if (jobStatus === 'queued' || jobStatus === 'running') {
-        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification job submitted`])
+    }
+    
+    // When classification stops, trigger completion after a delay to allow backend to finish
+    if (!isClassifying && logs.length > 0 && jobStatus !== 'completed' && jobStatus !== 'failed') {
+      const timer = setTimeout(() => {
+        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification completed`])
         setJobStatus('completed')
-        setTimeout(() => onComplete(), 2000)
-      }
+        onComplete()
+      }, 3000)
+      return () => clearTimeout(timer)
     }
     
     return () => {
@@ -357,7 +360,7 @@ function ClassificationStatusCard({
         eventSourceRef.current = null
       }
     }
-  }, [isClassifying, datasetId, onComplete, jobStatus])
+  }, [isClassifying, datasetId, onComplete, jobStatus, logs.length])
 
   // Don't render if no activity
   if (!isClassifying && logs.length === 0) {
