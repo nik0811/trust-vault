@@ -262,6 +262,8 @@ func (s *Server) setupRoutes() {
 				r.Post("/dsar", s.createDSAR)
 				r.Get("/dsar", s.listDSARs)
 				r.Get("/dsar/{id}", s.getDSAR)
+				r.Put("/dsar/{id}", s.updateDSAR)
+				r.Delete("/dsar/{id}", s.deleteDSAR)
 				r.Get("/dsar/{id}/package", s.getDSARPackage)
 				r.Post("/dsar/{id}/execute", s.executeDSAR)
 				r.Post("/pia", s.generatePIA)

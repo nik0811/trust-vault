@@ -66,7 +66,44 @@ export function useDSARPackage(id: string) {
       const response = await api.get(`/privacy/dsar/${id}/package`)
       return response.data
     },
-    enabled: !!id,
+    enabled: false, // Only fetch when explicitly triggered
+  })
+}
+
+export function useUpdateDSAR() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, ...data }: { id: string; status?: string }) => {
+      const response = await api.put<DSAR>(`/privacy/dsar/${id}`, data)
+      return response.data
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['dsars'] })
+      queryClient.invalidateQueries({ queryKey: ['dsars', variables.id] })
+      toast.success('DSAR updated successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to update DSAR')
+    },
+  })
+}
+
+export function useDeleteDSAR() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const response = await api.delete(`/privacy/dsar/${id}`)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dsars'] })
+      toast.success('DSAR deleted successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to delete DSAR')
+    },
   })
 }
 

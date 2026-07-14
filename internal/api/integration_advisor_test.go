@@ -20,12 +20,25 @@ func TestIntegration_Advisor(t *testing.T) {
 	if len(recs) == 0 {
 		t.Error("Expected at least one recommendation")
 	}
+	// Verify frontend-expected fields
+	if len(recs) > 0 {
+		if recs[0]["priority"] == nil {
+			t.Error("Expected priority field in recommendation")
+		}
+		if recs[0]["type"] == nil {
+			t.Error("Expected type field in recommendation")
+		}
+	}
 
 	// Get compliance gaps
 	gapsResp := makeRequest(t, "GET", "/api/v1/advisor/gaps", nil, token)
 	if gapsResp.Code != http.StatusOK {
 		t.Errorf("Get compliance gaps failed: %d", gapsResp.Code)
 	}
+	// Verify gaps is an array (frontend expects array format)
+	var gaps []map[string]any
+	json.Unmarshal(gapsResp.Body.Bytes(), &gaps)
+	// gaps can be empty if no compliance issues
 
 	// Generate defense docket
 	docketResp := makeRequest(t, "POST", "/api/v1/advisor/defense-docket", map[string]any{

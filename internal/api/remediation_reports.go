@@ -564,6 +564,16 @@ func (s *Server) getCorrectionTrend(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, trend)
 }
 
+// FrontendRecommendation matches the frontend's expected format
+type FrontendRecommendation struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Priority    string `json:"priority"` // Frontend expects "priority" not "severity"
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Action      string `json:"action"`
+}
+
 func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
@@ -611,13 +621,40 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	recommendations := domain.GenerateRecommendations(advCtx)
-	
-	// Ensure we return an empty array, not null
-	if recommendations == nil {
-		recommendations = []domain.Recommendation{}
+
+	// Convert to frontend format (severity -> priority, map to lowercase)
+	result := make([]FrontendRecommendation, 0, len(recommendations))
+	for _, rec := range recommendations {
+		priority := "low"
+		switch rec.Severity {
+		case "CRITICAL":
+			priority = "high"
+		case "HIGH":
+			priority = "high"
+		case "MEDIUM":
+			priority = "medium"
+		case "LOW":
+			priority = "low"
+		}
+		result = append(result, FrontendRecommendation{
+			ID:          rec.ID,
+			Type:        rec.Category,
+			Priority:    priority,
+			Title:       rec.Title,
+			Description: rec.Description,
+			Action:      rec.Action,
+		})
 	}
 
-	pkg.JSON(w, recommendations)
+	pkg.JSON(w, result)
+}
+
+// FrontendComplianceGap matches the frontend's expected format
+type FrontendComplianceGap struct {
+	Regulation  string `json:"regulation"`
+	Requirement string `json:"requirement"`
+	Status      string `json:"status"`
+	Remediation string `json:"remediation"`
 }
 
 func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
@@ -632,32 +669,46 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 	var ropaCount int
 	s.db.GetContext(ctx, &ropaCount, "SELECT COUNT(*) FROM ropa WHERE tenant_id = $1", tenantID)
 
-	gdprScore := 0.7
-	gdprGaps := []string{}
-	if labeledDatasets < totalDatasets {
-		gdprGaps = append(gdprGaps, "Incomplete data classification")
-		gdprScore -= 0.1
+	// Build gaps array in the format frontend expects
+	gaps := []FrontendComplianceGap{}
+
+	// GDPR gaps
+	if labeledDatasets < totalDatasets && totalDatasets > 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "GDPR",
+			Requirement: "Data Classification (Art. 5)",
+			Status:      "open",
+			Remediation: "Complete data classification for all datasets",
+		})
 	}
 	if ropaCount == 0 {
-		gdprGaps = append(gdprGaps, "Missing Records of Processing Activities")
-		gdprScore -= 0.15
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "GDPR",
+			Requirement: "Records of Processing Activities (Art. 30)",
+			Status:      "open",
+			Remediation: "Create RoPA entries documenting all data processing activities",
+		})
 	}
 	if policyCount < 3 {
-		gdprGaps = append(gdprGaps, "Insufficient governance policies")
-		gdprScore -= 0.1
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "GDPR",
+			Requirement: "Governance Policies (Art. 25, 32)",
+			Status:      "open",
+			Remediation: "Define access, retention, and redaction policies",
+		})
 	}
 
-	ccpaScore := 0.8
-	ccpaGaps := []string{}
-	if labeledDatasets < totalDatasets {
-		ccpaGaps = append(ccpaGaps, "Incomplete data inventory")
-		ccpaScore -= 0.1
+	// CCPA gaps
+	if labeledDatasets < totalDatasets && totalDatasets > 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "CCPA",
+			Requirement: "Data Inventory (1798.100)",
+			Status:      "open",
+			Remediation: "Complete data inventory and classification",
+		})
 	}
 
-	pkg.JSON(w, map[string]any{
-		"gdpr": map[string]any{"score": max(0, gdprScore), "gaps": gdprGaps},
-		"ccpa": map[string]any{"score": max(0, ccpaScore), "gaps": ccpaGaps},
-	})
+	pkg.JSON(w, gaps)
 }
 
 func (s *Server) generateDefenseDocket(w http.ResponseWriter, r *http.Request) {

@@ -157,6 +157,60 @@ func (s *Server) getDSAR(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, dsar)
 }
 
+func (s *Server) updateDSAR(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	dsar, err := s.dsars.FindByID(ctx, tenantID, id)
+	if err != nil || dsar == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := pkg.Bind(r, &req); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	if req.Status != "" {
+		dsar.Status = req.Status
+		if req.Status == "completed" {
+			now := time.Now()
+			dsar.CompletedAt = &now
+		}
+	}
+
+	if err := s.dsars.Update(ctx, dsar); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	pkg.JSON(w, dsar)
+}
+
+func (s *Server) deleteDSAR(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	dsar, err := s.dsars.FindByID(ctx, tenantID, id)
+	if err != nil || dsar == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	if err := s.dsars.Delete(ctx, tenantID, id); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) getDSARPackage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
