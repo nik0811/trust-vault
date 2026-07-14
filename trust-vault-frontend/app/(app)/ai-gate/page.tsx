@@ -60,7 +60,7 @@ export default function AIGatePage() {
               />
               <StatCard
                 label="Avg Latency"
-                value={`${stats?.avg_latency_ms || 0}ms`}
+                value={`${Math.round(stats?.avg_latency_ms || 0)}ms`}
                 icon={<Clock className="h-6 w-6" />}
               />
             </>

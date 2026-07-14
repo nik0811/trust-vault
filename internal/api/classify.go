@@ -686,17 +686,27 @@ func (s *Server) getDatasetClassification(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Get datasource info for the dataset name
+	// Try to get a human-readable name
+	datasetName := datasetID
+	sourceID := ""
+	
+	// First, try to find datasource by dataset_id
 	var datasource store.DataSource
 	err = s.db.GetContext(ctx, &datasource,
 		"SELECT * FROM datasources WHERE tenant_id = $1 AND id = $2",
 		tenantID, datasetID)
-	
-	datasetName := datasetID
-	sourceID := ""
 	if err == nil {
 		datasetName = datasource.Name
 		sourceID = datasource.ID
+	} else if len(classifications) > 0 {
+		// Try to get datasource from the first classification's source_id
+		err = s.db.GetContext(ctx, &datasource,
+			"SELECT * FROM datasources WHERE tenant_id = $1 AND id = $2",
+			tenantID, classifications[0].SourceID)
+		if err == nil {
+			datasetName = datasource.Name
+			sourceID = datasource.ID
+		}
 	}
 
 	// Build column classifications from the classification results

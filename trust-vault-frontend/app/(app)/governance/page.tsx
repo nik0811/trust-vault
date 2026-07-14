@@ -18,7 +18,7 @@ export default function GovernancePage() {
     const policiesArray = Array.isArray(policies) ? policies : []
     const activePolicies = policiesArray.filter(p => p.active).length
     const totalPolicies = policiesArray.length
-    const complianceScore = riskScore?.overall_score ? Math.round((1 - riskScore.overall_score) * 100) : 0
+    const complianceScore = riskScore?.overall_score ? Math.round(riskScore.overall_score * 100) : 0
     const openGaps = Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0
 
     return { activePolicies, totalPolicies, complianceScore, openGaps }

@@ -144,15 +144,18 @@ type Policy struct {
 
 // Classification stores detected entities
 type Classification struct {
-	ID         string    `db:"id" json:"id"`
-	TenantID   string    `db:"tenant_id" json:"-"`
-	DatasetID  string    `db:"dataset_id" json:"dataset_id"`
-	SourceID   string    `db:"source_id" json:"source_id"`
-	EntityType string    `db:"entity_type" json:"entity_type"`
-	Value      string    `db:"value" json:"value"`
-	Confidence float64   `db:"confidence" json:"confidence"`
-	Context    JSON      `db:"context" json:"context"`
-	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	ID                   string    `db:"id" json:"id"`
+	TenantID             string    `db:"tenant_id" json:"-"`
+	DatasetID            string    `db:"dataset_id" json:"dataset_id"`
+	SourceID             string    `db:"source_id" json:"source_id"`
+	EntityType           string    `db:"entity_type" json:"entity_type"`
+	Value                string    `db:"value" json:"value"`
+	Confidence           float64   `db:"confidence" json:"confidence"`
+	Context              JSON      `db:"context" json:"context"`
+	LabelID              *string   `db:"label_id" json:"label_id,omitempty"`
+	RuleID               *string   `db:"rule_id" json:"rule_id,omitempty"`
+	ClassificationSource *string   `db:"classification_source" json:"classification_source,omitempty"`
+	CreatedAt            time.Time `db:"created_at" json:"created_at"`
 }
 
 // AuditLog records all actions

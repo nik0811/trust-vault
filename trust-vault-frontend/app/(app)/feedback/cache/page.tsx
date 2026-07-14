@@ -1,56 +1,13 @@
 'use client'
 
-import { useState } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { StatCard } from '@/components/base/stat-card'
-import { DataTable, type Column } from '@/components/base/data-table'
-import { Database, Trash2 } from 'lucide-react'
-import { toast } from 'sonner'
-
-interface CacheEntry {
-  id: string
-  pattern: string
-  entity: string
-  hits: number
-  lastHit: string
-}
-
-const initialEntries: CacheEntry[] = [
-  { id: '1', pattern: 'INV-####-###', entity: 'INVOICE_ID', hits: 84200, lastHit: '2 min ago' },
-  { id: '2', pattern: 'EMP-#####', entity: 'EMPLOYEE_ID', hits: 31500, lastHit: '14 min ago' },
-  { id: '3', pattern: '###-##-#### (SSN format)', entity: 'US_SSN', hits: 12800, lastHit: '1h ago' },
-  { id: '4', pattern: 'name@domain email', entity: 'EMAIL_ADDRESS', hits: 240100, lastHit: 'just now' },
-  { id: '5', pattern: 'PRJ-*-#', entity: 'PROJECT_CODE', hits: 4100, lastHit: '3h ago' },
-]
+import { Skeleton } from '@/components/base/skeleton'
+import { Database, Zap, Clock, TrendingUp } from 'lucide-react'
+import { useKnowledgeCache } from '@/hooks/use-advisor'
 
 export default function KnowledgeCachePage() {
-  const [entries, setEntries] = useState(initialEntries)
-
-  const clearEntry = (id: string, pattern: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== id))
-    toast.success(`Cache entry cleared: ${pattern}`)
-  }
-
-  const columns: Column<CacheEntry>[] = [
-    { id: 'pattern', header: 'Pattern', cell: (row) => <span className="font-mono text-sm">{row.pattern}</span> },
-    { id: 'entity', header: 'Entity Type', cell: (row) => <span className="font-mono text-xs font-semibold">{row.entity}</span> },
-    { id: 'hits', header: 'Cache Hits', cell: (row) => row.hits.toLocaleString() },
-    { id: 'lastHit', header: 'Last Hit', accessorKey: 'lastHit' },
-    {
-      id: 'actions',
-      header: '',
-      cell: (row) => (
-        <button
-          onClick={() => clearEntry(row.id, row.pattern)}
-          aria-label={`Clear cache entry ${row.pattern}`}
-          className="flex items-center gap-1.5 rounded border border-border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <Trash2 className="h-3 w-3" />
-          Clear
-        </button>
-      ),
-    },
-  ]
+  const { data: cache, isLoading, error } = useKnowledgeCache()
 
   return (
     <div className="min-h-screen bg-background">
@@ -66,17 +23,80 @@ export default function KnowledgeCachePage() {
       </div>
 
       <div className="space-y-8 p-8">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          <StatCard label="Cache Entries" value="14.2K" icon={<Database className="h-6 w-6" />} />
-          <StatCard label="Hit Rate" value="68%" change={12} changeLabel="vs last month" />
-          <StatCard label="Avg Lookup Time" value="0.4ms" />
-          <StatCard label="Compute Saved" value="~$860/mo" />
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+            <Skeleton className="h-24" />
+          </div>
+        ) : error ? (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-6 text-center">
+            <p className="text-destructive">Failed to load cache data</p>
+          </div>
+        ) : cache?.cache_size === 0 && cache?.total_classifications === 0 ? (
+          <>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <StatCard label="Entity Types" value="0" icon={<Database className="h-6 w-6" />} />
+              <StatCard label="Classifications" value="0" icon={<Zap className="h-6 w-6" />} />
+              <StatCard label="Avg Lookup Time" value="-" icon={<Clock className="h-6 w-6" />} />
+              <StatCard label="Cache Status" value="Empty" icon={<TrendingUp className="h-6 w-6" />} />
+            </div>
+            <div className="rounded-lg border border-border bg-card p-12 text-center">
+              <Database className="mx-auto h-12 w-12 text-muted-foreground/50" />
+              <h3 className="mt-4 text-lg font-semibold text-foreground">No Cache Data Yet</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Classification cache will populate as you classify data sources and documents.
+                Run a classification job to start building the knowledge cache.
+              </p>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <StatCard 
+                label="Entity Types" 
+                value={cache?.cache_size?.toLocaleString() || '0'} 
+                icon={<Database className="h-6 w-6" />} 
+              />
+              <StatCard 
+                label="Classifications" 
+                value={cache?.total_classifications?.toLocaleString() || '0'} 
+                icon={<Zap className="h-6 w-6" />} 
+              />
+              <StatCard 
+                label="Avg Lookup Time" 
+                value="<1ms" 
+                icon={<Clock className="h-6 w-6" />} 
+              />
+              <StatCard 
+                label="Last Updated" 
+                value={cache?.last_updated ? new Date(cache.last_updated).toLocaleTimeString() : '-'} 
+                icon={<TrendingUp className="h-6 w-6" />} 
+              />
+            </div>
 
-        <div className="rounded-lg border border-border bg-card p-6">
-          <h3 className="mb-4 text-lg font-semibold text-foreground">Top Cache Entries</h3>
-          <DataTable columns={columns} data={entries} />
-        </div>
+            <div className="rounded-lg border border-border bg-card p-6">
+              <h3 className="mb-4 text-lg font-semibold text-foreground">Cache Information</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-border pb-4">
+                  <span className="text-sm text-muted-foreground">Total Entity Types Cached</span>
+                  <span className="font-semibold text-foreground">{cache?.cache_size || 0}</span>
+                </div>
+                <div className="flex items-center justify-between border-b border-border pb-4">
+                  <span className="text-sm text-muted-foreground">Total Classifications</span>
+                  <span className="font-semibold text-foreground">{cache?.total_classifications?.toLocaleString() || 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Cache Status</span>
+                  <span className="inline-flex items-center rounded-full bg-green-500/10 px-2.5 py-0.5 text-xs font-medium text-green-500">
+                    Active
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
