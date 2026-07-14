@@ -388,6 +388,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/datasets", s.getROTDatasets)
 				r.Get("/duplicates", s.getDuplicates)
 				r.Post("/scan", s.triggerROTScan)
+				r.Get("/scan/{id}/status", s.getROTScanStatus)
 				r.Post("/remediate", s.remediateROT)
 			})
 

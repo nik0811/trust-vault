@@ -485,6 +485,17 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 		"datasets_discovered": callback.DatasetsDiscovered,
 	})
 
+	// Create lineage entry for successful scans
+	if callback.Status == "completed" && callback.DatasetsDiscovered > 0 {
+		dataFlow := store.DataFlow{
+			TenantID:        tenantID,
+			SourceDatasetID: datasourceID,
+			TargetDatasetID: "trustvault-classification",
+			FlowType:        "ingestion",
+		}
+		s.dataFlows.Create(ctx, &dataFlow)
+	}
+
 	log.Info().
 		Str("datasource_id", datasourceID).
 		Str("tenant_id", tenantID).

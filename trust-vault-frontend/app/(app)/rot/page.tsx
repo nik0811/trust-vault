@@ -1,12 +1,12 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { StatCard } from '@/components/base/stat-card'
 import { DataTable, type Column } from '@/components/base/data-table'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import Link from 'next/link'
-import { Trash2, HardDrive, Copy, Clock, Play } from 'lucide-react'
+import { Trash2, HardDrive, Copy, Clock, Play, ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
 import { useROTSummary, useROTDatasets, useTriggerROTScan, type ROTDataset } from '@/hooks/use-advisor'
 
 const columns: Column<ROTDataset>[] = [
@@ -59,11 +59,86 @@ const columns: Column<ROTDataset>[] = [
 ]
 
 export default function ROTPage() {
-  const { data: summary, isLoading: summaryLoading } = useROTSummary()
-  const { data: datasets, isLoading: datasetsLoading } = useROTDatasets()
+  const { data: summary, isLoading: summaryLoading, refetch: refetchSummary } = useROTSummary()
+  const { data: datasets, isLoading: datasetsLoading, refetch: refetchDatasets } = useROTDatasets()
   const triggerScan = useTriggerROTScan()
+  
+  const [isScanning, setIsScanning] = useState(false)
+  const [scanLogs, setScanLogs] = useState<string[]>([])
+  const [isLogsExpanded, setIsLogsExpanded] = useState(false)
+  const eventSourceRef = useRef<EventSource | null>(null)
+  const logsEndRef = useRef<HTMLDivElement>(null)
 
   const datasetsData = Array.isArray(datasets) ? datasets : []
+
+  // Auto-scroll logs
+  useEffect(() => {
+    if (logsEndRef.current && isLogsExpanded) {
+      logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [scanLogs, isLogsExpanded])
+
+  // Connect to SSE when scanning
+  useEffect(() => {
+    if (isScanning && !eventSourceRef.current) {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+      const token = document.cookie.split('; ').find(row => row.startsWith('accessToken='))?.split('=')[1]
+      
+      try {
+        const baseUrl = apiUrl.replace(/\/api\/v1\/?$/, '')
+        const es = new EventSource(`${baseUrl}/api/v1/notifications/events?token=${token}`)
+        eventSourceRef.current = es
+        
+        es.onopen = () => {
+          setScanLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connected to scan stream`])
+        }
+        
+        es.addEventListener('rot.scan.started', (event) => {
+          const data = JSON.parse(event.data)
+          setScanLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message || 'ROT scan started'}`])
+        })
+        
+        es.addEventListener('rot.scan.progress', (event) => {
+          const data = JSON.parse(event.data)
+          setScanLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message}`])
+        })
+        
+        es.addEventListener('rot.scan.completed', (event) => {
+          const data = JSON.parse(event.data)
+          setScanLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${data.message || 'ROT scan completed'}`])
+          setIsScanning(false)
+          refetchSummary()
+          refetchDatasets()
+          
+          // Close connection after completion
+          if (eventSourceRef.current) {
+            eventSourceRef.current.close()
+            eventSourceRef.current = null
+          }
+        })
+        
+        es.onerror = () => {
+          setScanLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] Connection error - retrying...`])
+        }
+      } catch (error) {
+        console.error('Failed to connect to SSE:', error)
+      }
+    }
+    
+    return () => {
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+        eventSourceRef.current = null
+      }
+    }
+  }, [isScanning, refetchSummary, refetchDatasets])
+
+  const handleStartScan = () => {
+    setIsScanning(true)
+    setIsLogsExpanded(true)
+    setScanLogs([`[${new Date().toLocaleTimeString()}] Initiating ROT scan...`])
+    triggerScan.mutate()
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -75,17 +150,62 @@ export default function ROTPage() {
           <p className="text-sm text-muted-foreground mt-1">Identify Redundant, Obsolete, and Trivial data</p>
         </div>
         <button
-          onClick={() => triggerScan.mutate()}
-          disabled={triggerScan.isPending}
+          onClick={handleStartScan}
+          disabled={isScanning || triggerScan.isPending}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
         >
-          <Play className="h-4 w-4" />
-          {triggerScan.isPending ? 'Scanning...' : 'Run Scan'}
+          {isScanning ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Scanning...
+            </>
+          ) : (
+            <>
+              <Play className="h-4 w-4" />
+              Run Scan
+            </>
+          )}
         </button>
       </div>
 
       {/* Content */}
       <div className="p-8 space-y-8">
+        {/* Scan Logs - Collapsible */}
+        {(isScanning || scanLogs.length > 0) && (
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <button
+              onClick={() => setIsLogsExpanded(!isLogsExpanded)}
+              className="w-full flex items-center justify-between p-4 hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                {isScanning && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                <span className="font-medium text-foreground">
+                  {isScanning ? 'Scan in Progress' : 'Scan Logs'}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                  ({scanLogs.length} entries)
+                </span>
+              </div>
+              {isLogsExpanded ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </button>
+            
+            {isLogsExpanded && (
+              <div className="border-t border-border bg-muted/30 p-4 max-h-64 overflow-y-auto font-mono text-sm">
+                {scanLogs.map((log, i) => (
+                  <div key={i} className="text-muted-foreground py-0.5">
+                    {log}
+                  </div>
+                ))}
+                <div ref={logsEndRef} />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {summaryLoading ? (

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/trustvault/trustvault/internal/events"
 	"github.com/trustvault/trustvault/internal/pkg"
 	"github.com/trustvault/trustvault/internal/store"
 )
@@ -74,11 +75,32 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	s.kafka.Produce(ctx, "rot-scan-jobs", tenantID, map[string]any{
+	// Create a scan log for tracking
+	scanLog := store.ScanLog{
+		TenantID:     tenantID,
+		DatasourceID: "rot-scan",
+		Status:       "running",
+		Message:      "ROT scan started",
+	}
+	s.scanLogs.Create(ctx, &scanLog)
+
+	// Emit SSE event for scan started
+	events.Emit("rot.scan.started", map[string]any{
+		"scan_id":   scanLog.ID,
 		"tenant_id": tenantID,
+		"status":    "running",
+		"message":   "ROT scan started - analyzing data for redundant, obsolete, and trivial content",
 	})
 
-	pkg.JSON(w, map[string]string{"status": "scanning"})
+	s.kafka.Produce(ctx, "rot-scan-jobs", tenantID, map[string]any{
+		"tenant_id": tenantID,
+		"scan_id":   scanLog.ID,
+	})
+
+	pkg.JSON(w, map[string]any{
+		"status":  "scanning",
+		"scan_id": scanLog.ID,
+	})
 }
 
 func (s *Server) remediateROT(w http.ResponseWriter, r *http.Request) {
@@ -114,6 +136,28 @@ func (s *Server) remediateROT(w http.ResponseWriter, r *http.Request) {
 		"status":   "processing",
 		"datasets": len(req.DatasetIDs),
 		"action":   req.Action,
+	})
+}
+
+func (s *Server) getROTScanStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	scanID := chi.URLParam(r, "id")
+
+	var scanLog store.ScanLog
+	err := s.db.GetContext(ctx, &scanLog,
+		"SELECT * FROM scan_logs WHERE tenant_id = $1 AND id = $2",
+		tenantID, scanID)
+
+	if err != nil {
+		pkg.Error(w, fmt.Errorf("scan not found"), http.StatusNotFound)
+		return
+	}
+
+	pkg.JSON(w, map[string]any{
+		"scan_id": scanLog.ID,
+		"status":  scanLog.Status,
+		"message": scanLog.Message,
 	})
 }
 

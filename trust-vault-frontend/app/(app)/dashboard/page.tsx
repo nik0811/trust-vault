@@ -7,12 +7,12 @@ import { DataTable, type Column } from '@/components/base/data-table'
 import { StatusIndicator } from '@/components/base/status-badge'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
-import { BarChart3, Database, Zap, CheckCircle, AlertTriangle } from 'lucide-react'
+import { BarChart3, Database, Zap, CheckCircle, AlertTriangle, Shield } from 'lucide-react'
 import { useDataSources } from '@/hooks/use-datasources'
 import { usePolicies } from '@/hooks/use-policies'
 import { useGateStats } from '@/hooks/use-gate'
 import { useAlerts, useSystemHealth } from '@/hooks/use-audit'
-import { useRiskScore } from '@/hooks/use-advisor'
+import { useRiskScore, useComplianceGaps, useRecommendations } from '@/hooks/use-advisor'
 
 interface Alert {
   id: string
@@ -51,6 +51,8 @@ export default function DashboardPage() {
   const { data: gateStats, isLoading: gateLoading } = useGateStats()
   const { data: alerts, isLoading: alertsLoading } = useAlerts()
   const { data: riskScore, isLoading: riskLoading } = useRiskScore()
+  const { data: gaps, isLoading: gapsLoading } = useComplianceGaps()
+  const { data: recommendations, isLoading: recsLoading } = useRecommendations()
   const { data: health } = useSystemHealth()
 
   const stats = useMemo(() => {
@@ -59,7 +61,7 @@ export default function DashboardPage() {
     const connectedSources = dsArray.filter(ds => ds.status === 'connected').length
     const totalSources = dsArray.length
     const activePolicies = policiesArray.filter(p => p.active).length
-    const complianceScore = riskScore?.overall_score ? Math.round((1 - riskScore.overall_score) * 100) : 0
+    const complianceScore = riskScore?.overall_score ? Math.round(riskScore.overall_score * 100) : 0
 
     return [
       { 
@@ -202,6 +204,65 @@ export default function DashboardPage() {
 
           {/* Right column - Sidebar metrics */}
           <div className="space-y-6">
+            {/* Compliance Overview */}
+            <div className="rounded-lg border border-border bg-card p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-foreground">Compliance</h3>
+                <Link href="/governance" className="text-sm text-primary hover:underline">
+                  View details
+                </Link>
+              </div>
+              {riskLoading || gapsLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-8 w-full" />
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="relative h-16 w-16">
+                      <svg className="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+                        <path
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          className="text-muted"
+                        />
+                        <path
+                          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeDasharray={`${(riskScore?.overall_score || 0) * 100}, 100`}
+                          className={riskScore?.overall_score >= 0.8 ? 'text-green-500' : riskScore?.overall_score >= 0.6 ? 'text-yellow-500' : 'text-red-500'}
+                        />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-sm font-bold">
+                        {Math.round((riskScore?.overall_score || 0) * 100)}%
+                      </span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {riskScore?.risk_level === 'low' ? 'Good Standing' : 
+                         riskScore?.risk_level === 'medium' ? 'Needs Attention' : 
+                         riskScore?.risk_level === 'high' ? 'At Risk' : 'Critical'}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0} open gaps
+                      </p>
+                    </div>
+                  </div>
+                  {Array.isArray(recommendations) && recommendations.length > 0 && (
+                    <div className="border-t border-border pt-3">
+                      <p className="text-xs text-muted-foreground mb-2">Top Recommendation</p>
+                      <p className="text-sm text-foreground">{recommendations[0]?.title || recommendations[0]?.description}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Data Sources Status */}
             <div className="rounded-lg border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">

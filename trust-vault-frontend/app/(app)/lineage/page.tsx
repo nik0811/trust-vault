@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
-import { GitBranch, Search } from 'lucide-react'
+import { GitBranch, Search, ArrowRight, Database, Shield, Cpu, AlertCircle } from 'lucide-react'
 import { useDatasetLineage } from '@/hooks/use-datamap'
 import { useDataSources } from '@/hooks/use-datasources'
 
@@ -11,6 +11,11 @@ export default function LineagePage() {
   const [selectedDataset, setSelectedDataset] = useState('')
   const { data: dataSources, isLoading: dsLoading } = useDataSources()
   const { data: lineage, isLoading: lineageLoading } = useDatasetLineage(selectedDataset)
+
+  const hasUpstream = lineage?.upstream && Array.isArray(lineage.upstream) && lineage.upstream.length > 0
+  const hasDownstream = lineage?.downstream && Array.isArray(lineage.downstream) && lineage.downstream.length > 0
+  const hasAiUsage = lineage?.ai_usage && Array.isArray(lineage.ai_usage) && lineage.ai_usage.length > 0
+  const hasAnyLineage = hasUpstream || hasDownstream || hasAiUsage
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,34 +63,125 @@ export default function LineagePage() {
           ) : lineageLoading ? (
             <Skeleton className="h-64 w-full" />
           ) : lineage ? (
-            <div className="space-y-4">
-              {/* Simple lineage visualization */}
-              <div className="flex items-center justify-center gap-4 py-8">
-                <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                  <p className="text-sm font-medium text-blue-600">Source</p>
-                  <p className="text-xs text-muted-foreground">Data Origin</p>
+            <div className="space-y-6">
+              {/* Visual lineage flow */}
+              <div className="flex items-center justify-center gap-4 py-8 overflow-x-auto">
+                {/* Upstream sources */}
+                <div className="flex flex-col gap-2 items-center">
+                  <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20 min-w-[140px]">
+                    <Database className="h-6 w-6 text-blue-600 mx-auto mb-2" />
+                    <p className="text-sm font-medium text-blue-600 text-center">Source</p>
+                    <p className="text-xs text-muted-foreground text-center">
+                      {hasUpstream ? `${lineage.upstream.length} upstream` : 'Data Origin'}
+                    </p>
+                  </div>
                 </div>
-                <div className="w-16 h-0.5 bg-border" />
-                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
-                  <p className="text-sm font-medium text-primary">TrustVault</p>
-                  <p className="text-xs text-muted-foreground">Classification & Governance</p>
+                
+                <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+                
+                {/* TrustVault */}
+                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20 min-w-[140px]">
+                  <Shield className="h-6 w-6 text-primary mx-auto mb-2" />
+                  <p className="text-sm font-medium text-primary text-center">TrustVault</p>
+                  <p className="text-xs text-muted-foreground text-center">Classification & Governance</p>
                 </div>
-                <div className="w-16 h-0.5 bg-border" />
-                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-                  <p className="text-sm font-medium text-green-600">AI Gate</p>
-                  <p className="text-xs text-muted-foreground">Governed Access</p>
+                
+                <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+                
+                {/* AI Gate */}
+                <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20 min-w-[140px]">
+                  <Shield className="h-6 w-6 text-green-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-green-600 text-center">AI Gate</p>
+                  <p className="text-xs text-muted-foreground text-center">Governed Access</p>
                 </div>
-                <div className="w-16 h-0.5 bg-border" />
-                <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                  <p className="text-sm font-medium text-purple-600">AI/LLM</p>
-                  <p className="text-xs text-muted-foreground">Consumption</p>
+                
+                <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+                
+                {/* AI/LLM */}
+                <div className="p-4 rounded-lg bg-purple-500/10 border border-purple-500/20 min-w-[140px]">
+                  <Cpu className="h-6 w-6 text-purple-600 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-purple-600 text-center">AI/LLM</p>
+                  <p className="text-xs text-muted-foreground text-center">
+                    {hasAiUsage ? `${lineage.ai_usage.length} models` : 'Consumption'}
+                  </p>
                 </div>
               </div>
               
               {/* Lineage details */}
-              <pre className="p-4 rounded-lg bg-muted text-sm overflow-auto max-h-64">
-                {JSON.stringify(lineage, null, 2)}
-              </pre>
+              {hasAnyLineage ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Upstream */}
+                  <div className="rounded-lg border border-border p-4">
+                    <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
+                      <Database className="h-4 w-4 text-blue-600" />
+                      Upstream Sources
+                    </h4>
+                    {hasUpstream ? (
+                      <ul className="space-y-2">
+                        {lineage.upstream.map((flow: any, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-blue-500" />
+                            {flow.source_dataset_id}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No upstream sources recorded</p>
+                    )}
+                  </div>
+                  
+                  {/* Downstream */}
+                  <div className="rounded-lg border border-border p-4">
+                    <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
+                      <ArrowRight className="h-4 w-4 text-green-600" />
+                      Downstream Flows
+                    </h4>
+                    {hasDownstream ? (
+                      <ul className="space-y-2">
+                        {lineage.downstream.map((flow: any, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-green-500" />
+                            {flow.target_dataset_id}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No downstream flows recorded</p>
+                    )}
+                  </div>
+                  
+                  {/* AI Usage */}
+                  <div className="rounded-lg border border-border p-4">
+                    <h4 className="font-medium text-foreground mb-3 flex items-center gap-2">
+                      <Cpu className="h-4 w-4 text-purple-600" />
+                      AI Model Usage
+                    </h4>
+                    {hasAiUsage ? (
+                      <ul className="space-y-2">
+                        {lineage.ai_usage.map((usage: any, i: number) => (
+                          <li key={i} className="text-sm text-muted-foreground flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-purple-500" />
+                            {usage.model_id || usage.model_name || 'AI Model'}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">No AI usage recorded</p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4 flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-foreground">No lineage data yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Lineage data is automatically captured when you scan data sources and use the AI Gate.
+                      Run a scan or make AI Gate queries to start building lineage.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center py-12">

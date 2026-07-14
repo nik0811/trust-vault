@@ -371,6 +371,19 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 		_ = err
 	}
 
+	// Create data flow entry for lineage tracking
+	for _, chunk := range contextChunks {
+		if chunk.Source != "" {
+			dataFlow := store.DataFlow{
+				TenantID:        tenantID,
+				SourceDatasetID: chunk.Source,
+				TargetDatasetID: "ai-gate-" + gateQuery.ID,
+				FlowType:        "ai_consumption",
+			}
+			s.dataFlows.Create(ctx, &dataFlow)
+		}
+	}
+
 	pkg.JSON(w, GateQueryResponse{
 		ID:         gateQuery.ID,
 		Response:   responseText,
