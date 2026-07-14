@@ -520,7 +520,10 @@ func (s *Server) listCorrections(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	corrections, _ := s.feedback.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	corrections, err := s.feedback.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if err != nil || corrections == nil {
+		corrections = []store.Feedback{}
+	}
 	pkg.JSON(w, corrections)
 }
 
@@ -572,6 +575,11 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	recommendations := domain.GenerateRecommendations(advCtx)
+	
+	// Ensure we return an empty array, not null
+	if recommendations == nil {
+		recommendations = []domain.Recommendation{}
+	}
 
 	pkg.JSON(w, recommendations)
 }
