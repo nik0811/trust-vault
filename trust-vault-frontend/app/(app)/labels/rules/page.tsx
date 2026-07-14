@@ -14,7 +14,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/base/alert-dialog'
+} from '@/components/ui/alert-dialog'
 
 export default function LabelRulesPage() {
   const { data: rules, isLoading } = useLabelRules()
