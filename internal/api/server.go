@@ -215,6 +215,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}", s.getPolicy)
 				r.Put("/{id}", s.updatePolicy)
 				r.Delete("/{id}", s.deletePolicy)
+				r.Delete("/{id}", s.deletePolicy)
 			})
 			r.Post("/governance/evaluate", s.evaluatePolicy)
 
