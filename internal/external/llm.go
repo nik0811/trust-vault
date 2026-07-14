@@ -127,9 +127,6 @@ type StreamChunk struct {
 
 func (l *LLM) Chat(ctx context.Context, messages []ChatMessage) (*ChatResponse, error) {
 	if l.provider == LLMProviderBedrock {
-		if l.bedrockClient == nil {
-			return nil, fmt.Errorf("bedrock client not initialized - provider=%s, model=%s", l.provider, l.model)
-		}
 		return l.chatBedrock(ctx, messages)
 	}
 	return l.chatOllama(ctx, messages)
@@ -209,9 +206,6 @@ func (l *LLM) chatBedrock(ctx context.Context, messages []ChatMessage) (*ChatRes
 	if strings.HasPrefix(modelID, "bedrock/") {
 		modelID = strings.TrimPrefix(modelID, "bedrock/")
 	}
-
-	// Log the model ID being used
-	fmt.Printf("[DEBUG] Bedrock Converse API - modelID: %s\n", modelID)
 
 	// Build Converse API messages
 	var converseMessages []types.Message
