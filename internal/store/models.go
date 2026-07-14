@@ -267,14 +267,14 @@ type Label struct {
 
 // Feedback stores user corrections for self-learning
 type Feedback struct {
-	ID             string    `db:"id" json:"id"`
-	TenantID       string    `db:"tenant_id" json:"-"`
-	ClassificationID string  `db:"classification_id" json:"classification_id"`
-	Type           string    `db:"type" json:"type" validate:"oneof=correction confirmation false_positive false_negative"`
-	OriginalLabel  string    `db:"original_label" json:"original_label"`
-	CorrectedLabel string    `db:"corrected_label" json:"corrected_label"`
-	UserID         string    `db:"user_id" json:"user_id"`
-	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	ID               string    `db:"id" json:"id"`
+	TenantID         string    `db:"tenant_id" json:"-"`
+	ClassificationID *string   `db:"classification_id" json:"classification_id,omitempty"`
+	Type             string    `db:"type" json:"type" validate:"oneof=correction confirmation false_positive false_negative general"`
+	OriginalLabel    string    `db:"original_label" json:"original_label"`
+	CorrectedLabel   string    `db:"corrected_label" json:"corrected_label"`
+	UserID           string    `db:"user_id" json:"user_id"`
+	CreatedAt        time.Time `db:"created_at" json:"created_at"`
 }
 
 // Integration stores outbound integration configs

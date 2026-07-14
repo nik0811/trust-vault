@@ -47,6 +47,12 @@ services:
       - SUPERADMIN_EMAIL=admin@trustvault.local
       - SUPERADMIN_PASSWORD=TrustVault@2026!
       - SUPERADMIN_NAME=Super Admin
+      # LLM Configuration
+      - LLM_PROVIDER=${LLM_PROVIDER:-ollama}
+      - LLM_MODEL=${LLM_MODEL:-}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-}
+      - AWS_REGION_NAME=${AWS_REGION_NAME:-us-east-1}
     depends_on:
       postgres:
         condition: service_healthy

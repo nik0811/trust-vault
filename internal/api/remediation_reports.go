@@ -389,13 +389,19 @@ func (s *Server) submitFeedback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	feedback := store.Feedback{
-		TenantID:         tenantID,
-		ClassificationID: req.ClassificationID,
-		Type:             feedbackType,
-		CorrectedLabel:   req.CorrectedLabel,
-		UserID:           userID,
+		TenantID:       tenantID,
+		Type:           feedbackType,
+		CorrectedLabel: req.CorrectedLabel,
+		UserID:         userID,
 	}
-	s.feedback.Create(ctx, &feedback)
+	if req.ClassificationID != "" {
+		feedback.ClassificationID = &req.ClassificationID
+	}
+
+	if err := s.feedback.Create(ctx, &feedback); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
 
 	pkg.JSON(w, feedback, http.StatusCreated)
 }
@@ -406,7 +412,7 @@ func (s *Server) submitCorrection(w http.ResponseWriter, r *http.Request) {
 	userID := pkg.UserFromCtx(ctx)
 
 	var req struct {
-		ClassificationID string `json:"classification_id" validate:"required"`
+		ClassificationID string `json:"classification_id"`
 		CorrectedLabel   string `json:"corrected_label" validate:"required"`
 	}
 	if err := pkg.Bind(r, &req); err != nil {
@@ -415,13 +421,19 @@ func (s *Server) submitCorrection(w http.ResponseWriter, r *http.Request) {
 	}
 
 	feedback := store.Feedback{
-		TenantID:         tenantID,
-		ClassificationID: req.ClassificationID,
-		Type:             "correction",
-		CorrectedLabel:   req.CorrectedLabel,
-		UserID:           userID,
+		TenantID:       tenantID,
+		Type:           "correction",
+		CorrectedLabel: req.CorrectedLabel,
+		UserID:         userID,
 	}
-	s.feedback.Create(ctx, &feedback)
+	if req.ClassificationID != "" {
+		feedback.ClassificationID = &req.ClassificationID
+	}
+
+	if err := s.feedback.Create(ctx, &feedback); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
 
 	pkg.JSON(w, feedback, http.StatusCreated)
 }
@@ -432,7 +444,7 @@ func (s *Server) submitConfirmation(w http.ResponseWriter, r *http.Request) {
 	userID := pkg.UserFromCtx(ctx)
 
 	var req struct {
-		ClassificationID string `json:"classification_id" validate:"required"`
+		ClassificationID string `json:"classification_id"`
 	}
 	if err := pkg.Bind(r, &req); err != nil {
 		pkg.Error(w, err, http.StatusBadRequest)
@@ -440,12 +452,18 @@ func (s *Server) submitConfirmation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	feedback := store.Feedback{
-		TenantID:         tenantID,
-		ClassificationID: req.ClassificationID,
-		Type:             "confirmation",
-		UserID:           userID,
+		TenantID: tenantID,
+		Type:     "confirmation",
+		UserID:   userID,
 	}
-	s.feedback.Create(ctx, &feedback)
+	if req.ClassificationID != "" {
+		feedback.ClassificationID = &req.ClassificationID
+	}
+
+	if err := s.feedback.Create(ctx, &feedback); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
 
 	pkg.JSON(w, feedback, http.StatusCreated)
 }
