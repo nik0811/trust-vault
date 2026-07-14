@@ -302,31 +302,93 @@ export default function DashboardPage() {
               </div>
               {auditLoading ? (
                 <div className="space-y-3">
-                  {[1, 2, 3, 4, 5].map(i => (
-                    <Skeleton key={i} className="h-12 w-full" />
+                  {[1, 2, 3, 4].map(i => (
+                    <Skeleton key={i} className="h-16 w-full" />
                   ))}
                 </div>
               ) : Array.isArray(auditTrail) && auditTrail.length > 0 ? (
-                <div className="space-y-3">
-                  {auditTrail.slice(0, 4).map((log: any) => (
-                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
-                        log.action?.includes('delete') ? 'bg-red-500' :
-                        log.action?.includes('create') ? 'bg-green-500' :
-                        log.action?.includes('scan') ? 'bg-blue-500' :
-                        'bg-gray-400'
-                      }`} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-foreground">
-                          <span className="font-medium capitalize">{log.action?.replace(/_/g, ' ')}</span>
-                          {log.resource && <span className="text-muted-foreground"> on {log.resource}</span>}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {new Date(log.created_at).toLocaleString()}
-                        </p>
+                <div className="space-y-2">
+                  {auditTrail.slice(0, 4).map((log: any) => {
+                    const details = typeof log.details === 'string' ? JSON.parse(log.details || '{}') : (log.details || {});
+                    const actionParts = log.action?.split('.') || [];
+                    const actionType = actionParts[1] || actionParts[0] || 'action';
+                    const resourceType = actionParts[0] || log.resource || 'system';
+                    
+                    const getActionIcon = () => {
+                      if (log.action?.includes('login')) return '🔐';
+                      if (log.action?.includes('logout')) return '🚪';
+                      if (log.action?.includes('create')) return '➕';
+                      if (log.action?.includes('delete')) return '🗑️';
+                      if (log.action?.includes('update')) return '✏️';
+                      if (log.action?.includes('scan')) return '🔍';
+                      if (log.action?.includes('classification')) return '🏷️';
+                      if (log.action?.includes('policy')) return '📋';
+                      return '📌';
+                    };
+                    
+                    const getActionColor = () => {
+                      if (log.action?.includes('delete')) return 'text-red-500';
+                      if (log.action?.includes('create')) return 'text-green-500';
+                      if (log.action?.includes('login')) return 'text-blue-500';
+                      if (log.action?.includes('scan')) return 'text-purple-500';
+                      return 'text-gray-500';
+                    };
+                    
+                    const getDescription = () => {
+                      if (log.action === 'user.login') {
+                        return `${details.email || 'User'} signed in`;
+                      }
+                      if (log.action === 'user.logout') {
+                        return `${details.email || 'User'} signed out`;
+                      }
+                      if (log.action?.includes('datasource.created')) {
+                        return `Data source "${details.name || 'Unknown'}" created`;
+                      }
+                      if (log.action?.includes('datasource.deleted')) {
+                        return `Data source removed`;
+                      }
+                      if (log.action?.includes('datasource.scan_started')) {
+                        return `Scan started on "${details.name || 'data source'}"`;
+                      }
+                      if (log.action?.includes('classification')) {
+                        return `Classification ${actionType} on dataset`;
+                      }
+                      if (log.action?.includes('policy')) {
+                        return `Policy "${details.name || ''}" ${actionType}`;
+                      }
+                      return `${resourceType} ${actionType}`;
+                    };
+
+                    return (
+                      <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors">
+                        <span className="text-lg">{getActionIcon()}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-foreground font-medium">
+                            {getDescription()}
+                          </p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(log.created_at).toLocaleString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                            {log.ip && log.ip !== '' && (
+                              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                {log.ip}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full bg-muted ${getActionColor()}`}>
+                          {actionType}
+                        </span>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
