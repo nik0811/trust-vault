@@ -33,7 +33,8 @@ const columns: Column<AuditLog>[] = [
   {
     id: 'ip_address',
     header: 'IP Address',
-    accessorKey: 'ip_address',
+    accessorKey: 'ip',
+    cell: (row) => row.ip || '—',
   },
   {
     id: 'created_at',
