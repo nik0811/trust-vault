@@ -797,6 +797,15 @@ func (s *Server) reclassifyDataset(w http.ResponseWriter, r *http.Request) {
 		"tenant_id":     tenantID,
 		"reclassify":    true,
 	})
+	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "classification.started",
+		Resource:   "dataset",
+		ResourceID: datasetID,
+	})
 
 	pkg.JSON(w, map[string]string{
 		"status":     "queued",

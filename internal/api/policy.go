@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -41,6 +42,17 @@ func (s *Server) createPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events.Emit("policy.created", policy)
+	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "policy.created",
+		Resource:   "policy",
+		ResourceID: policy.ID,
+		Details:    store.JSON(fmt.Sprintf(`{"name":"%s","type":"%s"}`, policy.Name, policy.Type)),
+	})
+	
 	pkg.JSON(w, policy, http.StatusCreated)
 }
 
@@ -92,6 +104,17 @@ func (s *Server) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events.Emit("policy.updated", policy)
+	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "policy.updated",
+		Resource:   "policy",
+		ResourceID: policy.ID,
+		Details:    store.JSON(fmt.Sprintf(`{"name":"%s"}`, policy.Name)),
+	})
+	
 	pkg.JSON(w, policy)
 }
 
@@ -106,6 +129,16 @@ func (s *Server) deletePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events.Emit("policy.deleted", map[string]string{"id": id})
+	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "policy.deleted",
+		Resource:   "policy",
+		ResourceID: id,
+	})
+	
 	pkg.JSON(w, map[string]string{"status": "deleted"})
 }
 

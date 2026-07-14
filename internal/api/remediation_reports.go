@@ -516,6 +516,33 @@ func (s *Server) getKnowledgeCache(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (s *Server) listCorrections(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	corrections, _ := s.feedback.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	pkg.JSON(w, corrections)
+}
+
+func (s *Server) getCorrectionTrend(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	// Get corrections per day for last 7 days
+	var trend []int
+	for i := 6; i >= 0; i-- {
+		var count int
+		s.db.GetContext(ctx, &count,
+			`SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 
+			 AND created_at >= NOW() - INTERVAL '1 day' * $2 
+			 AND created_at < NOW() - INTERVAL '1 day' * $3`,
+			tenantID, i+1, i)
+		trend = append(trend, count)
+	}
+
+	pkg.JSON(w, trend)
+}
+
 func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)

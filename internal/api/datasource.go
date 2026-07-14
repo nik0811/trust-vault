@@ -106,6 +106,16 @@ func (s *Server) createDataSource(w http.ResponseWriter, r *http.Request) {
 
 	events.Emit("datasource.created", ds)
 	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "datasource.created",
+		Resource:   "datasource",
+		ResourceID: ds.ID,
+		Details:    store.JSON(fmt.Sprintf(`{"name":"%s","type":"%s"}`, ds.Name, ds.Type)),
+	})
+	
 	// Mask sensitive fields before returning
 	masked := maskDataSource(&ds)
 	pkg.JSON(w, masked, http.StatusCreated)
@@ -165,6 +175,16 @@ func (s *Server) updateDataSource(w http.ResponseWriter, r *http.Request) {
 
 	events.Emit("datasource.updated", ds)
 	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "datasource.updated",
+		Resource:   "datasource",
+		ResourceID: ds.ID,
+		Details:    store.JSON(fmt.Sprintf(`{"name":"%s"}`, ds.Name)),
+	})
+	
 	// Mask sensitive fields before returning
 	masked := maskDataSource(ds)
 	pkg.JSON(w, masked)
@@ -181,6 +201,16 @@ func (s *Server) deleteDataSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	events.Emit("datasource.deleted", map[string]string{"id": id})
+	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "datasource.deleted",
+		Resource:   "datasource",
+		ResourceID: id,
+	})
+	
 	pkg.JSON(w, map[string]string{"status": "deleted"})
 }
 
@@ -224,6 +254,16 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 	if err := s.scanLogs.Create(ctx, &scanLog); err != nil {
 		log.Error().Err(err).Str("datasource_id", id).Msg("failed to create scan log entry")
 	}
+	
+	// Audit log
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		UserID:     pkg.UserFromCtx(ctx),
+		Action:     "datasource.scan_started",
+		Resource:   "datasource",
+		ResourceID: id,
+		Details:    store.JSON(fmt.Sprintf(`{"name":"%s","type":"%s"}`, ds.Name, ds.Type)),
+	})
 
 	// Refetch to get clean config (avoid buffer reuse issues)
 	ds, err = s.datasources.FindByID(ctx, tenantID, id)

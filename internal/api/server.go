@@ -364,6 +364,8 @@ func (s *Server) setupRoutes() {
 				r.Post("/correction", s.submitCorrection)
 				r.Post("/confirmation", s.submitConfirmation)
 				r.Get("/stats", s.getFeedbackStats)
+				r.Get("/corrections", s.listCorrections)
+				r.Get("/trend", s.getCorrectionTrend)
 				r.Post("/custom-entity", s.createCustomEntity)
 				r.Get("/knowledge-cache", s.getKnowledgeCache)
 			})
