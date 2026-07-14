@@ -390,7 +390,7 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	ds.LastScan = &now
 	if callback.Status == "completed" {
-		ds.Status = "active"
+		ds.Status = "connected"
 	} else {
 		ds.Status = "error"
 	}
