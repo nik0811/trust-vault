@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -479,15 +480,43 @@ func (s *Server) getFeedbackStats(w http.ResponseWriter, r *http.Request) {
 		"SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 AND type = 'confirmation'", tenantID)
 
 	total := corrections + confirmations
-	var accuracy float64
+	var accuracyImprovement string
 	if total > 0 {
-		accuracy = float64(confirmations) / float64(total)
+		accuracy := float64(confirmations) / float64(total) * 100
+		accuracyImprovement = fmt.Sprintf("+%.1f%%", accuracy)
+	} else {
+		accuracyImprovement = "—"
+	}
+
+	// Get knowledge cache size (custom entities count)
+	var cacheSize int
+	s.db.GetContext(ctx, &cacheSize, "SELECT COUNT(*) FROM custom_entities WHERE tenant_id = $1", tenantID)
+	cacheSizeStr := fmt.Sprintf("%d entries", cacheSize)
+	if cacheSize == 0 {
+		cacheSizeStr = "0 entries"
+	}
+
+	// Calculate cache hit rate based on classifications that matched custom entities
+	var cacheHitRate string
+	var totalClassifications int
+	s.db.GetContext(ctx, &totalClassifications, "SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
+	if totalClassifications > 0 && cacheSize > 0 {
+		// Estimate hit rate based on corrections vs total
+		hitRate := float64(confirmations) / float64(totalClassifications) * 100
+		if hitRate > 100 {
+			hitRate = 100
+		}
+		cacheHitRate = fmt.Sprintf("%.0f%%", hitRate)
+	} else {
+		cacheHitRate = "—"
 	}
 
 	pkg.JSON(w, map[string]any{
 		"total_corrections":    corrections,
 		"total_confirmations":  confirmations,
-		"accuracy_improvement": accuracy,
+		"accuracy_improvement": accuracyImprovement,
+		"cache_size":           cacheSizeStr,
+		"cache_hit_rate":       cacheHitRate,
 	})
 }
 
@@ -576,14 +605,65 @@ func (s *Server) getKnowledgeCache(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CorrectionResponse matches the frontend's expected format for corrections
+type CorrectionResponse struct {
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	From      string    `json:"from"`
+	To        string    `json:"to"`
+	User      string    `json:"user"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 func (s *Server) listCorrections(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	corrections, err := s.feedback.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if err != nil || corrections == nil {
-		corrections = []store.Feedback{}
+	feedbackList, err := s.feedback.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if err != nil || feedbackList == nil {
+		feedbackList = []store.Feedback{}
 	}
+
+	// Transform to frontend format
+	corrections := make([]CorrectionResponse, 0, len(feedbackList))
+	for _, fb := range feedbackList {
+		// Only include corrections (not confirmations)
+		if fb.Type != "correction" {
+			continue
+		}
+
+		// Get username from user_id
+		userName := fb.UserID
+		var user store.User
+		if err := s.db.GetContext(ctx, &user, "SELECT * FROM users WHERE id = $1", fb.UserID); err == nil {
+			userName = user.Name
+			if userName == "" {
+				userName = user.Email
+			}
+		}
+
+		// Generate a text sample from the classification if available
+		textSample := fmt.Sprintf("%s → %s", fb.OriginalLabel, fb.CorrectedLabel)
+		if fb.ClassificationID != nil {
+			var classification store.Classification
+			if err := s.db.GetContext(ctx, &classification, "SELECT * FROM classifications WHERE id = $1", *fb.ClassificationID); err == nil && classification.Value != "" {
+				textSample = classification.Value
+				if len(textSample) > 50 {
+					textSample = textSample[:50] + "..."
+				}
+			}
+		}
+
+		corrections = append(corrections, CorrectionResponse{
+			ID:        fb.ID,
+			Text:      textSample,
+			From:      fb.OriginalLabel,
+			To:        fb.CorrectedLabel,
+			User:      userName,
+			CreatedAt: fb.CreatedAt,
+		})
+	}
+
 	pkg.JSON(w, corrections)
 }
 
