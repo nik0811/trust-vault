@@ -5,7 +5,7 @@ import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { FileText, Download } from 'lucide-react'
 import { useGenerateDefenseDocket } from '@/hooks/use-advisor'
 
-const regulations = ['GDPR', 'CCPA', 'HIPAA', 'SOC2', 'PCI-DSS', 'DPDP', 'EU AI Act']
+const regulations = ['GDPR', 'CCPA', 'HIPAA', 'SOC2', 'PCI-DSS', 'DPDP', 'UAE PDPL', 'EU AI Act']
 
 export default function DefenseDocketPage() {
   const generateDocket = useGenerateDefenseDocket()

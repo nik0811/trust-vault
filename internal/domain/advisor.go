@@ -11,7 +11,7 @@ import (
 type Recommendation struct {
 	ID            string `json:"id"`
 	Severity      string `json:"severity"` // CRITICAL, HIGH, MEDIUM, LOW
-	Category      string `json:"category"` // pii, gdpr, ccpa, retention, access, ai
+	Category      string `json:"category"` // pii, gdpr, ccpa, pdpb, uae_pdpl, retention, access, ai
 	Title         string `json:"title"`
 	Description   string `json:"description"`
 	Action        string `json:"action"`
@@ -68,6 +68,8 @@ func GenerateRecommendations(advCtx *AdvisorContext) []Recommendation {
 	recs = append(recs, checkMissingLabels(advCtx)...)
 	recs = append(recs, checkHighSensitivityData(advCtx)...)
 	recs = append(recs, checkAIGovernance(advCtx)...)
+	recs = append(recs, checkPDPBCompliance(advCtx)...)
+	recs = append(recs, checkUAEPDPLCompliance(advCtx)...)
 
 	return recs
 }
@@ -331,6 +333,229 @@ func checkAIGovernance(advCtx *AdvisorContext) []Recommendation {
 			Description: "Sensitive data exists but no policies govern its use in AI/LLM systems",
 			Action:      "Create AI governance policies to control what data can be sent to LLMs",
 			Regulation:  "EU AI Act",
+		})
+	}
+
+	return recs
+}
+
+// checkPDPBCompliance checks India's Digital Personal Data Protection Act 2023 requirements
+func checkPDPBCompliance(advCtx *AdvisorContext) []Recommendation {
+	var recs []Recommendation
+
+	hasPII := false
+	for _, c := range advCtx.Classifications {
+		if PIITypes[c.EntityType] {
+			hasPII = true
+			break
+		}
+	}
+
+	if !hasPII {
+		return recs
+	}
+
+	hasConsentPolicy := false
+	hasDataLocalizationPolicy := false
+	hasChildrenDataPolicy := false
+	hasRetentionPolicy := false
+
+	for _, p := range advCtx.Policies {
+		if !p.Active {
+			continue
+		}
+		switch p.Type {
+		case "consent":
+			hasConsentPolicy = true
+		case "localization", "data_localization":
+			hasDataLocalizationPolicy = true
+		case "children", "minor_protection":
+			hasChildrenDataPolicy = true
+		case "retention":
+			hasRetentionPolicy = true
+		}
+	}
+
+	if !hasConsentPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-pdpb-consent",
+			Severity:    "CRITICAL",
+			Category:    "pdpb",
+			Title:       "Missing consent management for DPDP Act",
+			Description: "India's DPDP Act requires explicit consent before processing personal data",
+			Action:      "Implement consent management system with clear purpose specification",
+			Regulation:  "DPDP Act 2023 Section 6",
+		})
+	}
+
+	if !hasDataLocalizationPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-pdpb-localization",
+			Severity:    "HIGH",
+			Category:    "pdpb",
+			Title:       "No data localization policy defined",
+			Description: "Critical personal data must be stored and processed within India under DPDP Act",
+			Action:      "Define data localization policies for critical personal data categories",
+			Regulation:  "DPDP Act 2023 Section 16",
+		})
+	}
+
+	if !hasChildrenDataPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-pdpb-children",
+			Severity:    "HIGH",
+			Category:    "pdpb",
+			Title:       "Missing children's data protection policy",
+			Description: "DPDP Act requires verifiable parental consent for processing data of persons under 18",
+			Action:      "Implement age verification and parental consent mechanisms",
+			Regulation:  "DPDP Act 2023 Section 9",
+		})
+	}
+
+	if !hasRetentionPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-pdpb-retention",
+			Severity:    "HIGH",
+			Category:    "pdpb",
+			Title:       "No data retention limits defined",
+			Description: "DPDP Act requires data to be erased when purpose is fulfilled or consent withdrawn",
+			Action:      "Define retention policies with automatic deletion when purpose is complete",
+			Regulation:  "DPDP Act 2023 Section 8(7)",
+		})
+	}
+
+	if len(advCtx.RoPA) == 0 {
+		recs = append(recs, Recommendation{
+			ID:          "rec-pdpb-dpo",
+			Severity:    "CRITICAL",
+			Category:    "pdpb",
+			Title:       "Significant Data Fiduciary obligations not documented",
+			Description: "Significant Data Fiduciaries must appoint a DPO and conduct Data Protection Impact Assessments",
+			Action:      "Document processing activities and appoint Data Protection Officer if applicable",
+			Regulation:  "DPDP Act 2023 Section 10",
+		})
+	}
+
+	return recs
+}
+
+// checkUAEPDPLCompliance checks UAE Personal Data Protection Law requirements
+func checkUAEPDPLCompliance(advCtx *AdvisorContext) []Recommendation {
+	var recs []Recommendation
+
+	hasPII := false
+	for _, c := range advCtx.Classifications {
+		if PIITypes[c.EntityType] {
+			hasPII = true
+			break
+		}
+	}
+
+	if !hasPII {
+		return recs
+	}
+
+	hasLawfulBasisPolicy := false
+	hasCrossBorderPolicy := false
+	hasSpecialCategoryPolicy := false
+	hasRetentionPolicy := false
+	hasAccessPolicy := false
+
+	for _, p := range advCtx.Policies {
+		if !p.Active {
+			continue
+		}
+		switch p.Type {
+		case "lawful_basis", "consent":
+			hasLawfulBasisPolicy = true
+		case "cross_border", "transfer":
+			hasCrossBorderPolicy = true
+		case "special_category", "sensitive":
+			hasSpecialCategoryPolicy = true
+		case "retention":
+			hasRetentionPolicy = true
+		case "access":
+			hasAccessPolicy = true
+		}
+	}
+
+	if !hasLawfulBasisPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-uae-lawful-basis",
+			Severity:    "CRITICAL",
+			Category:    "uae_pdpl",
+			Title:       "Missing lawful basis documentation",
+			Description: "UAE PDPL requires documented lawful basis for all personal data processing",
+			Action:      "Document lawful basis (consent, contract, legal obligation, vital interests, public interest, or legitimate interests)",
+			Regulation:  "UAE PDPL Art. 4",
+		})
+	}
+
+	if !hasCrossBorderPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-uae-cross-border",
+			Severity:    "HIGH",
+			Category:    "uae_pdpl",
+			Title:       "No cross-border transfer policy defined",
+			Description: "UAE PDPL restricts transfer of personal data outside UAE without adequate protection",
+			Action:      "Define cross-border transfer policies ensuring adequate protection level",
+			Regulation:  "UAE PDPL Art. 22",
+		})
+	}
+
+	hasHighSensitivity := false
+	for _, c := range advCtx.Classifications {
+		if HighSensitivityTypes[c.EntityType] {
+			hasHighSensitivity = true
+			break
+		}
+	}
+
+	if hasHighSensitivity && !hasSpecialCategoryPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-uae-special-category",
+			Severity:    "CRITICAL",
+			Category:    "uae_pdpl",
+			Title:       "Special category data without explicit protection",
+			Description: "UAE PDPL requires explicit consent and additional safeguards for sensitive personal data",
+			Action:      "Implement explicit consent and enhanced protection for health, biometric, genetic, and other sensitive data",
+			Regulation:  "UAE PDPL Art. 7",
+		})
+	}
+
+	if !hasRetentionPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-uae-retention",
+			Severity:    "HIGH",
+			Category:    "uae_pdpl",
+			Title:       "No data retention policy for UAE PDPL",
+			Description: "UAE PDPL requires data to be kept only as long as necessary for the specified purpose",
+			Action:      "Define retention periods aligned with processing purposes",
+			Regulation:  "UAE PDPL Art. 5",
+		})
+	}
+
+	if !hasAccessPolicy {
+		recs = append(recs, Recommendation{
+			ID:          "rec-uae-data-subject-rights",
+			Severity:    "HIGH",
+			Category:    "uae_pdpl",
+			Title:       "Data subject rights not fully implemented",
+			Description: "UAE PDPL grants rights to access, rectification, erasure, and data portability",
+			Action:      "Implement mechanisms for data subject access requests and rights fulfillment",
+			Regulation:  "UAE PDPL Art. 13-18",
+		})
+	}
+
+	if len(advCtx.RoPA) == 0 {
+		recs = append(recs, Recommendation{
+			ID:          "rec-uae-records",
+			Severity:    "HIGH",
+			Category:    "uae_pdpl",
+			Title:       "Missing records of processing activities",
+			Description: "UAE PDPL requires controllers to maintain records of processing activities",
+			Action:      "Create and maintain records of all personal data processing activities",
+			Regulation:  "UAE PDPL Art. 8",
 		})
 	}
 

@@ -711,6 +711,12 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 	var ropaCount int
 	s.db.GetContext(ctx, &ropaCount, "SELECT COUNT(*) FROM ropa WHERE tenant_id = $1", tenantID)
 
+	// Check for specific policy types
+	var consentPolicyCount, localizationPolicyCount, crossBorderPolicyCount int
+	s.db.GetContext(ctx, &consentPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('consent', 'lawful_basis')", tenantID)
+	s.db.GetContext(ctx, &localizationPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('localization', 'data_localization')", tenantID)
+	s.db.GetContext(ctx, &crossBorderPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('cross_border', 'transfer')", tenantID)
+
 	// Build gaps array in the format frontend expects
 	gaps := []FrontendComplianceGap{}
 
@@ -747,6 +753,74 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 			Requirement: "Data Inventory (1798.100)",
 			Status:      "open",
 			Remediation: "Complete data inventory and classification",
+		})
+	}
+
+	// PDPB (India DPDP Act 2023) gaps
+	if consentPolicyCount == 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "DPDP",
+			Requirement: "Consent Management (Section 6)",
+			Status:      "open",
+			Remediation: "Implement explicit consent collection with clear purpose specification",
+		})
+	}
+	if localizationPolicyCount == 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "DPDP",
+			Requirement: "Data Localization (Section 16)",
+			Status:      "open",
+			Remediation: "Define data localization policies for critical personal data stored in India",
+		})
+	}
+	if ropaCount == 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "DPDP",
+			Requirement: "Significant Data Fiduciary Obligations (Section 10)",
+			Status:      "open",
+			Remediation: "Appoint Data Protection Officer and conduct Data Protection Impact Assessments",
+		})
+	}
+	if policyCount < 3 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "DPDP",
+			Requirement: "Data Principal Rights (Section 11-14)",
+			Status:      "open",
+			Remediation: "Implement mechanisms for access, correction, and erasure requests",
+		})
+	}
+
+	// UAE PDPL gaps
+	if consentPolicyCount == 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "UAE PDPL",
+			Requirement: "Lawful Basis for Processing (Art. 4)",
+			Status:      "open",
+			Remediation: "Document lawful basis for all personal data processing activities",
+		})
+	}
+	if crossBorderPolicyCount == 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "UAE PDPL",
+			Requirement: "Cross-Border Transfer Restrictions (Art. 22)",
+			Status:      "open",
+			Remediation: "Define cross-border transfer policies ensuring adequate protection level",
+		})
+	}
+	if ropaCount == 0 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "UAE PDPL",
+			Requirement: "Records of Processing Activities (Art. 8)",
+			Status:      "open",
+			Remediation: "Maintain records of all personal data processing activities",
+		})
+	}
+	if policyCount < 3 {
+		gaps = append(gaps, FrontendComplianceGap{
+			Regulation:  "UAE PDPL",
+			Requirement: "Data Subject Rights (Art. 13-18)",
+			Status:      "open",
+			Remediation: "Implement access, rectification, erasure, and portability request mechanisms",
 		})
 	}
 
