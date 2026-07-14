@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
+	"github.com/trustvault/trustvault/internal/events"
 	"github.com/trustvault/trustvault/internal/pkg"
 	"github.com/trustvault/trustvault/internal/store"
 )
@@ -692,4 +694,73 @@ func determineSensitivityLevel(entityType string, confidence float64) string {
 	}
 
 	return "low"
+}
+
+// classificationCallback handles completion callbacks from the worker
+func (s *Server) classificationCallback(w http.ResponseWriter, r *http.Request) {
+	var callback struct {
+		TenantID          string `json:"tenant_id"`
+		DatasetID         string `json:"dataset_id"`
+		Status            string `json:"status"`
+		ColumnsClassified int    `json:"columns_classified"`
+		Message           string `json:"message"`
+		Error             string `json:"error,omitempty"`
+	}
+	if err := pkg.Bind(r, &callback); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	log.Info().
+		Str("dataset_id", callback.DatasetID).
+		Str("status", callback.Status).
+		Int("columns_classified", callback.ColumnsClassified).
+		Msg("Classification callback received")
+
+	// Emit SSE event for completion
+	events.Emit("classification.completed", map[string]any{
+		"tenant_id":          callback.TenantID,
+		"dataset_id":         callback.DatasetID,
+		"status":             callback.Status,
+		"columns_classified": callback.ColumnsClassified,
+		"message":            callback.Message,
+		"error":              callback.Error,
+	})
+
+	pkg.JSON(w, map[string]string{"status": "ok"})
+}
+
+// classificationProgress handles progress callbacks from the worker
+func (s *Server) classificationProgress(w http.ResponseWriter, r *http.Request) {
+	var progress struct {
+		TenantID  string `json:"tenant_id"`
+		DatasetID string `json:"dataset_id"`
+		Message   string `json:"message"`
+		Progress  struct {
+			Current int `json:"current"`
+			Total   int `json:"total"`
+		} `json:"progress"`
+	}
+	if err := pkg.Bind(r, &progress); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	log.Debug().
+		Str("dataset_id", progress.DatasetID).
+		Str("message", progress.Message).
+		Int("current", progress.Progress.Current).
+		Int("total", progress.Progress.Total).
+		Msg("Classification progress received")
+
+	// Emit SSE event for progress
+	events.Emit("classification.progress", map[string]any{
+		"tenant_id":  progress.TenantID,
+		"dataset_id": progress.DatasetID,
+		"message":    progress.Message,
+		"progress":   progress.Progress,
+		"status":     "running",
+	})
+
+	pkg.JSON(w, map[string]string{"status": "ok"})
 }

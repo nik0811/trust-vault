@@ -1,10 +1,12 @@
 package external
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -345,29 +347,20 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				}
 				columnsClassified++
 
-				// Emit progress event
+				// Send progress callback to gateway for SSE broadcast
 				sourceLabel := "pattern"
 				if classificationSource == "gliner_ml" {
 					sourceLabel = "ML"
 				}
-				events.Emit("classification.progress", map[string]any{
-					"tenant_id":  job.TenantID,
-					"dataset_id": job.DatasetID,
-					"message":    fmt.Sprintf("Classified: %s → %s (%.0f%% via %s)", col.Name, entityType, confidence*100, sourceLabel),
-					"progress": map[string]int{
-						"current": i + 1,
-						"total":   len(allColumns),
-					},
-				})
+				sendClassificationProgress(job.TenantID, job.DatasetID, 
+					fmt.Sprintf("Classified: %s → %s (%.0f%% via %s)", col.Name, entityType, confidence*100, sourceLabel),
+					i+1, len(allColumns))
 			}
 		} else {
 			// Fallback: No DataHub data, skip classification
 			log.Warn().Str("dataset_id", job.DatasetID).Msg("No schema available for classification")
-			events.Emit("classification.progress", map[string]any{
-				"tenant_id":  job.TenantID,
-				"dataset_id": job.DatasetID,
-				"message":    "No schema data available. Please run a scan first to discover the schema.",
-			})
+			sendClassificationProgress(job.TenantID, job.DatasetID, 
+				"No schema data available. Please run a scan first to discover the schema.", 0, 0)
 		}
 
 		log.Info().
@@ -376,15 +369,63 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			Dur("duration", time.Since(start)).
 			Msg("Dataset classification completed")
 
-		// Emit completion event for SSE
-		events.Emit("classification.completed", map[string]any{
-			"tenant_id":          job.TenantID,
-			"dataset_id":         job.DatasetID,
-			"status":             "completed",
-			"columns_classified": columnsClassified,
-			"message":            fmt.Sprintf("Classification completed - %d columns classified", columnsClassified),
-		})
+		// Send completion callback to gateway for SSE broadcast
+		sendClassificationCallback(job.TenantID, job.DatasetID, "completed", columnsClassified,
+			fmt.Sprintf("Classification completed - %d columns classified", columnsClassified), "")
 	}
+}
+
+// sendClassificationCallback sends a completion callback to the gateway for SSE broadcast
+func sendClassificationCallback(tenantID, datasetID, status string, columnsClassified int, message, errMsg string) {
+	gatewayURL := envOr("GATEWAY_URL", "http://trustvault-gateway:8080")
+	callbackURL := gatewayURL + "/api/v1/classification/callback"
+
+	payload := map[string]any{
+		"tenant_id":          tenantID,
+		"dataset_id":         datasetID,
+		"status":             status,
+		"columns_classified": columnsClassified,
+		"message":            message,
+	}
+	if errMsg != "" {
+		payload["error"] = errMsg
+	}
+
+	data, _ := json.Marshal(payload)
+	resp, err := http.Post(callbackURL, "application/json", bytes.NewReader(data))
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send classification callback")
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Warn().Int("status", resp.StatusCode).Msg("Classification callback returned non-200")
+	}
+}
+
+// sendClassificationProgress sends a progress update to the gateway for SSE broadcast
+func sendClassificationProgress(tenantID, datasetID, message string, current, total int) {
+	gatewayURL := envOr("GATEWAY_URL", "http://trustvault-gateway:8080")
+	progressURL := gatewayURL + "/api/v1/classification/progress"
+
+	payload := map[string]any{
+		"tenant_id":  tenantID,
+		"dataset_id": datasetID,
+		"message":    message,
+		"progress": map[string]int{
+			"current": current,
+			"total":   total,
+		},
+	}
+
+	data, _ := json.Marshal(payload)
+	resp, err := http.Post(progressURL, "application/json", bytes.NewReader(data))
+	if err != nil {
+		log.Debug().Err(err).Msg("Failed to send classification progress")
+		return
+	}
+	defer resp.Body.Close()
 }
 
 // Default entity types for GLiNER classification

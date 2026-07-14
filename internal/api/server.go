@@ -137,6 +137,8 @@ func (s *Server) setupRoutes() {
 	// Service-to-service callbacks (no auth, internal network only)
 	r.Post("/api/v1/datasources/callback", s.scanCallback)
 	r.Post("/api/v1/datasources/progress", s.scanProgress)
+	r.Post("/api/v1/classification/callback", s.classificationCallback)
+	r.Post("/api/v1/classification/progress", s.classificationProgress)
 
 	// API Documentation
 	r.Get("/api/docs", s.swaggerUI)
