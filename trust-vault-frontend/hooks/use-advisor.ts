@@ -231,6 +231,42 @@ export function useCreateLabelRule() {
   })
 }
 
+export function useUpdateLabelRule() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (data: { id: string; classification: string; label: string }) => {
+      const { id, ...rest } = data
+      const response = await api.put(`/labels/rules/${id}`, rest)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['label-rules'] })
+      toast.success('Label rule updated')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to update label rule')
+    },
+  })
+}
+
+export function useDeleteLabelRule() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/labels/rules/${id}`)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['label-rules'] })
+      toast.success('Label rule deleted')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to delete label rule')
+    },
+  })
+}
+
 export function useLabelSummary() {
   return useQuery({
     queryKey: ['label-summary'],

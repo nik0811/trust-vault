@@ -298,6 +298,60 @@ func (s *Server) createLabelRule(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, rule, http.StatusCreated)
 }
 
+func (s *Server) updateLabelRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	rule, err := s.labelRules.FindByID(ctx, tenantID, id)
+	if err != nil || rule == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Classification string `json:"classification"`
+		Label          string `json:"label"`
+		Priority       int    `json:"priority"`
+		Active         *bool  `json:"active"`
+	}
+	if err := pkg.Bind(r, &req); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	if req.Classification != "" {
+		rule.Classification = req.Classification
+	}
+	if req.Label != "" {
+		rule.Label = req.Label
+	}
+	if req.Priority != 0 {
+		rule.Priority = req.Priority
+	}
+	if req.Active != nil {
+		rule.Active = *req.Active
+	}
+
+	s.labelRules.Update(ctx, rule)
+	pkg.JSON(w, rule)
+}
+
+func (s *Server) deleteLabelRule(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	rule, err := s.labelRules.FindByID(ctx, tenantID, id)
+	if err != nil || rule == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	s.labelRules.Delete(ctx, tenantID, id)
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) getLabelSummary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)

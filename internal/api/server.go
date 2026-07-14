@@ -352,6 +352,8 @@ func (s *Server) setupRoutes() {
 				r.Post("/assign", s.assignLabel)
 				r.Get("/rules", s.getLabelRules)
 				r.Post("/rules", s.createLabelRule)
+				r.Put("/rules/{id}", s.updateLabelRule)
+				r.Delete("/rules/{id}", s.deleteLabelRule)
 				r.Get("/summary", s.getLabelSummary)
 			})
 
