@@ -3,9 +3,9 @@
 > This file is the single source of truth for project progress.
 > Updated after every work session. Read this FIRST in any new session.
 
-## Last Updated: 2026-07-10
+## Last Updated: 2026-07-14
 
-## Current Phase: E2E BUG FIXES COMPLETE
+## Current Phase: ENTERPRISE CLASSIFICATION PIPELINE COMPLETE
 
 ## Overall Progress: 32/32 modules (Backend: 31/31, Frontend: INTEGRATED, Tests: DONE, Security: HARDENED, Monitoring: DONE)
 
@@ -105,6 +105,7 @@
 | 2026-07-10 | #11 | **JOB/SCAN EXECUTION SYSTEM.** Worker mode processes scan-jobs, job-executions, classification-jobs. SSE streaming for real-time status updates. Job scheduler for cron/scheduled jobs. Kafka consumers for all job types. |
 | 2026-07-10 | #12 | **REAL IMPLEMENTATIONS AUDIT.** Replaced all dummy/mock implementations with real functionality: 25+ PII patterns with validation (SSN, credit card, IBAN, etc.), real database connection testing (Postgres, MySQL, S3, Snowflake, BigQuery, MongoDB, Redis), real job execution logic (classification, quality, ROT scan, compliance, retention, lineage), real integration testing (Slack, Jira, ServiceNow, Splunk, Datadog, PagerDuty, webhooks), real quality scoring with format validation and consistency checks. |
 | 2026-07-10 | #13 | **E2E TEST BUG FIXES.** Fixed text classification API (pre-compiled regex patterns), fixed audit trail RBAC (superadmin cross-tenant access), improved logout functionality (proper cookie clearing), improved session persistence (JWT decoding for user info), verified AI Gate playground page exists. |
+| 2026-07-14 | #14 | **ENTERPRISE CLASSIFICATION PIPELINE.** Added ClassificationRule model (override, pattern, whitelist, threshold types), migration 005 for classification_rules table, layered rule evaluation in worker (whitelist→override→pattern→threshold), automatic label assignment after classification (label rules + fallback mapping), full CRUD API for classification rules, track classification source and applied rule. |
 
 ---
 

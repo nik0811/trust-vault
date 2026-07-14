@@ -439,6 +439,7 @@ var builtInModels = []map[string]any{
 		"speed":       "4M chars/sec",
 		"default":     true,
 		"active":      true,
+		"status":      "active",
 		"type":        "Pattern",
 		"version":     "1.0.0",
 		"entity_types": []string{
@@ -456,6 +457,7 @@ var builtInModels = []map[string]any{
 		"speed":       "2M chars/sec",
 		"default":     false,
 		"active":      true,
+		"status":      "active",
 		"type":        "ML",
 		"version":     "1.0.0",
 		"entity_types": []string{
@@ -475,6 +477,7 @@ var builtInModels = []map[string]any{
 		"speed":       "3M chars/sec",
 		"default":     false,
 		"active":      true,
+		"status":      "active",
 		"type":        "ML",
 		"version":     "1.0.0",
 		"entity_types": []string{
