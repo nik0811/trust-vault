@@ -274,9 +274,19 @@ function ClassificationStatusCard({
     }
   }, [logs, isExpanded])
 
-  // Connect to SSE when classification starts
+  // Track if we should keep SSE connection open (until job completes)
+  const [sseActive, setSseActive] = useState(false)
+
+  // Start SSE when classification begins
   useEffect(() => {
-    if (isClassifying && !eventSourceRef.current) {
+    if (isClassifying && !sseActive) {
+      setSseActive(true)
+    }
+  }, [isClassifying, sseActive])
+
+  // Connect to SSE when sseActive is true
+  useEffect(() => {
+    if (sseActive && !eventSourceRef.current) {
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
       const token = document.cookie.split('; ').find(row => row.startsWith('accessToken='))?.split('=')[1]
       
@@ -317,10 +327,15 @@ function ClassificationStatusCard({
               if (data.status === 'completed') {
                 setJobStatus('completed')
                 setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification completed - ${data.columns_classified || 0} columns classified`])
-                setTimeout(() => onComplete(), 1000)
+                // Close SSE connection after completion
+                setTimeout(() => {
+                  setSseActive(false)
+                  onComplete()
+                }, 1000)
               } else if (data.status === 'failed') {
                 setJobStatus('failed')
                 setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✗ Classification failed: ${data.error || 'Unknown error'}`])
+                setSseActive(false)
               } else if (data.status === 'running') {
                 setJobStatus('running')
               }
@@ -348,21 +363,11 @@ function ClassificationStatusCard({
       }
     }
     
-    // Cleanup when classification stops
-    if (!isClassifying && eventSourceRef.current) {
+    // Cleanup when SSE should be closed
+    if (!sseActive && eventSourceRef.current) {
       eventSourceRef.current.close()
       eventSourceRef.current = null
       setIsConnected(false)
-    }
-    
-    // When classification stops, trigger completion after a delay to allow backend to finish
-    if (!isClassifying && logs.length > 0 && jobStatus !== 'completed' && jobStatus !== 'failed') {
-      const timer = setTimeout(() => {
-        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification completed`])
-        setJobStatus('completed')
-        onComplete()
-      }, 3000)
-      return () => clearTimeout(timer)
     }
     
     return () => {
@@ -371,10 +376,23 @@ function ClassificationStatusCard({
         eventSourceRef.current = null
       }
     }
-  }, [isClassifying, datasetId, onComplete, jobStatus, logs.length])
+  }, [sseActive, datasetId, onComplete])
+
+  // Timeout fallback - if no completion event received within 60 seconds, assume done
+  useEffect(() => {
+    if (sseActive && jobStatus !== 'completed' && jobStatus !== 'failed') {
+      const timer = setTimeout(() => {
+        setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Classification completed (timeout)`])
+        setJobStatus('completed')
+        setSseActive(false)
+        onComplete()
+      }, 60000) // 60 second timeout
+      return () => clearTimeout(timer)
+    }
+  }, [sseActive, jobStatus, onComplete])
 
   // Don't render if no activity
-  if (!isClassifying && logs.length === 0) {
+  if (!sseActive && logs.length === 0) {
     return null
   }
 
@@ -417,7 +435,7 @@ function ClassificationStatusCard({
       >
         <div className="flex items-center gap-3">
           <h3 className="text-sm font-semibold text-foreground">Classification Status</h3>
-          {isClassifying && (
+          {sseActive && (
             <span className="flex items-center gap-1 text-xs text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 px-2 py-0.5 rounded-full">
               <span className="h-2 w-2 rounded-full bg-yellow-500 animate-pulse" />
               Live
