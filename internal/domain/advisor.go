@@ -218,7 +218,7 @@ func checkStaleDataSources(advCtx *AdvisorContext) []Recommendation {
 
 	staleCount := 0
 	for _, ds := range advCtx.DataSources {
-		if ds.LastScan.IsZero() {
+		if ds.LastScan == nil || ds.LastScan.IsZero() {
 			staleCount++
 		}
 	}
