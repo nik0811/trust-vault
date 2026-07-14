@@ -388,7 +388,7 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 
 	// Update datasource status based on callback
 	now := time.Now()
-	ds.LastScan = now
+	ds.LastScan = &now
 	if callback.Status == "completed" {
 		ds.Status = "active"
 	} else {

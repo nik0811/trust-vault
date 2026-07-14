@@ -114,15 +114,15 @@ type APIKey struct {
 
 // DataSource represents a connected data system
 type DataSource struct {
-	ID        string    `db:"id" json:"id"`
-	TenantID  string    `db:"tenant_id" json:"-"`
-	Name      string    `db:"name" json:"name" validate:"required"`
-	Type      string    `db:"type" json:"type" validate:"required"`
-	Config    JSON      `db:"config" json:"config"`
-	Status    string    `db:"status" json:"status"`
-	LastScan  time.Time `db:"last_scan" json:"last_scan"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID        string     `db:"id" json:"id"`
+	TenantID  string     `db:"tenant_id" json:"-"`
+	Name      string     `db:"name" json:"name" validate:"required"`
+	Type      string     `db:"type" json:"type" validate:"required"`
+	Config    JSON       `db:"config" json:"config"`
+	Status    string     `db:"status" json:"status"`
+	LastScan  *time.Time `db:"last_scan" json:"last_scan,omitempty"`
+	CreatedAt time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // Policy defines governance rules

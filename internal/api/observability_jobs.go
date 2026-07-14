@@ -69,7 +69,12 @@ func (s *Server) getSourceHealth(w http.ResponseWriter, r *http.Request) {
 		health = "unhealthy"
 	}
 
-	daysSinceLastScan := time.Since(ds.LastScan).Hours() / 24
+	var daysSinceLastScan float64
+	if ds.LastScan != nil {
+		daysSinceLastScan = time.Since(*ds.LastScan).Hours() / 24
+	} else {
+		daysSinceLastScan = 999 // Never scanned
+	}
 	if daysSinceLastScan > 7 {
 		health = "stale"
 	}
