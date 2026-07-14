@@ -259,12 +259,18 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					continue
 				}
 
+				// Use table.column as the unique value to avoid duplicates
+				columnFullName := col.Name
+				if col.TableName != "" {
+					columnFullName = col.TableName + "." + col.Name
+				}
+
 				_, err := db.ExecContext(ctx,
 					`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, created_at)
 					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 					 ON CONFLICT DO NOTHING`,
-					generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, entityType, col.Name, confidence,
-					fmt.Sprintf(`{"column_name": "%s", "data_type": "%s", "classification_source": "datahub_schema"}`, col.Name, col.Type))
+					generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, entityType, columnFullName, confidence,
+					fmt.Sprintf(`{"column_name": "%s", "table_name": "%s", "data_type": "%s", "classification_source": "datahub_schema"}`, col.Name, col.TableName, col.Type))
 				if err != nil {
 					log.Error().Err(err).Str("column", col.Name).Msg("Failed to store classification")
 					continue

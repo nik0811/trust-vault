@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -111,12 +112,14 @@ type DatasetColumn struct {
 	Type        string `json:"type"`
 	Description string `json:"description,omitempty"`
 	Nullable    bool   `json:"nullable"`
+	TableName   string `json:"table_name,omitempty"`
 }
 
 // GetDatasetSchema fetches the schema (columns) for a dataset from DataHub
 func (d *DataHub) GetDatasetSchema(ctx context.Context, urn string) ([]DatasetColumn, error) {
 	query := `query getDatasetSchema($urn: String!) {
 		dataset(urn: $urn) {
+			name
 			schemaMetadata {
 				fields {
 					fieldPath
@@ -130,6 +133,7 @@ func (d *DataHub) GetDatasetSchema(ctx context.Context, urn string) ([]DatasetCo
 	
 	var result struct {
 		Dataset struct {
+			Name           string `json:"name"`
 			SchemaMetadata struct {
 				Fields []struct {
 					FieldPath      string `json:"fieldPath"`
@@ -146,6 +150,13 @@ func (d *DataHub) GetDatasetSchema(ctx context.Context, urn string) ([]DatasetCo
 		return nil, err
 	}
 	
+	// Extract table name from dataset name (format: database.schema.table)
+	tableName := result.Dataset.Name
+	parts := strings.Split(tableName, ".")
+	if len(parts) > 0 {
+		tableName = parts[len(parts)-1] // Get last part (table name)
+	}
+	
 	columns := make([]DatasetColumn, 0, len(result.Dataset.SchemaMetadata.Fields))
 	for _, f := range result.Dataset.SchemaMetadata.Fields {
 		columns = append(columns, DatasetColumn{
@@ -153,6 +164,7 @@ func (d *DataHub) GetDatasetSchema(ctx context.Context, urn string) ([]DatasetCo
 			Type:        f.NativeDataType,
 			Description: f.Description,
 			Nullable:    f.Nullable,
+			TableName:   tableName,
 		})
 	}
 	
