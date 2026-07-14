@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -124,6 +126,188 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 	}
 	s.reports.Create(ctx, &report)
 
+	if req.Type == "compliance" {
+		advCtx := s.buildAdvisorContext(ctx, tenantID)
+		recommendations := domain.GenerateRecommendations(advCtx)
+
+		criticalCount, highCount, mediumCount, lowCount := 0, 0, 0, 0
+		for _, rec := range recommendations {
+			switch rec.Severity {
+			case "CRITICAL":
+				criticalCount++
+			case "HIGH":
+				highCount++
+			case "MEDIUM":
+				mediumCount++
+			case "LOW":
+				lowCount++
+			}
+		}
+
+		score := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount)
+
+		status := "Compliant"
+		switch {
+		case score < 50:
+			status = "Non-Compliant"
+		case score < 75:
+			status = "Needs Attention"
+		case score < 90:
+			status = "Partially Compliant"
+		}
+
+		scannedSources := 0
+		for _, ds := range advCtx.DataSources {
+			if ds.LastScan != nil && !ds.LastScan.IsZero() {
+				scannedSources++
+			}
+		}
+
+		activePolicies := 0
+		for _, p := range advCtx.Policies {
+			if p.Active {
+				activePolicies++
+			}
+		}
+
+		regulationMap := map[string]*complianceRegEntry{}
+		for _, rec := range recommendations {
+			reg := rec.Regulation
+			if reg == "" {
+				continue
+			}
+			// normalize to top-level regulation name
+			regName := reg
+			switch {
+			case len(reg) >= 4 && reg[:4] == "GDPR":
+				regName = "GDPR"
+			case len(reg) >= 4 && reg[:4] == "CCPA":
+				regName = "CCPA"
+			case len(reg) >= 4 && reg[:4] == "DPDP":
+				regName = "DPDP Act 2023"
+			case len(reg) >= 3 && reg[:3] == "UAE":
+				regName = "UAE PDPL"
+			case len(reg) >= 5 && reg[:5] == "EU AI":
+				regName = "EU AI Act"
+			case len(reg) >= 5 && reg[:5] == "HIPAA":
+				regName = "HIPAA"
+			case len(reg) >= 7 && reg[:7] == "PCI-DSS":
+				regName = "PCI-DSS"
+			}
+			e, ok := regulationMap[regName]
+			if !ok {
+				e = &complianceRegEntry{Name: regName}
+				regulationMap[regName] = e
+			}
+			e.FindingsCount++
+			if rec.RegulationArticle != "" {
+				alreadyIn := false
+				for _, a := range e.Articles {
+					if a == rec.RegulationArticle {
+						alreadyIn = true
+						break
+					}
+				}
+				if !alreadyIn {
+					e.Articles = append(e.Articles, rec.RegulationArticle)
+				}
+			}
+			switch rec.Severity {
+			case "CRITICAL":
+				e.CriticalCount++
+			case "HIGH":
+				e.HighCount++
+			}
+		}
+
+		regulations := make([]map[string]any, 0, len(regulationMap))
+		for _, e := range regulationMap {
+			regScore := 100.0 - float64(e.CriticalCount)*15 - float64(e.HighCount)*10
+			if regScore < 0 {
+				regScore = 0
+			}
+			regStatus := "Compliant"
+			if regScore < 50 {
+				regStatus = "Non-Compliant"
+			} else if regScore < 80 {
+				regStatus = "Partially Compliant"
+			}
+			regulations = append(regulations, map[string]any{
+				"name":              e.Name,
+				"score":             regScore,
+				"status":            regStatus,
+				"findings_count":    e.FindingsCount,
+				"articles_assessed": e.Articles,
+			})
+		}
+
+		findings := make([]map[string]any, 0, len(recommendations))
+		for _, rec := range recommendations {
+			evidence := rec.Evidence
+			if evidence == nil {
+				evidence = []domain.EvidenceItem{}
+			}
+			assets := rec.AffectedAssets
+			if assets == nil {
+				assets = []domain.AffectedAsset{}
+			}
+			findings = append(findings, map[string]any{
+				"id":                 rec.ID,
+				"severity":           rec.Severity,
+				"category":           rec.Category,
+				"title":              rec.Title,
+				"description":        rec.Description,
+				"action":             rec.Action,
+				"regulation":         rec.Regulation,
+				"regulation_article": rec.RegulationArticle,
+				"affected_count":     rec.AffectedCount,
+				"evidence":           evidence,
+				"affected_assets":    assets,
+				"detected_at":        rec.DetectedAt,
+				"evidence_summary":   rec.EvidenceSummary,
+				"severity_reason":    rec.SeverityReason,
+			})
+		}
+
+		reportContent := map[string]any{
+			"id":           report.ID,
+			"title":        "SecureLens Compliance Assessment Report",
+			"generated_at": time.Now(),
+			"tenant_id":    tenantID,
+			"executive_summary": map[string]any{
+				"overall_score":         score,
+				"status":                status,
+				"total_findings":        len(recommendations),
+				"critical":              criticalCount,
+				"high":                  highCount,
+				"medium":                mediumCount,
+				"low":                   lowCount,
+				"data_sources_total":    len(advCtx.DataSources),
+				"data_sources_scanned":  scannedSources,
+				"classifications_total": len(advCtx.Classifications),
+				"active_policies":       activePolicies,
+			},
+			"regulations": regulations,
+			"findings":    findings,
+			"methodology": "Automated compliance assessment based on ML data classification, policy coverage analysis, and regulatory requirement mapping against live data",
+			"assessor":    "SecureLens Automated Compliance Engine v1.0",
+		}
+
+		contentBytes, err := json.Marshal(reportContent)
+		if err != nil {
+			pkg.Error(w, err, http.StatusInternalServerError)
+			return
+		}
+
+		report.Status = "completed"
+		report.Content = store.JSON(contentBytes)
+		s.reports.Update(ctx, &report)
+
+		pkg.JSON(w, report, http.StatusCreated)
+		return
+	}
+
+	// For non-compliance report types, keep async via Kafka
 	s.kafka.Produce(ctx, "report-jobs", tenantID, map[string]any{
 		"report_id": report.ID,
 		"type":      req.Type,
@@ -132,6 +316,78 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 	})
 
 	pkg.JSON(w, report)
+}
+
+// complianceRegEntry accumulates per-regulation stats
+type complianceRegEntry struct {
+	Name          string
+	FindingsCount int
+	CriticalCount int
+	HighCount     int
+	Articles      []string
+}
+
+// calcComplianceScore starts at 100 and deducts per finding severity
+func calcComplianceScore(critical, high, medium, low int) float64 {
+	score := 100.0
+	score -= float64(critical) * 15
+	score -= float64(high) * 10
+	score -= float64(medium) * 5
+	score -= float64(low) * 2
+	if score < 0 {
+		score = 0
+	}
+	return score
+}
+
+// buildAdvisorContext fetches all data needed by the advisor engine
+func (s *Server) buildAdvisorContext(ctx context.Context, tenantID string) *domain.AdvisorContext {
+	classifications, _ := s.classifications.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if classifications == nil {
+		classifications = []store.Classification{}
+	}
+	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if policies == nil {
+		policies = []store.Policy{}
+	}
+	labels, _ := s.labels.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if labels == nil {
+		labels = []store.Label{}
+	}
+	violations, _ := s.retentionViolations.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if violations == nil {
+		violations = []store.RetentionViolation{}
+	}
+	dataSources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if dataSources == nil {
+		dataSources = []store.DataSource{}
+	}
+	ropa, _ := s.ropa.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if ropa == nil {
+		ropa = []store.RoPA{}
+	}
+
+	var auditLogs []store.AuditLog
+	s.db.SelectContext(ctx, &auditLogs,
+		"SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100", tenantID)
+
+	var totalDatasets, labeledDatasets int
+	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", tenantID)
+
+	return &domain.AdvisorContext{
+		TenantID:            tenantID,
+		Classifications:     classifications,
+		Policies:            policies,
+		Labels:              labels,
+		RetentionViolations: violations,
+		DataSources:         dataSources,
+		RoPA:                ropa,
+		TotalDatasets:       totalDatasets,
+		LabeledDatasets:     labeledDatasets,
+		AuditLogs:           auditLogs,
+		AssessmentTime:      time.Now(),
+	}
 }
 
 func (s *Server) listReports(w http.ResponseWriter, r *http.Request) {
@@ -154,11 +410,7 @@ func (s *Server) downloadReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pkg.JSON(w, map[string]any{
-		"id":     report.ID,
-		"status": report.Status,
-		"url":    report.FilePath,
-	})
+	pkg.JSON(w, report)
 }
 
 func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
@@ -177,12 +429,22 @@ func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
 	s.db.GetContext(ctx, &stats.TotalPolicies, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1", tenantID)
 	s.db.GetContext(ctx, &stats.TotalQueries, "SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1", tenantID)
 
-	var complianceScore float64 = 0.85
-	var violations int
-	s.db.GetContext(ctx, &violations, "SELECT COUNT(*) FROM retention_violations WHERE tenant_id = $1", tenantID)
-	if violations > 0 {
-		complianceScore = max(0.5, complianceScore-float64(violations)*0.05)
+	advCtx := s.buildAdvisorContext(ctx, tenantID)
+	recommendations := domain.GenerateRecommendations(advCtx)
+	criticalCount, highCount, mediumCount, lowCount := 0, 0, 0, 0
+	for _, rec := range recommendations {
+		switch rec.Severity {
+		case "CRITICAL":
+			criticalCount++
+		case "HIGH":
+			highCount++
+		case "MEDIUM":
+			mediumCount++
+		case "LOW":
+			lowCount++
+		}
 	}
+	complianceScore := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount) / 100.0
 
 	pkg.JSON(w, map[string]any{
 		"total_sources":         stats.TotalSources,

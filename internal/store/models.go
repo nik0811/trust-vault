@@ -332,6 +332,7 @@ type Report struct {
 	DateTo    *time.Time `db:"date_to" json:"date_to,omitempty"`
 	FilePath  string     `db:"file_path" json:"file_path"`
 	Metadata  JSON       `db:"metadata" json:"metadata"`
+	Content   JSON       `db:"content" json:"content,omitempty"`
 	CreatedAt time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 }
