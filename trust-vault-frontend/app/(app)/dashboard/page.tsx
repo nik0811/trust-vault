@@ -194,7 +194,7 @@ export default function DashboardPage() {
                     <div className="pt-2 border-t border-border">
                       <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Avg Confidence</span>
-                        <span className="font-medium text-foreground">{Math.round((analytics?.avg_confidence || 0.85) * 100)}%</span>
+                        <span className="font-medium text-foreground">{analytics?.avg_confidence ? `${Math.round(analytics.avg_confidence * 100)}%` : '-'}</span>
                       </div>
                     </div>
                   </div>
@@ -252,19 +252,19 @@ export default function DashboardPage() {
                   <Skeleton className="h-8 w-32" />
                   <Skeleton className="h-24 w-full" />
                 </div>
-              ) : (
+              ) : qualityTrends?.overall ? (
                 <div className="space-y-4">
                   <div className="flex items-baseline gap-3">
-                    <span className="text-4xl font-bold text-foreground">{Math.round((qualityTrends?.overall || 0.78) * 100)}%</span>
+                    <span className="text-4xl font-bold text-foreground">{Math.round(qualityTrends.overall * 100)}%</span>
                     <span className="text-sm text-muted-foreground">Overall Quality Score</span>
                   </div>
                   <div className="grid grid-cols-5 gap-3">
                     {[
-                      { label: 'Completeness', value: qualityTrends?.completeness || 0.85, color: 'bg-blue-500' },
-                      { label: 'Accuracy', value: qualityTrends?.accuracy || 0.92, color: 'bg-green-500' },
-                      { label: 'Consistency', value: qualityTrends?.consistency || 0.78, color: 'bg-yellow-500' },
-                      { label: 'Timeliness', value: qualityTrends?.timeliness || 0.88, color: 'bg-purple-500' },
-                      { label: 'Uniqueness', value: qualityTrends?.uniqueness || 0.95, color: 'bg-pink-500' },
+                      { label: 'Completeness', value: qualityTrends?.completeness || 0, color: 'bg-blue-500' },
+                      { label: 'Accuracy', value: qualityTrends?.accuracy || 0, color: 'bg-green-500' },
+                      { label: 'Consistency', value: qualityTrends?.consistency || 0, color: 'bg-yellow-500' },
+                      { label: 'Timeliness', value: qualityTrends?.timeliness || 0, color: 'bg-purple-500' },
+                      { label: 'Uniqueness', value: qualityTrends?.uniqueness || 0, color: 'bg-pink-500' },
                     ].map((dim) => (
                       <div key={dim.label} className="text-center">
                         <div className="h-20 w-full bg-muted rounded-lg relative overflow-hidden">
@@ -278,6 +278,16 @@ export default function DashboardPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <BarChart3 className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">No quality assessments yet</p>
+                  <Link href="/data-sources" className="text-xs text-primary hover:underline mt-1">
+                    Run assessment on a data source
+                  </Link>
                 </div>
               )}
             </div>
