@@ -233,3 +233,9 @@ func Sprintf(format string, args ...any) string {
 func GenerateID() string {
 	return uuid.New().String()
 }
+
+// IsValidUUID checks if a string is a valid UUID
+func IsValidUUID(s string) bool {
+	_, err := uuid.Parse(s)
+	return err == nil
+}

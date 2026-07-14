@@ -394,7 +394,7 @@ func (s *Server) submitFeedback(w http.ResponseWriter, r *http.Request) {
 		CorrectedLabel: req.CorrectedLabel,
 		UserID:         userID,
 	}
-	if req.ClassificationID != "" {
+	if req.ClassificationID != "" && pkg.IsValidUUID(req.ClassificationID) {
 		feedback.ClassificationID = &req.ClassificationID
 	}
 
@@ -426,7 +426,7 @@ func (s *Server) submitCorrection(w http.ResponseWriter, r *http.Request) {
 		CorrectedLabel: req.CorrectedLabel,
 		UserID:         userID,
 	}
-	if req.ClassificationID != "" {
+	if req.ClassificationID != "" && pkg.IsValidUUID(req.ClassificationID) {
 		feedback.ClassificationID = &req.ClassificationID
 	}
 
@@ -456,7 +456,7 @@ func (s *Server) submitConfirmation(w http.ResponseWriter, r *http.Request) {
 		Type:     "confirmation",
 		UserID:   userID,
 	}
-	if req.ClassificationID != "" {
+	if req.ClassificationID != "" && pkg.IsValidUUID(req.ClassificationID) {
 		feedback.ClassificationID = &req.ClassificationID
 	}
 
