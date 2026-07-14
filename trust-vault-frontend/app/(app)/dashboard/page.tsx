@@ -308,7 +308,7 @@ export default function DashboardPage() {
                 </div>
               ) : Array.isArray(auditTrail) && auditTrail.length > 0 ? (
                 <div className="space-y-3">
-                  {auditTrail.slice(0, 8).map((log: any) => (
+                  {auditTrail.slice(0, 4).map((log: any) => (
                     <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted/50 transition-colors">
                       <div className={`mt-0.5 h-2 w-2 rounded-full flex-shrink-0 ${
                         log.action?.includes('delete') ? 'bg-red-500' :
