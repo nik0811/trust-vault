@@ -44,16 +44,21 @@ export default function DataResidencyPage() {
     setLoading(true)
     try {
       const [rulesRes, vioRes, dsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/residency/rules`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/v1/residency/violations`, { headers: authHeaders() }),
-        fetch(`${API_BASE}/api/v1/datasources`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/residency/rules`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/residency/violations`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/datasources`, { headers: authHeaders() }),
       ])
+      if (!rulesRes.ok) throw new Error(`HTTP ${rulesRes.status}`)
+      if (!vioRes.ok) throw new Error(`HTTP ${vioRes.status}`)
+      if (!dsRes.ok) throw new Error(`HTTP ${dsRes.status}`)
       const rulesData = await rulesRes.json()
       const vioData = await vioRes.json()
       const dsData = await dsRes.json()
       setRules(rulesData.rules || [])
       setViolations(vioData.violations || [])
       setDatasources(Array.isArray(dsData) ? dsData : dsData.datasources || [])
+    } catch (err) {
+      console.error('Failed to load residency data:', err)
     } finally {
       setLoading(false)
     }
@@ -62,7 +67,7 @@ export default function DataResidencyPage() {
   useEffect(() => { loadAll() }, [])
 
   const createRule = async () => {
-    const res = await fetch(`${API_BASE}/api/v1/residency/rules`, {
+    const res = await fetch(`${API_BASE}/residency/rules`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify(newRule),
@@ -78,7 +83,7 @@ export default function DataResidencyPage() {
   }
 
   const deleteRule = async (id: string) => {
-    const res = await fetch(`${API_BASE}/api/v1/residency/rules/${id}`, {
+    const res = await fetch(`${API_BASE}/residency/rules/${id}`, {
       method: 'DELETE',
       headers: authHeaders(),
     })
@@ -90,7 +95,7 @@ export default function DataResidencyPage() {
 
   const tagRegionFn = async () => {
     if (!tagTarget) return
-    const res = await fetch(`${API_BASE}/api/v1/residency/datasources/${tagTarget.id}/tag-region`, {
+    const res = await fetch(`${API_BASE}/residency/datasources/${tagTarget.id}/tag-region`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ region: tagRegion, country: tagCountry }),

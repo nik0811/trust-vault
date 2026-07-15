@@ -31,9 +31,12 @@ function PreferenceCenterTab() {
     if (!subjectId.trim()) return
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/v1/consent/preferences/${encodeURIComponent(subjectId)}`, { headers: authHeaders() })
+      const res = await fetch(`${API_BASE}/consent/preferences/${encodeURIComponent(subjectId)}`, { headers: authHeaders() })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       setPrefs(data.preferences || {})
+    } catch (err) {
+      console.error('Failed to lookup preferences:', err)
     } finally {
       setLoading(false)
     }
@@ -41,7 +44,7 @@ function PreferenceCenterTab() {
 
   const savePrefs = async () => {
     if (!subjectId || !prefs) return
-    await fetch(`${API_BASE}/api/v1/consent/preferences/${encodeURIComponent(subjectId)}`, {
+    await fetch(`${API_BASE}/consent/preferences/${encodeURIComponent(subjectId)}`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(prefs),
@@ -125,8 +128,11 @@ function WidgetConfigTab() {
   const [saved, setSaved] = useState(false)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/v1/consent/widget-config`, { headers: authHeaders() })
-      .then(r => r.json())
+    fetch(`${API_BASE}/consent/widget-config`, { headers: authHeaders() })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         if (data && data.primary_color) setConfig(data)
       })
@@ -135,7 +141,7 @@ function WidgetConfigTab() {
 
   const save = async () => {
     setLoading(true)
-    await fetch(`${API_BASE}/api/v1/consent/widget-config`, {
+    await fetch(`${API_BASE}/consent/widget-config`, {
       method: 'PUT',
       headers: authHeaders(),
       body: JSON.stringify(config),
@@ -245,8 +251,11 @@ function EmbedCodeTab() {
   const [copied, setCopied] = useState(false)
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/v1/consent/embed-code`, { headers: authHeaders() })
-      .then(r => r.json())
+    fetch(`${API_BASE}/consent/embed-code`, { headers: authHeaders() })
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+        return r.json()
+      })
       .then(data => {
         setEmbedCode(data.embed_code || '')
         setTenantId(data.tenant_id || '')
@@ -260,7 +269,7 @@ function EmbedCodeTab() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const fullEmbed = embedCode || `<script src="${API_BASE}/api/v1/consent/widget.js?tenant=YOUR_TENANT_ID"></script>`
+  const fullEmbed = embedCode || `<script src="${API_BASE}/consent/widget.js?tenant=YOUR_TENANT_ID"></script>`
 
   return (
     <div className="space-y-6">
@@ -290,15 +299,15 @@ function EmbedCodeTab() {
           {[
             {
               title: 'React / Next.js',
-              code: `import Script from 'next/script'\n\n<Script src="${API_BASE}/api/v1/consent/widget.js?tenant=${tenantId || 'YOUR_TENANT_ID'}" strategy="afterInteractive" />`,
+              code: `import Script from 'next/script'\n\n<Script src="${API_BASE}/consent/widget.js?tenant=${tenantId || 'YOUR_TENANT_ID'}" strategy="afterInteractive" />`,
             },
             {
               title: 'WordPress (functions.php)',
-              code: `function add_consent_widget() {\n  echo '<script src="${API_BASE}/api/v1/consent/widget.js?tenant=${tenantId || 'YOUR_TENANT_ID'}"></script>';\n}\nadd_action('wp_footer', 'add_consent_widget');`,
+              code: `function add_consent_widget() {\n  echo '<script src="${API_BASE}/consent/widget.js?tenant=${tenantId || 'YOUR_TENANT_ID'}"></script>';\n}\nadd_action('wp_footer', 'add_consent_widget');`,
             },
             {
               title: 'Google Tag Manager',
-              code: `// Create a Custom HTML tag with:\n<script src="${API_BASE}/api/v1/consent/widget.js?tenant=${tenantId || 'YOUR_TENANT_ID'}"></script>\n// Trigger: All Pages`,
+              code: `// Create a Custom HTML tag with:\n<script src="${API_BASE}/consent/widget.js?tenant=${tenantId || 'YOUR_TENANT_ID'}"></script>\n// Trigger: All Pages`,
             },
           ].map(ex => (
             <div key={ex.title}>
