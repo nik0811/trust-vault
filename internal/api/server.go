@@ -57,7 +57,14 @@ type Server struct {
 	retentionPolicies   *store.Repository[store.RetentionPolicy]
 	retentionViolations *store.Repository[store.RetentionViolation]
 	scanLogs            *store.Repository[store.ScanLog]
-	classificationRules *store.Repository[store.ClassificationRule]
+	classificationRules      *store.Repository[store.ClassificationRule]
+	dpias                    *store.Repository[store.DPIA]
+	consentRecords           *store.Repository[store.ConsentRecord]
+	criticalDataElements     *store.Repository[store.CriticalDataElement]
+	dataProfiles             *store.Repository[store.DataProfile]
+	documentClassifications  *store.Repository[store.DocumentClassification]
+	endpointAgents           *store.Repository[store.EndpointAgent]
+	residencyRules           *store.Repository[store.ResidencyRule]
 }
 
 func NewServer(db *store.DB, kafka *external.Kafka) *Server {
@@ -99,7 +106,14 @@ func NewServer(db *store.DB, kafka *external.Kafka) *Server {
 		retentionPolicies:   store.NewRepo[store.RetentionPolicy](db, "retention_policies"),
 		retentionViolations: store.NewRepo[store.RetentionViolation](db, "retention_violations"),
 		scanLogs:            store.NewRepo[store.ScanLog](db, "scan_logs"),
-		classificationRules: store.NewRepo[store.ClassificationRule](db, "classification_rules"),
+		classificationRules:      store.NewRepo[store.ClassificationRule](db, "classification_rules"),
+		dpias:                    store.NewRepo[store.DPIA](db, "dpias"),
+		consentRecords:           store.NewRepo[store.ConsentRecord](db, "consent_records"),
+		criticalDataElements:     store.NewRepo[store.CriticalDataElement](db, "critical_data_elements"),
+		dataProfiles:             store.NewRepo[store.DataProfile](db, "data_profiles"),
+		documentClassifications:  store.NewRepo[store.DocumentClassification](db, "document_classifications"),
+		endpointAgents:           store.NewRepo[store.EndpointAgent](db, "endpoint_agents"),
+		residencyRules:           store.NewRepo[store.ResidencyRule](db, "residency_rules"),
 	}
 
 	s.setupRoutes()
@@ -255,6 +269,15 @@ func (s *Server) setupRoutes() {
 				r.Get("/trends", s.getQualityTrends)
 				r.Put("/threshold", s.setQualityThresholds)
 				r.Post("/thresholds", s.setQualityThresholds)
+				r.Post("/profile/{datasource_id}", s.autoProfileDataSource)
+				r.Get("/profile/{datasource_id}", s.getDataProfile)
+			})
+
+			// Critical Data Elements
+			r.Route("/cde", func(r chi.Router) {
+				r.Post("/", s.createCDE)
+				r.Get("/", s.listCDEs)
+				r.Delete("/{id}", s.deleteCDE)
 			})
 
 			// Privacy
@@ -274,6 +297,16 @@ func (s *Server) setupRoutes() {
 				r.Delete("/consent/{subject_id}", s.withdrawConsent)
 				r.Get("/retention/violations", s.getRetentionViolations)
 				r.Post("/retention/policies", s.setRetentionPolicy)
+				// DPIA workflow
+				r.Post("/dpia", s.createDPIA)
+				r.Get("/dpia", s.listDPIAs)
+				r.Get("/dpia/{id}", s.getDPIA)
+				r.Put("/dpia/{id}/step/{step}", s.updateDPIAStep)
+				// Enhanced consent
+				r.Post("/consent/record", s.recordConsentV2)
+				r.Get("/consent/records", s.listConsentRecords)
+				r.Get("/consent/stats", s.getConsentStats)
+				r.Post("/consent/withdraw/{subject_id}", s.withdrawConsentV2)
 			})
 
 			// Audit
@@ -422,6 +455,34 @@ func (s *Server) setupRoutes() {
 				r.Post("/extract", s.extractDocument)
 				r.Post("/classify", s.classifyDocument)
 				r.Get("/review-queue", s.getReviewQueue)
+				r.Get("/{id}/classifications", s.getDocumentClassifications)
+			})
+
+			// Endpoint scanning
+			r.Route("/endpoints", func(r chi.Router) {
+				r.Post("/register", s.registerEndpoint)
+				r.Get("/", s.listEndpoints)
+				r.Post("/{id}/scan", s.triggerEndpointScan)
+				r.Post("/{id}/scan-results", s.receiveEndpointScanResults)
+				r.Get("/{id}/results", s.getEndpointResults)
+			})
+
+			// Data residency
+			r.Route("/residency", func(r chi.Router) {
+				r.Post("/rules", s.createResidencyRule)
+				r.Get("/rules", s.listResidencyRules)
+				r.Delete("/rules/{id}", s.deleteResidencyRule)
+				r.Get("/violations", s.getResidencyViolations)
+				r.Post("/datasources/{id}/tag-region", s.tagDatasourceRegion)
+			})
+
+			// Consent widget config & preferences
+			r.Route("/consent", func(r chi.Router) {
+				r.Get("/widget-config", s.getConsentWidgetConfig)
+				r.Put("/widget-config", s.updateConsentWidgetConfig)
+				r.Get("/embed-code", s.getConsentEmbedCode)
+				r.Get("/preferences/{subject_id}", s.getConsentPreferences)
+				r.Put("/preferences/{subject_id}", s.updateConsentPreferences)
 			})
 		})
 	})

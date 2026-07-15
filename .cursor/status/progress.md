@@ -108,6 +108,7 @@
 | 2026-07-14 | #14 | **ENTERPRISE CLASSIFICATION PIPELINE.** Added ClassificationRule model (override, pattern, whitelist, threshold types), migration 005 for classification_rules table, layered rule evaluation in worker (whitelist→override→pattern→threshold), automatic label assignment after classification (label rules + fallback mapping), full CRUD API for classification rules, track classification source and applied rule. |
 || 2026-07-15 | #15 | **COMPLIANCE EVIDENCE TRAILS (AUDIT-GRADE).** Every compliance gap and recommendation now includes verifiable evidence: EvidenceItem structs with source/timestamp/metadata, AffectedAsset references, exact regulation article citations, severity justifications, evidence summaries. Added POST /compliance/assess for on-demand assessments. Frontend enhanced with expandable evidence panels, regulation badges, grouped gaps, Run Assessment button, assessment result banners. Evidence sourced from classifications, policies, retention violations, data sources, RoPA, and audit logs. |
 | 2026-07-15 | #16 | **AUTO-GOVERNANCE AFTER CLASSIFICATION.** New auto_governance.go: entity→label mapping (RESTRICTED/CONFIDENTIAL/INTERNAL), label upsert (upgrade-only), classification.auto_governance audit log, compliance.gap_detected for unprotected PII types. Hooked into classifyText (sync) and classificationCallback (async). Frontend [id]/page.tsx: governance banner shows assigned label, detected count, policy gaps from audit logs. |
+| 2026-07-15 | #17 | **REAL-VALUE GLINER CLASSIFICATION + AUTO-ERADICATION.** classifyValues() sends 20 actual DB column values as individual texts to GLiNER (not joined string). maskValue() produces type-aware masked examples (n*****@g****.com, ***-**-1234, ****-****-****-1234). Stores up to 3 masked samples in new value_sample column (migration 008). autoEradicateByPolicy() goroutine checks active redaction/access policies after each column; creates remediation_action + audit log when entity_type matches. Frontend classification [id] page shows "Sample Values" column. |
 
 ---
 
@@ -294,3 +295,17 @@ AUDIT_LOG_ENABLED=true               # Enable/disable audit logging
 LOG_SAMPLE_RATE=0.1                  # Sampling rate for high-volume endpoints
 ENVIRONMENT=production               # Environment name
 ```
+
+---
+
+## Session Log
+
+### 2026-07-15 — Extend value sampling to all datasource types
+- Refactored `sampleColumnData()` → `sampleColumnValues()` dispatcher in `internal/external/kafka.go`
+- **DB types** (postgresql/mysql/mssql/oracle): `sampleDBValues()` — SELECT DISTINCT … LIMIT N (read-only)
+- **CSV/file types** (csv/file): `sampleFileValues()` — local path or HTTP GET, CSV parsed with `encoding/csv`; Excel gracefully skipped
+- **Object storage** (s3/gcs/azure_blob): `sampleObjectStorageValues()` — Range: bytes=0-51199 GET; builds URL from config; parses CSV; skips non-text content types
+- **REST API** (rest_api/api): `sampleAPIValues()` — GET-only with bearer/basic/api-key auth; parses JSON array/object incl. nested arrays
+- **All other types**: returns `nil, nil` + logs `value_sampling_skipped` reason
+- All samplers are strictly read-only (no writes to source)
+- Committed: `f2bd900`, pushed + deployed to production worker

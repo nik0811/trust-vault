@@ -215,3 +215,162 @@ export function useSetRetentionPolicy() {
     },
   })
 }
+
+// ── DPIA hooks ──────────────────────────────────────────────────────────────
+
+export interface DPIAStep {
+  id: string
+  name: string
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
+  notes: string
+  completed_at: string | null
+}
+
+export interface DPIA {
+  id: string
+  name: string
+  description: string
+  data_types: string[]
+  processing_purpose: string
+  risk_level: 'high' | 'medium' | 'low'
+  status: 'in_progress' | 'completed' | 'pending_dpo'
+  steps: DPIAStep[]
+  dpo_consulted: boolean
+  created_at: string
+  updated_at: string
+}
+
+export function useDPIAs() {
+  return useQuery({
+    queryKey: ['dpias'],
+    queryFn: async () => {
+      const response = await api.get<DPIA[]>('/privacy/dpia')
+      return response.data ?? []
+    },
+  })
+}
+
+export function useDPIA(id: string) {
+  return useQuery({
+    queryKey: ['dpias', id],
+    queryFn: async () => {
+      const response = await api.get<DPIA>(`/privacy/dpia/${id}`)
+      return response.data
+    },
+    enabled: !!id,
+  })
+}
+
+export function useCreateDPIA() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: Partial<DPIA>) => {
+      const response = await api.post<DPIA>('/privacy/dpia', data)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dpias'] })
+      toast.success('DPIA created')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to create DPIA')
+    },
+  })
+}
+
+export function useUpdateDPIAStep() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, step, data }: { id: string; step: string; data: { status: string; notes: string } }) => {
+      const response = await api.put(`/privacy/dpia/${id}/step/${step}`, data)
+      return response.data
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['dpias', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['dpias'] })
+      toast.success('Step updated')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to update step')
+    },
+  })
+}
+
+// ── Enhanced Consent hooks ────────────────────────────────────────────────────
+
+export interface ConsentRecord {
+  id: string
+  subject_id: string
+  purpose: string
+  status: 'granted' | 'withdrawn'
+  ip: string
+  source: string
+  created_at: string
+}
+
+export interface ConsentStats {
+  total: number
+  granted: number
+  withdrawn: number
+  withdrawal_rate: number
+  by_purpose: Record<string, { total: number; granted: number }>
+}
+
+export function useConsentRecords(purpose?: string, status?: string) {
+  return useQuery({
+    queryKey: ['consent-records', purpose, status],
+    queryFn: async () => {
+      const params = new URLSearchParams()
+      if (purpose) params.set('purpose', purpose)
+      if (status) params.set('status', status)
+      const response = await api.get<ConsentRecord[]>(`/privacy/consent/records?${params}`)
+      return response.data ?? []
+    },
+  })
+}
+
+export function useConsentStats() {
+  return useQuery({
+    queryKey: ['consent-stats'],
+    queryFn: async () => {
+      const response = await api.get<ConsentStats>('/privacy/consent/stats')
+      return response.data
+    },
+  })
+}
+
+export function useRecordConsentV2() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: { subject_id: string; purpose: string; status?: string; ip?: string; source?: string }) => {
+      const response = await api.post<ConsentRecord>('/privacy/consent/record', data)
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consent-records'] })
+      queryClient.invalidateQueries({ queryKey: ['consent-stats'] })
+      toast.success('Consent recorded')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to record consent')
+    },
+  })
+}
+
+export function useWithdrawConsentV2() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (subjectId: string) => {
+      const response = await api.post(`/privacy/consent/withdraw/${subjectId}`, {})
+      return response.data
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consent-records'] })
+      queryClient.invalidateQueries({ queryKey: ['consent-stats'] })
+      toast.success('Consent withdrawn')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to withdraw consent')
+    },
+  })
+}

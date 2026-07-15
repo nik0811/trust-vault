@@ -122,6 +122,8 @@ type DataSource struct {
 	Status           string     `db:"status" json:"status"`
 	LastScan         *time.Time `db:"last_scan" json:"last_scan,omitempty"`
 	SensitivityLabel *string    `db:"sensitivity_label" json:"sensitivity_label,omitempty"`
+	Region           *string    `db:"region" json:"region,omitempty"`
+	Country          *string    `db:"country" json:"country,omitempty"`
 	CreatedAt        time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt        time.Time  `db:"updated_at" json:"updated_at"`
 }
@@ -281,19 +283,22 @@ type Feedback struct {
 	CreatedAt        time.Time `db:"created_at" json:"created_at"`
 }
 
-// Integration stores outbound integration configs
+// Integration stores outbound integration configs.
+// Supported types: slack, teams, email, webhook, jira, servicenow, pagerduty,
+// dlp, siem, splunk, sentinel, catalog, collibra, alation, onetrust, privacyops,
+// rest_api, custom, privacy_platform, ticketing, communication
 type Integration struct {
-	ID        string    `db:"id" json:"id"`
-	TenantID  string    `db:"tenant_id" json:"-"`
-	Name      string    `db:"name" json:"name" validate:"required"`
-	Type      string    `db:"type" json:"type" validate:"required,oneof=dlp privacy_platform catalog siem ticketing communication"`
-	Provider  string    `db:"provider" json:"provider"`
-	Config    JSON      `db:"config" json:"config"`
-	SyncFreq  string    `db:"sync_freq" json:"sync_freq"`
-	Status    string    `db:"status" json:"status"`
-	LastSync  time.Time `db:"last_sync" json:"last_sync"`
-	CreatedAt time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+	ID        string     `db:"id" json:"id"`
+	TenantID  string     `db:"tenant_id" json:"-"`
+	Name      string     `db:"name" json:"name" validate:"required"`
+	Type      string     `db:"type" json:"type" validate:"required"`
+	Provider  string     `db:"provider" json:"provider"`
+	Config    JSON       `db:"config" json:"config"`
+	SyncFreq  string     `db:"sync_freq" json:"sync_freq"`
+	Status    string     `db:"status" json:"status"`
+	LastSync  *time.Time `db:"last_sync" json:"last_sync"`
+	CreatedAt time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // ROTData stores ROT analysis results
@@ -492,6 +497,117 @@ type ScanLog struct {
 	Logs               JSON       `db:"logs" json:"logs"`
 	DatasetsDiscovered int        `db:"datasets_discovered" json:"datasets_discovered"`
 	CreatedAt          time.Time  `db:"created_at" json:"created_at"`
+}
+
+// EndpointAgent represents a registered endpoint device/server
+type EndpointAgent struct {
+	ID           string     `db:"id" json:"id"`
+	TenantID     string     `db:"tenant_id" json:"-"`
+	Hostname     string     `db:"hostname" json:"hostname" validate:"required"`
+	IP           string     `db:"ip" json:"ip"`
+	OS           string     `db:"os" json:"os"`
+	AgentVersion string     `db:"agent_version" json:"agent_version"`
+	Status       string     `db:"status" json:"status"`
+	LastSeenAt   *time.Time `db:"last_seen_at" json:"last_seen_at,omitempty"`
+	LastScanAt   *time.Time `db:"last_scan_at" json:"last_scan_at,omitempty"`
+	ScanResults  JSON       `db:"scan_results" json:"scan_results"`
+	CreatedAt    time.Time  `db:"created_at" json:"created_at"`
+}
+
+// ResidencyRule defines geographic data residency requirements
+type ResidencyRule struct {
+	ID             string    `db:"id" json:"id"`
+	TenantID       string    `db:"tenant_id" json:"-"`
+	Name           string    `db:"name" json:"name" validate:"required"`
+	Regulation     string    `db:"regulation" json:"regulation"`
+	AllowedRegions JSON      `db:"allowed_regions" json:"allowed_regions"`
+	DataTypes      JSON      `db:"data_types" json:"data_types"`
+	Active         bool      `db:"active" json:"active"`
+	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+}
+
+// ConsentWidgetConfig holds the tenant's consent banner configuration
+type ConsentWidgetConfig struct {
+	ID              string    `db:"id" json:"id"`
+	TenantID        string    `db:"tenant_id" json:"-"`
+	PrimaryColor    string    `db:"primary_color" json:"primary_color"`
+	BackgroundColor string    `db:"background_color" json:"background_color"`
+	TextColor       string    `db:"text_color" json:"text_color"`
+	BannerTitle     string    `db:"banner_title" json:"banner_title"`
+	BannerText      string    `db:"banner_text" json:"banner_text"`
+	AcceptLabel     string    `db:"accept_label" json:"accept_label"`
+	RejectLabel     string    `db:"reject_label" json:"reject_label"`
+	Purposes        JSON      `db:"purposes" json:"purposes"`
+	CreatedAt       time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt       time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// DPIA (Data Protection Impact Assessment)
+type DPIA struct {
+	ID                 string    `db:"id" json:"id"`
+	TenantID           string    `db:"tenant_id" json:"-"`
+	Name               string    `db:"name" json:"name" validate:"required"`
+	Description        string    `db:"description" json:"description"`
+	DataTypes          JSON      `db:"data_types" json:"data_types"`
+	ProcessingPurpose  string    `db:"processing_purpose" json:"processing_purpose"`
+	RiskLevel          string    `db:"risk_level" json:"risk_level"`
+	Status             string    `db:"status" json:"status"`
+	Steps              JSON      `db:"steps" json:"steps"`
+	DPOConsulted       bool      `db:"dpo_consulted" json:"dpo_consulted"`
+	CreatedAt          time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// ConsentRecord tracks individual consent events
+type ConsentRecord struct {
+	ID        string    `db:"id" json:"id"`
+	TenantID  string    `db:"tenant_id" json:"-"`
+	SubjectID string    `db:"subject_id" json:"subject_id" validate:"required"`
+	Purpose   string    `db:"purpose" json:"purpose" validate:"required"`
+	Status    string    `db:"status" json:"status"`
+	IP        string    `db:"ip" json:"ip"`
+	Source    string    `db:"source" json:"source"`
+	CreatedAt time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// CriticalDataElement designates a column as a Critical Data Element
+type CriticalDataElement struct {
+	ID               string    `db:"id" json:"id"`
+	TenantID         string    `db:"tenant_id" json:"-"`
+	DatasourceID     string    `db:"datasource_id" json:"datasource_id"`
+	ColumnName       string    `db:"column_name" json:"column_name" validate:"required"`
+	TableName        string    `db:"table_name" json:"table_name" validate:"required"`
+	BusinessDefinition string  `db:"business_definition" json:"business_definition"`
+	DataOwner        string    `db:"data_owner" json:"data_owner"`
+	Criticality      string    `db:"criticality" json:"criticality"`
+	QualityScore     float64   `db:"quality_score" json:"quality_score"`
+	CreatedAt        time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt        time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// DataProfile stores auto-profiling results for a datasource
+type DataProfile struct {
+	ID           string    `db:"id" json:"id"`
+	TenantID     string    `db:"tenant_id" json:"-"`
+	DatasourceID string    `db:"datasource_id" json:"datasource_id"`
+	ProfileData  JSON      `db:"profile_data" json:"profile_data"`
+	Status       string    `db:"status" json:"status"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt    time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// DocumentClassification links a document to its classification results
+type DocumentClassification struct {
+	ID           string    `db:"id" json:"id"`
+	TenantID     string    `db:"tenant_id" json:"-"`
+	DocumentID   string    `db:"document_id" json:"document_id"`
+	DocumentName string    `db:"document_name" json:"document_name"`
+	EntityTypes  JSON      `db:"entity_types" json:"entity_types"`
+	Findings     JSON      `db:"findings" json:"findings"`
+	Governed     bool      `db:"governed" json:"governed"`
+	LabelApplied string    `db:"label_applied" json:"label_applied"`
+	CreatedAt    time.Time `db:"created_at" json:"created_at"`
 }
 
 // ClassificationRule defines rules for classification overrides and patterns

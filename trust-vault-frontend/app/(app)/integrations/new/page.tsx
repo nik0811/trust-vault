@@ -11,20 +11,42 @@ import Link from 'next/link'
 
 const integrationSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  type: z.enum(['dlp', 'privacy_platform', 'catalog', 'siem', 'ticketing', 'communication']),
+  type: z.string().min(1, 'Type is required'),
   provider: z.string().min(1, 'Provider is required'),
+  sync_freq: z.string().optional(),
+  config: z.any().optional(),
 })
 
 type IntegrationForm = z.infer<typeof integrationSchema>
 
 const integrationTypes = [
-  { value: 'dlp', label: 'DLP', description: 'Data Loss Prevention systems' },
-  { value: 'privacy_platform', label: 'Privacy Platform', description: 'OneTrust, BigID, etc.' },
-  { value: 'catalog', label: 'Data Catalog', description: 'Collibra, Alation, etc.' },
-  { value: 'siem', label: 'SIEM', description: 'Security monitoring' },
-  { value: 'ticketing', label: 'Ticketing', description: 'Jira, ServiceNow, etc.' },
-  { value: 'communication', label: 'Communication', description: 'Slack, Teams, etc.' },
+  // Communication
+  { value: 'slack', label: 'Slack', description: 'Slack workspace notifications', category: 'Communication' },
+  { value: 'teams', label: 'Microsoft Teams', description: 'Teams channel notifications', category: 'Communication' },
+  { value: 'email', label: 'Email (SMTP)', description: 'Email notifications via SMTP', category: 'Communication' },
+  { value: 'webhook', label: 'Webhook', description: 'Generic HTTP webhook endpoint', category: 'Communication' },
+  // Ticketing
+  { value: 'jira', label: 'Jira', description: 'Atlassian Jira issue tracking', category: 'Ticketing' },
+  { value: 'servicenow', label: 'ServiceNow', description: 'ServiceNow ITSM platform', category: 'Ticketing' },
+  { value: 'pagerduty', label: 'PagerDuty', description: 'Incident management', category: 'Ticketing' },
+  // Security / DLP
+  { value: 'dlp', label: 'DLP', description: 'Generic Data Loss Prevention', category: 'Security' },
+  { value: 'siem', label: 'SIEM', description: 'Generic security monitoring', category: 'Security' },
+  { value: 'splunk', label: 'Splunk', description: 'Splunk HEC endpoint', category: 'Security' },
+  { value: 'sentinel', label: 'Azure Sentinel', description: 'Microsoft Azure Sentinel SIEM', category: 'Security' },
+  // Catalog
+  { value: 'catalog', label: 'Data Catalog', description: 'Generic data catalog', category: 'Catalog' },
+  { value: 'collibra', label: 'Collibra', description: 'Collibra data governance', category: 'Catalog' },
+  { value: 'alation', label: 'Alation', description: 'Alation data catalog', category: 'Catalog' },
+  // Privacy
+  { value: 'onetrust', label: 'OneTrust', description: 'OneTrust privacy platform', category: 'Privacy' },
+  { value: 'privacyops', label: 'PrivacyOps', description: 'Privacy operations platform', category: 'Privacy' },
+  // Custom
+  { value: 'rest_api', label: 'REST API', description: 'Custom REST API endpoint', category: 'Custom' },
+  { value: 'custom', label: 'Custom', description: 'Custom integration', category: 'Custom' },
 ]
+
+const typeCategories = Array.from(new Set(integrationTypes.map(t => t.category)))
 
 export default function NewIntegrationPage() {
   const router = useRouter()
@@ -38,7 +60,7 @@ export default function NewIntegrationPage() {
   } = useForm<IntegrationForm>({
     resolver: zodResolver(integrationSchema),
     defaultValues: {
-      type: 'dlp',
+      type: 'slack',
     },
   })
 
@@ -92,27 +114,32 @@ export default function NewIntegrationPage() {
           {/* Type Selection */}
           <div>
             <label className="block text-sm font-medium text-foreground mb-2">Type</label>
-            <div className="grid grid-cols-2 gap-3">
-              {integrationTypes.map((type) => (
-                <label
-                  key={type.value}
-                  className={`flex flex-col p-4 rounded-lg border cursor-pointer transition-colors ${
-                    watchType === type.value
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
-                  }`}
-                >
-                  <input
-                    {...register('type')}
-                    type="radio"
-                    value={type.value}
-                    className="sr-only"
-                  />
-                  <span className="text-sm font-medium text-foreground">{type.label}</span>
-                  <span className="text-xs text-muted-foreground mt-1">{type.description}</span>
-                </label>
-              ))}
-            </div>
+            {typeCategories.map((category) => (
+              <div key={category} className="mb-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{category}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {integrationTypes.filter(t => t.category === category).map((type) => (
+                    <label
+                      key={type.value}
+                      className={`flex flex-col p-3 rounded-lg border cursor-pointer transition-colors ${
+                        watchType === type.value
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50'
+                      }`}
+                    >
+                      <input
+                        {...register('type')}
+                        type="radio"
+                        value={type.value}
+                        className="sr-only"
+                      />
+                      <span className="text-sm font-medium text-foreground">{type.label}</span>
+                      <span className="text-xs text-muted-foreground mt-0.5">{type.description}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Provider */}

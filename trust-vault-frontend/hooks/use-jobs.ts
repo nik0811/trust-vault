@@ -101,21 +101,22 @@ export function useRunJobNow() {
 export interface Integration {
   id: string
   name: string
-  type: 'dlp' | 'privacy_platform' | 'catalog' | 'siem' | 'ticketing' | 'communication'
+  type: string  // slack, teams, email, webhook, jira, servicenow, pagerduty, dlp, siem, splunk, sentinel, catalog, collibra, alation, onetrust, privacyops, rest_api, custom, privacy_platform, ticketing, communication
   provider: string
   config: any
   sync_freq: string
   status: string
-  last_sync: string
+  last_sync: string | null
   created_at: string
   updated_at: string
 }
 
 interface CreateIntegrationRequest {
   name: string
-  type: 'dlp' | 'privacy_platform' | 'catalog' | 'siem' | 'ticketing' | 'communication'
+  type: string
   provider: string
   config?: Record<string, any>
+  sync_freq?: string
 }
 
 export function useIntegrations() {
