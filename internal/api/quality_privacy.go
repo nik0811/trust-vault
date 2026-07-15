@@ -587,10 +587,12 @@ func (s *Server) getAuditTrail(w http.ResponseWriter, r *http.Request) {
 	if isSuperAdmin && tenantID == "" {
 		// Superadmin can see all audit logs across tenants
 		err = s.db.SelectContext(ctx, &logs,
-			"SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+			`SELECT id, tenant_id, COALESCE(user_id, '') as user_id, action, resource, COALESCE(resource_id, '') as resource_id, details, COALESCE(ip, '') as ip, created_at FROM audit_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
 			limit, offset)
 	} else {
-		logs, err = s.auditLogs.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
+		err = s.db.SelectContext(ctx, &logs,
+			`SELECT id, tenant_id, COALESCE(user_id, '') as user_id, action, resource, COALESCE(resource_id, '') as resource_id, details, COALESCE(ip, '') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+			tenantID, limit, offset)
 	}
 
 	if err != nil {

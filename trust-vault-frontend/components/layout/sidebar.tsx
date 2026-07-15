@@ -90,7 +90,6 @@ const navGroups: NavGroup[] = [
     items: [
       { icon: UserCheck, label: 'Privacy Center', href: '/privacy', description: 'DSAR & consent' },
       { icon: Sparkles, label: 'Advisor', href: '/advisor', description: 'AI recommendations' },
-      { icon: ClipboardList, label: 'Audit Trail', href: '/audit', description: 'Full history' },
       { icon: FileText, label: 'Reports', href: '/audit/reports', description: 'Compliance & analytics reports' },
     ],
   },
@@ -98,6 +97,7 @@ const navGroups: NavGroup[] = [
     title: 'System',
     emoji: '⚙️',
     items: [
+      { icon: ClipboardList, label: 'Audit Trail', href: '/audit', description: 'System activity log' },
       { icon: Plug, label: 'Integrations', href: '/integrations', description: 'External connections' },
       { icon: CalendarClock, label: 'Jobs', href: '/jobs', description: 'Scheduled tasks' },
       { icon: Activity, label: 'Observability', href: '/observability', description: 'Health & metrics' },
