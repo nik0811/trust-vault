@@ -247,6 +247,11 @@ func (s *Server) updateIntegration(w http.ResponseWriter, r *http.Request) {
 	}
 	s.integrations.Update(ctx, integration)
 
+	// Re-fetch to return accurate DB state
+	updated, _ := s.integrations.FindByID(ctx, tenantID, id)
+	if updated != nil {
+		integration = updated
+	}
 	pkg.JSON(w, integration)
 }
 
