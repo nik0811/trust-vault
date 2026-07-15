@@ -899,6 +899,9 @@ func (s *Server) classifyDocument(w http.ResponseWriter, r *http.Request) {
 			findings := make([]map[string]any, 0, len(results))
 			for _, r := range results {
 				et, _ := r["entity_type"].(string)
+				if et == "" {
+					continue
+				}
 				if !seen[et] {
 					seen[et] = true
 					entityTypes = append(entityTypes, et)
