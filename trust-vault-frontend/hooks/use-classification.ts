@@ -179,3 +179,45 @@ export function useReclassifyDataset() {
     },
   })
 }
+
+// ── Document Classification hooks ─────────────────────────────────────────────
+
+export interface DocumentClassification {
+  id: string
+  document_id: string
+  document_name: string
+  entity_types: string[]
+  findings: any[]
+  governed: boolean
+  label_applied: string
+  created_at: string
+}
+
+export function useDocumentClassifications(documentId: string) {
+  return useQuery({
+    queryKey: ['doc-classifications', documentId],
+    queryFn: async () => {
+      const response = await api.get<DocumentClassification[]>(`/documents/${documentId}/classifications`)
+      return response.data ?? []
+    },
+    enabled: !!documentId,
+  })
+}
+
+export function useClassifyDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (data: { document_id: string; document_name?: string; text: string }) => {
+      const response = await api.post('/documents/classify', data)
+      return response.data
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['doc-classifications', vars.document_id] })
+      queryClient.invalidateQueries({ queryKey: ['review-queue'] })
+      toast.success('Document classified')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to classify document')
+    },
+  })
+}

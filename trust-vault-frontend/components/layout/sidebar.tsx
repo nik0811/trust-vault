@@ -25,6 +25,8 @@ import {
   CalendarClock,
   Activity,
   Settings,
+  Monitor,
+  Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -64,6 +66,7 @@ const navGroups: NavGroup[] = [
       { icon: ScanSearch, label: 'Classification', href: '/classification', description: 'Auto-detect sensitive data' },
       { icon: FileStack, label: 'Documents', href: '/documents', description: 'Process files & PDFs' },
       { icon: Tags, label: 'Labels', href: '/labels', description: 'Sensitivity tags' },
+      { icon: Globe, label: 'Data Residency', href: '/data-map/residency', description: 'Geographic data controls' },
     ],
   },
   {
@@ -82,6 +85,7 @@ const navGroups: NavGroup[] = [
       { icon: BarChart3, label: 'Quality', href: '/quality', description: 'Data accuracy scores' },
       { icon: Trash2, label: 'ROT Analysis', href: '/rot', description: 'Cleanup data waste' },
       { icon: MessageSquarePlus, label: 'Feedback', href: '/feedback', description: 'Train the system' },
+      { icon: Database, label: 'Critical Elements', href: '/quality/cde', description: 'CDE management' },
     ],
   },
   {
@@ -89,6 +93,7 @@ const navGroups: NavGroup[] = [
     emoji: '✅',
     items: [
       { icon: UserCheck, label: 'Privacy Center', href: '/privacy', description: 'DSAR & consent' },
+      { icon: FileText, label: 'DPIA', href: '/privacy/dpia', description: 'Impact assessments' },
       { icon: Sparkles, label: 'Advisor', href: '/advisor', description: 'AI recommendations' },
       { icon: FileText, label: 'Reports', href: '/audit/reports', description: 'Compliance & analytics reports' },
     ],
@@ -101,6 +106,7 @@ const navGroups: NavGroup[] = [
       { icon: Plug, label: 'Integrations', href: '/integrations', description: 'External connections' },
       { icon: CalendarClock, label: 'Jobs', href: '/jobs', description: 'Scheduled tasks' },
       { icon: Activity, label: 'Observability', href: '/observability', description: 'Health & metrics' },
+      { icon: Monitor, label: 'Endpoints', href: '/endpoints', description: 'Endpoint scanning' },
       { icon: Settings, label: 'Settings', href: '/settings', description: 'Configuration' },
     ],
   },
