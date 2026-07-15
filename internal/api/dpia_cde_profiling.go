@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -606,7 +607,7 @@ func (s *Server) createCDE(w http.ResponseWriter, r *http.Request) {
 
 	// Use raw insert to avoid empty UUID issue with datasource_id
 	if req.DatasourceID != "" {
-		cde.DatasourceID = req.DatasourceID
+		cde.DatasourceID = sql.NullString{String: req.DatasourceID, Valid: true}
 		if err := s.criticalDataElements.Create(ctx, &cde); err != nil {
 			pkg.Error(w, err, http.StatusInternalServerError)
 			return
@@ -644,7 +645,7 @@ func (s *Server) listCDEs(w http.ResponseWriter, r *http.Request) {
 	for _, cde := range cdes {
 		item := map[string]any{
 			"id":                  cde.ID,
-			"datasource_id":       cde.DatasourceID,
+			"datasource_id":       cde.DatasourceID.String,
 			"column_name":         cde.ColumnName,
 			"table_name":          cde.TableName,
 			"business_definition": cde.BusinessDefinition,
@@ -654,9 +655,9 @@ func (s *Server) listCDEs(w http.ResponseWriter, r *http.Request) {
 			"created_at":          cde.CreatedAt,
 		}
 		// Try to get datasource name
-		if cde.DatasourceID != "" {
+		if cde.DatasourceID.Valid && cde.DatasourceID.String != "" {
 			var ds store.DataSource
-			if err := s.db.GetContext(ctx, &ds, "SELECT name, type FROM datasources WHERE id = $1", cde.DatasourceID); err == nil {
+			if err := s.db.GetContext(ctx, &ds, "SELECT name, type FROM datasources WHERE id = $1", cde.DatasourceID.String); err == nil {
 				item["datasource_name"] = ds.Name
 				item["datasource_type"] = ds.Type
 			}

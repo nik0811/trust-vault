@@ -16,7 +16,7 @@ function useEndpoints() {
     setError(null)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`${API_BASE}/api/v1/endpoints`, {
+      const res = await fetch(`${API_BASE}/endpoints`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
@@ -49,7 +49,7 @@ function StatusBadge({ status }: { status: string }) {
 function RegisterSnippet() {
   const [copied, setCopied] = useState(false)
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') || 'YOUR_TOKEN' : 'YOUR_TOKEN'
-  const snippet = `curl -X POST ${API_BASE}/api/v1/endpoints/register \\
+  const snippet = `curl -X POST ${API_BASE}/endpoints/register \\
   -H "Authorization: Bearer ${token}" \\
   -H "Content-Type: application/json" \\
   -d '{"hostname":"my-laptop","ip":"192.168.1.10","os":"macOS 14","agent_version":"1.0.0"}'`
@@ -168,7 +168,7 @@ export default function EndpointsPage() {
 
   const triggerScan = async (id: string) => {
     const token = localStorage.getItem('token')
-    const res = await fetch(`${API_BASE}/api/v1/endpoints/${id}/scan`, {
+    const res = await fetch(`${API_BASE}/endpoints/${id}/scan`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
     })

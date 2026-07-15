@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
 	"time"
@@ -573,17 +574,17 @@ type ConsentRecord struct {
 
 // CriticalDataElement designates a column as a Critical Data Element
 type CriticalDataElement struct {
-	ID               string    `db:"id" json:"id"`
-	TenantID         string    `db:"tenant_id" json:"-"`
-	DatasourceID     string    `db:"datasource_id" json:"datasource_id"`
-	ColumnName       string    `db:"column_name" json:"column_name" validate:"required"`
-	TableName        string    `db:"table_name" json:"table_name" validate:"required"`
-	BusinessDefinition string  `db:"business_definition" json:"business_definition"`
-	DataOwner        string    `db:"data_owner" json:"data_owner"`
-	Criticality      string    `db:"criticality" json:"criticality"`
-	QualityScore     float64   `db:"quality_score" json:"quality_score"`
-	CreatedAt        time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt        time.Time `db:"updated_at" json:"updated_at"`
+	ID                 string         `db:"id" json:"id"`
+	TenantID           string         `db:"tenant_id" json:"-"`
+	DatasourceID       sql.NullString `db:"datasource_id" json:"datasource_id"`
+	ColumnName         string         `db:"column_name" json:"column_name" validate:"required"`
+	TableName          string         `db:"table_name" json:"table_name" validate:"required"`
+	BusinessDefinition string         `db:"business_definition" json:"business_definition"`
+	DataOwner          string         `db:"data_owner" json:"data_owner"`
+	Criticality        string         `db:"criticality" json:"criticality"`
+	QualityScore       float64        `db:"quality_score" json:"quality_score"`
+	CreatedAt          time.Time      `db:"created_at" json:"created_at"`
+	UpdatedAt          time.Time      `db:"updated_at" json:"updated_at"`
 }
 
 // DataProfile stores auto-profiling results for a datasource
