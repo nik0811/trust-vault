@@ -455,9 +455,355 @@ function ComplianceViewer({ content }: { content: ComplianceContent }) {
   )
 }
 
+// ─── Quality Report Viewer ────────────────────────────────────────────────────
+
+interface QualityContent {
+  title: string
+  generated_at?: string
+  executive_summary: {
+    total_assessments: number
+    avg_overall_score: number
+    avg_completeness: number
+    avg_accuracy: number
+    status: string
+  }
+  datasets?: Array<{ name: string; score: number; status: string }>
+  methodology?: string
+  assessor?: string
+}
+
+function QualityViewer({ content }: { content: QualityContent }) {
+  const es = content.executive_summary
+
+  const statusColor =
+    es.status === 'Good'
+      ? 'bg-green-500/10 text-green-500'
+      : es.status === 'Fair'
+      ? 'bg-yellow-500/10 text-yellow-600'
+      : 'bg-red-500/10 text-red-500'
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{content.title || 'Data Quality Report'}</h3>
+            {content.assessor && (
+              <p className="text-sm text-muted-foreground mt-0.5">Assessor: {content.assessor}</p>
+            )}
+          </div>
+          <span className={cn('text-sm font-medium px-2.5 py-0.5 rounded-full', statusColor)}>{es.status}</span>
+        </div>
+
+        {es.total_assessments === 0 ? (
+          <div className="mt-6 flex flex-col items-center justify-center py-8 text-center text-muted-foreground gap-2">
+            <BarChart3 className="h-10 w-10 opacity-30" />
+            <p className="text-sm">No quality assessments yet — run a quality check on a data source first.</p>
+          </div>
+        ) : (
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
+              <p className="text-2xl font-bold text-primary">{es.total_assessments}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Total Assessments</p>
+            </div>
+            <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3">
+              <p className="text-2xl font-bold text-green-500">{Math.round(es.avg_overall_score * 100)}%</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Avg Overall Score</p>
+            </div>
+            <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+              <p className="text-2xl font-bold text-blue-500">{Math.round(es.avg_completeness * 100)}%</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Avg Completeness</p>
+            </div>
+            <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3">
+              <p className="text-2xl font-bold text-yellow-600">{Math.round(es.avg_accuracy * 100)}%</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Avg Accuracy</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Methodology */}
+      {content.methodology && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Methodology:</span> {content.methodology}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Printer className="h-3.5 w-3.5" />
+        <span>Use browser print (Ctrl/Cmd + P) to export this report as PDF.</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── AI Usage Report Viewer ───────────────────────────────────────────────────
+
+interface AIUsageContent {
+  title: string
+  generated_at?: string
+  executive_summary: {
+    total_queries: number
+    allowed_queries: number
+    blocked_queries: number
+    redacted_count: number
+    block_rate_pct: number
+    risk_level: string
+  }
+  recent_queries?: Array<{
+    query?: string
+    action?: string
+    created_at?: string
+    timestamp?: string
+  }>
+  methodology?: string
+  assessor?: string
+}
+
+function AIUsageViewer({ content }: { content: AIUsageContent }) {
+  const es = content.executive_summary
+
+  const riskColor =
+    es.risk_level === 'Low'
+      ? 'bg-green-500/10 text-green-500'
+      : es.risk_level === 'Medium'
+      ? 'bg-yellow-500/10 text-yellow-600'
+      : 'bg-red-500/10 text-red-500'
+
+  const actionBadge = (action?: string) => {
+    const a = (action ?? '').toLowerCase()
+    if (a === 'allow' || a === 'allowed') return 'bg-green-500/10 text-green-500'
+    if (a === 'block' || a === 'blocked') return 'bg-red-500/10 text-red-500'
+    if (a === 'redact' || a === 'redacted') return 'bg-yellow-500/10 text-yellow-600'
+    return 'bg-muted text-muted-foreground'
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header + Stats */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{content.title || 'AI Usage Report'}</h3>
+            {content.assessor && (
+              <p className="text-sm text-muted-foreground mt-0.5">Assessor: {content.assessor}</p>
+            )}
+          </div>
+          <span className={cn('text-sm font-medium px-2.5 py-0.5 rounded-full', riskColor)}>
+            {es.risk_level} Risk
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
+            <p className="text-2xl font-bold text-primary">{es.total_queries}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Total Queries</p>
+          </div>
+          <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3">
+            <p className="text-2xl font-bold text-green-500">{es.allowed_queries}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Allowed</p>
+          </div>
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-3">
+            <p className="text-2xl font-bold text-red-500">{es.blocked_queries}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Blocked</p>
+          </div>
+          <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3">
+            <p className="text-2xl font-bold text-yellow-600">{es.redacted_count}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Redacted</p>
+          </div>
+        </div>
+
+        {/* Block rate progress bar */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+            <span>Block Rate</span>
+            <span>{es.block_rate_pct?.toFixed(1)}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className="h-full rounded-full bg-red-500 transition-all"
+              style={{ width: `${Math.min(es.block_rate_pct ?? 0, 100)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Queries */}
+      {content.recent_queries && content.recent_queries.length > 0 && (
+        <div className="rounded-lg border border-border bg-card">
+          <div className="p-4 border-b border-border">
+            <h3 className="text-sm font-semibold text-foreground">Recent Queries</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Query</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Action</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {content.recent_queries.map((q, i) => (
+                  <tr key={i} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-4 py-2 text-xs text-foreground font-mono truncate max-w-xs">
+                      {(q.query ?? '—').slice(0, 40)}{(q.query ?? '').length > 40 ? '…' : ''}
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={cn('text-xs px-2 py-0.5 rounded-full', actionBadge(q.action))}>
+                        {q.action ?? '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                      {q.created_at || q.timestamp
+                        ? new Date(q.created_at ?? q.timestamp!).toLocaleString()
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Methodology */}
+      {content.methodology && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Methodology:</span> {content.methodology}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Printer className="h-3.5 w-3.5" />
+        <span>Use browser print (Ctrl/Cmd + P) to export this report as PDF.</span>
+      </div>
+    </div>
+  )
+}
+
+// ─── Audit Report Viewer ──────────────────────────────────────────────────────
+
+interface AuditContent {
+  title: string
+  generated_at?: string
+  executive_summary: {
+    total_events: number
+    login_events: number
+    data_events: number
+    policy_events: number
+    period: string
+  }
+  audit_log?: Array<{
+    action?: string
+    resource?: string
+    ip?: string
+    created_at?: string
+    timestamp?: string
+  }>
+  methodology?: string
+  assessor?: string
+}
+
+function AuditViewer({ content }: { content: AuditContent }) {
+  const es = content.executive_summary
+
+  return (
+    <div className="space-y-6">
+      {/* Header + Stats */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 className="text-base font-semibold text-foreground">{content.title || 'Audit Report'}</h3>
+            {content.assessor && (
+              <p className="text-sm text-muted-foreground mt-0.5">Assessor: {content.assessor}</p>
+            )}
+          </div>
+          <span className="text-xs px-2.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+            {es.period}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="rounded-lg bg-primary/10 border border-primary/20 p-3">
+            <p className="text-2xl font-bold text-primary">{es.total_events}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Total Events</p>
+          </div>
+          <div className="rounded-lg bg-blue-500/10 border border-blue-500/20 p-3">
+            <p className="text-2xl font-bold text-blue-500">{es.login_events}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Login Events</p>
+          </div>
+          <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-3">
+            <p className="text-2xl font-bold text-green-500">{es.data_events}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Data Events</p>
+          </div>
+          <div className="rounded-lg bg-yellow-500/10 border border-yellow-500/20 p-3">
+            <p className="text-2xl font-bold text-yellow-600">{es.policy_events}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Policy Events</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Audit Log */}
+      {content.audit_log && content.audit_log.length > 0 && (
+        <div className="rounded-lg border border-border bg-card">
+          <div className="p-4 border-b border-border">
+            <h3 className="text-sm font-semibold text-foreground">Audit Log</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Action</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Resource</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">IP</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Time</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {content.audit_log.map((entry, i) => (
+                  <tr key={i} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-4 py-2 text-xs font-medium text-foreground">{entry.action ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground truncate max-w-xs">{entry.resource ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground font-mono">{entry.ip ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground">
+                      {entry.created_at || entry.timestamp
+                        ? new Date(entry.created_at ?? entry.timestamp!).toLocaleString()
+                        : '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Methodology */}
+      {content.methodology && (
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Methodology:</span> {content.methodology}
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <Printer className="h-3.5 w-3.5" />
+        <span>Use browser print (Ctrl/Cmd + P) to export this report as PDF.</span>
+      </div>
+    </div>
+  )
+}
+
 // ─── Generic JSON Viewer ─────────────────────────────────────────────────────
 
-function GenericContentViewer({ content }: { content: any }) {
+function GenericContentViewer({ content }: { content: unknown }) {
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border bg-muted/30 p-4 overflow-x-auto">
@@ -507,6 +853,12 @@ function ReportDetailPanel({ report, onClose }: { report: Report; onClose: () =>
             </div>
           ) : report.type === 'compliance' ? (
             <ComplianceViewer content={content as ComplianceContent} />
+          ) : report.type === 'quality' ? (
+            <QualityViewer content={content as QualityContent} />
+          ) : report.type === 'ai_usage' ? (
+            <AIUsageViewer content={content as AIUsageContent} />
+          ) : report.type === 'audit' ? (
+            <AuditViewer content={content as AuditContent} />
           ) : (
             <GenericContentViewer content={content} />
           )}
