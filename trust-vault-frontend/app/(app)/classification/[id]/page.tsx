@@ -76,6 +76,17 @@ const columns: Column<ColumnClassification>[] = [
       <StatusIndicator status={row.status === 'classified' ? 'active' : row.status === 'pending' ? 'pending' : 'warning'} label={row.status} />
     ),
   },
+  {
+    id: 'value_sample',
+    header: 'Sample Values',
+    cell: (row) => row.value_sample
+      ? (
+        <code className="text-xs font-mono text-muted-foreground bg-muted/60 px-2 py-1 rounded max-w-[200px] truncate block" title={row.value_sample}>
+          {row.value_sample}
+        </code>
+      )
+      : <span className="text-muted-foreground text-xs">—</span>,
+  },
 ]
 
 export default function ClassificationDetailPage({ params }: { params: Promise<{ id: string }> }) {

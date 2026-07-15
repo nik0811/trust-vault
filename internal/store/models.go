@@ -155,6 +155,7 @@ type Classification struct {
 	LabelID              *string   `db:"label_id" json:"label_id,omitempty"`
 	RuleID               *string   `db:"rule_id" json:"rule_id,omitempty"`
 	ClassificationSource *string   `db:"classification_source" json:"classification_source,omitempty"`
+	ValueSample          *string   `db:"value_sample" json:"value_sample,omitempty"`
 	CreatedAt            time.Time `db:"created_at" json:"created_at"`
 }
 

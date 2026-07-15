@@ -3,7 +3,7 @@
 > This file is the single source of truth for project progress.
 > Updated after every work session. Read this FIRST in any new session.
 
-## Last Updated: 2026-07-14
+## Last Updated: 2026-07-15
 
 ## Current Phase: ENTERPRISE CLASSIFICATION PIPELINE COMPLETE
 
@@ -107,6 +107,7 @@
 | 2026-07-10 | #13 | **E2E TEST BUG FIXES.** Fixed text classification API (pre-compiled regex patterns), fixed audit trail RBAC (superadmin cross-tenant access), improved logout functionality (proper cookie clearing), improved session persistence (JWT decoding for user info), verified AI Gate playground page exists. |
 | 2026-07-14 | #14 | **ENTERPRISE CLASSIFICATION PIPELINE.** Added ClassificationRule model (override, pattern, whitelist, threshold types), migration 005 for classification_rules table, layered rule evaluation in worker (whitelist→override→pattern→threshold), automatic label assignment after classification (label rules + fallback mapping), full CRUD API for classification rules, track classification source and applied rule. |
 || 2026-07-15 | #15 | **COMPLIANCE EVIDENCE TRAILS (AUDIT-GRADE).** Every compliance gap and recommendation now includes verifiable evidence: EvidenceItem structs with source/timestamp/metadata, AffectedAsset references, exact regulation article citations, severity justifications, evidence summaries. Added POST /compliance/assess for on-demand assessments. Frontend enhanced with expandable evidence panels, regulation badges, grouped gaps, Run Assessment button, assessment result banners. Evidence sourced from classifications, policies, retention violations, data sources, RoPA, and audit logs. |
+| 2026-07-15 | #16 | **AUTO-GOVERNANCE AFTER CLASSIFICATION.** New auto_governance.go: entity→label mapping (RESTRICTED/CONFIDENTIAL/INTERNAL), label upsert (upgrade-only), classification.auto_governance audit log, compliance.gap_detected for unprotected PII types. Hooked into classifyText (sync) and classificationCallback (async). Frontend [id]/page.tsx: governance banner shows assigned label, detected count, policy gaps from audit logs. |
 
 ---
 

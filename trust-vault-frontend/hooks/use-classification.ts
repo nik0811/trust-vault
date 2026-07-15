@@ -126,6 +126,7 @@ export interface ColumnClassification {
   confidence: number
   classification_tag: string
   status: 'classified' | 'pending' | 'review'
+  value_sample?: string | null
 }
 
 export interface DatasetClassification {

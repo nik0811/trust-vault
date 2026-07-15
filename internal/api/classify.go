@@ -662,6 +662,7 @@ type ColumnClassification struct {
 	Confidence        float64 `json:"confidence"`
 	ClassificationTag string  `json:"classification_tag"`
 	Status            string  `json:"status"`
+	ValueSample       *string `json:"value_sample,omitempty"`
 }
 
 // DatasetClassificationResponse represents the full classification summary for a dataset
@@ -740,6 +741,7 @@ func (s *Server) getDatasetClassification(w http.ResponseWriter, r *http.Request
 			Confidence:        c.Confidence,
 			ClassificationTag: c.EntityType,
 			Status:            status,
+			ValueSample:       c.ValueSample,
 		})
 		totalConfidence += c.Confidence
 	}
@@ -795,6 +797,7 @@ func (s *Server) getDatasetColumns(w http.ResponseWriter, r *http.Request) {
 			Confidence:        c.Confidence,
 			ClassificationTag: c.EntityType,
 			Status:            status,
+			ValueSample:       c.ValueSample,
 		})
 	}
 

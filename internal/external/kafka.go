@@ -288,6 +288,8 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				var confidence float64
 				var classificationSource string
 				var appliedRuleID string
+				var valueSample *string        // masked sample values to store
+				var rawSamples []string        // raw samples for eradication check
 
 				// Use table.column as the unique value to avoid duplicates
 				columnFullName := col.Name
@@ -314,14 +316,16 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					log.Debug().Str("column", col.Name).Str("entity_type", entityType).Str("rule", ruleResult.RuleName).Msg("Rule override applied")
 				}
 
-				// STEP 2: Try ML classification if no override rule matched
+				// STEP 2: Try ML classification on real sampled values if no override rule matched
 				if entityType == "" && classifierAvailable && isTextColumn(col.Type) && dsConfig != nil {
-					samples, err := sampleColumnData(ctx, ds.Type, dsConfig, col.TableName, col.Name, 10)
+					samples, err := sampleColumnData(ctx, ds.Type, dsConfig, col.TableName, col.Name, 20)
 					if err != nil {
 						log.Debug().Err(err).Str("column", col.Name).Msg("Failed to sample column data, using pattern matching")
 					} else if len(samples) > 0 {
-						sampleText := strings.Join(samples, " | ")
-						result, err := classifier.Classify(ctx, sampleText, defaultEntityTypes, 0.3)
+						rawSamples = samples
+
+						// Send individual values to GLiNER (not joined text) for best accuracy
+						result, err := classifyValues(ctx, classifier, samples, defaultEntityTypes)
 						if err != nil {
 							log.Debug().Err(err).Str("column", col.Name).Msg("ML classification failed, using pattern matching")
 						} else if len(result.Entities) > 0 {
@@ -335,7 +339,14 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 							confidence = bestEntity.Confidence
 							classificationSource = "gliner_ml"
 
+							// Store up to 3 masked sample values
+							masked := buildValueSample(samples, entityType, 3)
+							if masked != "" {
+								valueSample = &masked
+							}
+
 							// Check if any pattern rule matches the value
+							sampleText := strings.Join(samples, " | ")
 							valueRuleResult := applyClassificationRules(classificationRules, col.Name, columnFullName, sampleText)
 							if valueRuleResult.Override && valueRuleResult.EntityType != "" {
 								entityType = valueRuleResult.EntityType
@@ -373,7 +384,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					continue
 				}
 
-				// Store classification with rule reference
+				// Store classification with rule reference and value_sample
 				contextJSON := fmt.Sprintf(`{"column_name": "%s", "table_name": "%s", "data_type": "%s", "classification_source": "%s"}`,
 					col.Name, col.TableName, col.Type, classificationSource)
 
@@ -382,17 +393,22 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					ruleIDParam = appliedRuleID
 				}
 
+				classificationID := generateUUID()
 				_, err := db.ExecContext(ctx,
-					`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, rule_id, classification_source, created_at)
-					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+					`INSERT INTO classifications (id, tenant_id, dataset_id, source_id, entity_type, value, confidence, context, rule_id, classification_source, value_sample, created_at)
+					 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 					 ON CONFLICT DO NOTHING`,
-					generateUUID(), job.TenantID, job.DatasetID, job.DatasetID, entityType, columnFullName, confidence,
-					contextJSON, ruleIDParam, classificationSource)
+					classificationID, job.TenantID, job.DatasetID, job.DatasetID, entityType, columnFullName, confidence,
+					contextJSON, ruleIDParam, classificationSource, valueSample)
 				if err != nil {
 					log.Error().Err(err).Str("column", col.Name).Msg("Failed to store classification")
 					continue
 				}
 				columnsClassified++
+
+				// STEP 5: Auto-eradication — check active policies and create remediation actions
+				go autoEradicateByPolicy(context.Background(), db, job.TenantID, job.DatasetID,
+					classificationID, entityType, columnFullName, rawSamples)
 
 				// Send progress callback to gateway for SSE broadcast
 				sourceLabel := "pattern"
@@ -856,6 +872,199 @@ func mapGLiNEREntityType(glinerType string) string {
 		return mapped
 	}
 	return strings.ToUpper(strings.ReplaceAll(glinerType, " ", "_"))
+}
+
+// classifyValues sends individual sampled values to the GLiNER classifier for best accuracy.
+// Unlike Classify (which sends joined text), this sends the texts array directly, letting
+// the model evaluate each value independently and return the highest-confidence entity.
+func classifyValues(ctx context.Context, c *ClassifierClient, samples []string, entityTypes []string) (*ClassifyResponse, error) {
+	url := c.baseURL + "/classify"
+	payload := map[string]any{
+		"texts":        samples,
+		"entity_types": entityTypes,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("classifier returned %d", resp.StatusCode)
+	}
+	var result ClassifyResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// maskValue masks a PII value based on its entity type, producing examples like
+// n*****@g****.com or ***-**-1234 for SSNs.
+func maskValue(value, entityType string) string {
+	if value == "" {
+		return value
+	}
+	switch entityType {
+	case "EMAIL":
+		parts := strings.SplitN(value, "@", 2)
+		if len(parts) == 2 {
+			local := parts[0]
+			domain := parts[1]
+			// Keep first char + stars + last char of local, partial domain
+			maskedLocal := maskMiddle(local)
+			domainParts := strings.SplitN(domain, ".", 2)
+			maskedDomain := maskMiddle(domainParts[0])
+			if len(domainParts) > 1 {
+				maskedDomain += "." + domainParts[1]
+			}
+			return maskedLocal + "@" + maskedDomain
+		}
+		return maskMiddle(value)
+	case "SSN":
+		// Format: ***-**-1234 (keep last 4)
+		digits := regexp.MustCompile(`\D`).ReplaceAllString(value, "")
+		if len(digits) >= 4 {
+			return "***-**-" + digits[len(digits)-4:]
+		}
+		return "***-**-****"
+	case "CREDIT_CARD", "CREDIT_CARD_FORMATTED":
+		// Keep last 4 digits: ****-****-****-1234
+		digits := regexp.MustCompile(`\D`).ReplaceAllString(value, "")
+		if len(digits) >= 4 {
+			return "****-****-****-" + digits[len(digits)-4:]
+		}
+		return "****-****-****-****"
+	case "PHONE":
+		digits := regexp.MustCompile(`\D`).ReplaceAllString(value, "")
+		if len(digits) >= 4 {
+			return strings.Repeat("*", len(digits)-4) + digits[len(digits)-4:]
+		}
+		return strings.Repeat("*", len(value))
+	case "PERSON_NAME":
+		words := strings.Fields(value)
+		masked := make([]string, len(words))
+		for i, w := range words {
+			masked[i] = maskMiddle(w)
+		}
+		return strings.Join(masked, " ")
+	default:
+		// Generic: keep first and last char, mask the middle
+		return maskMiddle(value)
+	}
+}
+
+// maskMiddle keeps the first and last character of a string and replaces the middle with stars.
+func maskMiddle(s string) string {
+	r := []rune(s)
+	if len(r) <= 2 {
+		return strings.Repeat("*", len(r))
+	}
+	return string(r[0]) + strings.Repeat("*", len(r)-2) + string(r[len(r)-1])
+}
+
+// buildValueSample produces a comma-separated string of up to n masked sample values.
+func buildValueSample(samples []string, entityType string, n int) string {
+	if len(samples) == 0 {
+		return ""
+	}
+	seen := make(map[string]bool)
+	var masked []string
+	for _, s := range samples {
+		if len(masked) >= n {
+			break
+		}
+		m := maskValue(s, entityType)
+		if !seen[m] {
+			seen[m] = true
+			masked = append(masked, m)
+		}
+	}
+	return strings.Join(masked, ", ")
+}
+
+// autoEradicateByPolicy checks active redaction/access policies for the tenant.
+// If the classified entity_type matches a policy's conditions, a remediation_action
+// entry is created and an audit log is written — non-blocking, called in a goroutine.
+func autoEradicateByPolicy(ctx context.Context, db *store.DB, tenantID, datasetID, classificationID, entityType, columnName string, samples []string) {
+	type policyRow struct {
+		ID         string `db:"id"`
+		Name       string `db:"name"`
+		Type       string `db:"type"`
+		Conditions []byte `db:"conditions"`
+	}
+	var policies []policyRow
+	err := db.SelectContext(ctx, &policies,
+		`SELECT id, name, type, conditions FROM policies WHERE tenant_id = $1 AND type IN ('redaction','access') AND active = true`,
+		tenantID)
+	if err != nil || len(policies) == 0 {
+		return
+	}
+
+	for _, policy := range policies {
+		if !policyMatchesEntityType(policy.Conditions, entityType) {
+			continue
+		}
+
+		// Determine action type from policy type
+		actionType := "redact"
+		if policy.Type == "access" {
+			actionType = "label"
+		}
+
+		reason := fmt.Sprintf("Auto-eradication: column %q classified as %s triggered policy %q (%s)",
+			columnName, entityType, policy.Name, policy.Type)
+
+		_, insertErr := db.ExecContext(ctx,
+			`INSERT INTO remediation_actions (id, tenant_id, type, dataset_id, reason, status, created_at, updated_at)
+			 VALUES ($1, $2, $3, $4, $5, 'pending', NOW(), NOW())`,
+			generateUUID(), tenantID, actionType, datasetID, reason)
+		if insertErr != nil {
+			log.Warn().Err(insertErr).Str("policy_id", policy.ID).Msg("Failed to create remediation_action for auto-eradication")
+			continue
+		}
+
+		// Audit log
+		details, _ := json.Marshal(map[string]any{
+			"policy_id":         policy.ID,
+			"policy_name":       policy.Name,
+			"policy_type":       policy.Type,
+			"classification_id": classificationID,
+			"entity_type":       entityType,
+			"column":            columnName,
+			"action":            actionType,
+		})
+		db.ExecContext(ctx,
+			`INSERT INTO audit_logs (id, tenant_id, user_id, action, resource, resource_id, details, ip, created_at)
+			 VALUES ($1, $2, 'system', 'classification.auto_eradication', 'classification', $3, $4, '', NOW())`,
+			generateUUID(), tenantID, classificationID, details)
+
+		log.Info().
+			Str("tenant_id", tenantID).
+			Str("entity_type", entityType).
+			Str("column", columnName).
+			Str("policy", policy.Name).
+			Str("action", actionType).
+			Msg("Auto-eradication remediation action created")
+	}
+}
+
+// policyMatchesEntityType checks whether a policy's JSON conditions reference the given entity type.
+func policyMatchesEntityType(conditionsJSON []byte, entityType string) bool {
+	if len(conditionsJSON) == 0 {
+		return false
+	}
+	// Check raw JSON for entity type occurrence (case-insensitive)
+	lower := strings.ToLower(string(conditionsJSON))
+	return strings.Contains(lower, strings.ToLower(entityType))
 }
 
 // classifyColumnName determines the entity type based on column name patterns
