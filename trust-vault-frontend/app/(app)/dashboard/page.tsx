@@ -134,11 +134,11 @@ export default function DashboardPage() {
 
       {/* Content */}
       <div className="p-8 space-y-8">
-        {/* Stats grid */}
+        {/* Row 1: KPI Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {stats.map((stat) => (
             stat.loading ? (
-              <div key={stat.label} className="rounded-lg border border-border bg-card p-6">
+              <div key={stat.label} className="rounded-xl border border-border bg-card p-6">
                 <Skeleton className="h-4 w-24 mb-2" />
                 <Skeleton className="h-8 w-16" />
               </div>
@@ -155,14 +155,14 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Two column layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left column - Main content */}
+        {/* Row 2: Main content + Sidebar */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          {/* Left 2/3 - Main content */}
           <div className="lg:col-span-2 space-y-6">
             {/* Classification Overview & Processing Stats Row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Classification Overview */}
-              <div className="rounded-lg border border-border bg-card p-6">
+              <div className="rounded-xl border border-border bg-card p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-foreground">Classification Overview</h3>
                   <Link href="/classification" className="text-sm text-primary hover:underline">
@@ -202,7 +202,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Processing Stats */}
-              <div className="rounded-lg border border-border bg-card p-6">
+              <div className="rounded-xl border border-border bg-card p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-foreground">Processing Stats</h3>
                   <Activity className="h-5 w-5 text-muted-foreground" />
@@ -240,7 +240,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Data Quality Summary */}
-            <div className="rounded-lg border border-border bg-card p-6">
+            <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">Data Quality Summary</h3>
                 <Link href="/quality" className="text-sm text-primary hover:underline">
@@ -293,7 +293,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Recent Activity Feed */}
-            <div className="rounded-lg border border-border bg-card p-6">
+            <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">Recent Activity</h3>
                 <Link href="/audit" className="text-sm text-primary hover:underline">
@@ -398,34 +398,12 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* AI Gate Activity */}
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">AI Gate Activity</h3>
-              {gateLoading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : (
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="text-center p-4 rounded-lg bg-muted/50">
-                    <p className="text-2xl font-bold text-foreground">{gateStats?.total_queries || 0}</p>
-                    <p className="text-sm text-muted-foreground">Total Queries</p>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-green-500/10">
-                    <p className="text-2xl font-bold text-green-600">{gateStats?.allowed_queries || 0}</p>
-                    <p className="text-sm text-muted-foreground">Allowed</p>
-                  </div>
-                  <div className="text-center p-4 rounded-lg bg-red-500/10">
-                    <p className="text-2xl font-bold text-red-600">{gateStats?.blocked_queries || 0}</p>
-                    <p className="text-sm text-muted-foreground">Blocked</p>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
 
-          {/* Right column - Sidebar metrics */}
+          {/* Right 1/3 - Sidebar */}
           <div className="space-y-6">
             {/* Compliance Score - Large Circular */}
-            <div className="rounded-lg border border-border bg-card p-6">
+            <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">Compliance Score</h3>
                 <Link href="/governance" className="text-sm text-primary hover:underline">
@@ -467,13 +445,13 @@ export default function DashboardPage() {
                   </div>
                   <div className="space-y-2 pt-2 border-t border-border">
                     {[
-                      { label: 'GDPR',         key: 'gdpr_score',    color: 'bg-blue-500',    fallback: 0.75 },
-                      { label: 'CCPA',         key: 'ccpa_score',    color: 'bg-purple-500',  fallback: 0.82 },
-                      { label: 'HIPAA',        key: 'hipaa_score',   color: 'bg-green-500',   fallback: 0.68 },
-                      { label: 'PCI-DSS',      key: 'pci_score',     color: 'bg-orange-500',  fallback: null },
-                      { label: 'DPDP 2023',    key: 'dpdp_score',    color: 'bg-pink-500',    fallback: null },
-                      { label: 'UAE PDPL',     key: 'uae_pdpl_score',color: 'bg-cyan-500',    fallback: null },
-                      { label: 'EU AI Act',    key: 'eu_ai_act_score',color: 'bg-yellow-500', fallback: null },
+                      { label: 'GDPR',         key: 'gdpr_score',     color: 'bg-blue-500',    fallback: 0.75 },
+                      { label: 'CCPA',         key: 'ccpa_score',     color: 'bg-purple-500',  fallback: 0.82 },
+                      { label: 'HIPAA',        key: 'hipaa_score',    color: 'bg-green-500',   fallback: 0.68 },
+                      { label: 'PCI-DSS',      key: 'pci_score',      color: 'bg-orange-500',  fallback: null },
+                      { label: 'DPDP 2023',    key: 'dpdp_score',     color: 'bg-pink-500',    fallback: null },
+                      { label: 'UAE PDPL',     key: 'uae_pdpl_score', color: 'bg-cyan-500',    fallback: null },
+                      { label: 'EU AI Act',    key: 'eu_ai_act_score',color: 'bg-yellow-500',  fallback: null },
                     ].map(({ label, key, color, fallback }) => {
                       const raw = riskScore?.[key as keyof typeof riskScore]
                       const pct = raw != null ? Math.round((raw as number) * 100) : (fallback != null ? Math.round(fallback * 100) : null)
@@ -499,8 +477,8 @@ export default function DashboardPage() {
               )}
             </div>
 
-            {/* Alerts & Recommendations */}
-            <div className="rounded-lg border border-border bg-card p-6">
+            {/* Recommendations */}
+            <div className="rounded-xl border border-border bg-card p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-foreground">Recommendations</h3>
                 <Lightbulb className="h-5 w-5 text-yellow-500" />
@@ -538,54 +516,80 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
 
-            {/* Data Sources Status */}
-            <div className="rounded-lg border border-border bg-card p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-foreground">Data Sources</h3>
-                <Link href="/data-sources" className="text-sm text-primary hover:underline">
-                  Manage
-                </Link>
+        {/* Row 3: AI Gate Activity | Data Sources | Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
+          {/* AI Gate Activity */}
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">AI Gate Activity</h3>
+            {gateLoading ? (
+              <Skeleton className="h-32 w-full" />
+            ) : (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center p-4 rounded-lg bg-muted/50">
+                  <p className="text-2xl font-bold text-foreground">{gateStats?.total_queries || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Total Queries</p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-green-500/10">
+                  <p className="text-2xl font-bold text-green-600">{gateStats?.allowed_queries || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Allowed</p>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-red-500/10">
+                  <p className="text-2xl font-bold text-red-600">{gateStats?.blocked_queries || 0}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Blocked</p>
+                </div>
               </div>
-              {dsLoading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {Array.isArray(dataSources) && dataSources.slice(0, 5).map(ds => (
-                    <div key={ds.id} className="flex items-center justify-between py-2">
-                      <span className="text-sm text-foreground truncate">{ds.name}</span>
-                      <StatusIndicator 
-                        status={ds.status === 'connected' ? 'success' : ds.status === 'scanning' ? 'pending' : 'error'} 
-                        label={ds.status} 
-                      />
-                    </div>
-                  ))}
-                  {(!Array.isArray(dataSources) || dataSources.length === 0) && (
-                    <p className="text-sm text-muted-foreground text-center py-4">No data sources connected</p>
-                  )}
-                </div>
-              )}
+            )}
+          </div>
+
+          {/* Data Sources Status */}
+          <div className="rounded-xl border border-border bg-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-foreground">Data Sources</h3>
+              <Link href="/data-sources" className="text-sm text-primary hover:underline">
+                Manage
+              </Link>
             </div>
-
-            {/* Quick Actions */}
-            <div className="rounded-lg border border-border bg-card p-6">
-              <h3 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h3>
+            {dsLoading ? (
               <div className="space-y-2">
-                <Link href="/data-sources/new" className="block w-full px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
-                  Add Data Source
-                </Link>
-                <Link href="/governance/policies/new" className="block w-full px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
-                  Create Policy
-                </Link>
-                <Link href="/ai-gate/playground" className="block w-full px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
-                  Test AI Gate
-                </Link>
-                <Link href="/audit/reports" className="block w-full px-4 py-2 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
-                  View Reports
-                </Link>
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-8 w-full" />)}
               </div>
+            ) : (
+              <div className="space-y-2">
+                {Array.isArray(dataSources) && dataSources.slice(0, 5).map(ds => (
+                  <div key={ds.id} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
+                    <span className="text-sm text-foreground truncate">{ds.name}</span>
+                    <StatusIndicator
+                      status={ds.status === 'connected' ? 'success' : ds.status === 'scanning' ? 'pending' : 'error'}
+                      label={ds.status}
+                    />
+                  </div>
+                ))}
+                {(!Array.isArray(dataSources) || dataSources.length === 0) && (
+                  <p className="text-sm text-muted-foreground text-center py-4">No data sources connected</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Actions */}
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h3 className="text-lg font-semibold text-foreground mb-4">Quick Actions</h3>
+            <div className="space-y-2">
+              <Link href="/data-sources/new" className="block w-full px-4 py-2.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
+                Add Data Source
+              </Link>
+              <Link href="/governance/policies/new" className="block w-full px-4 py-2.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
+                Create Policy
+              </Link>
+              <Link href="/ai-gate/playground" className="block w-full px-4 py-2.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
+                Test AI Gate
+              </Link>
+              <Link href="/audit/reports" className="block w-full px-4 py-2.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium text-left">
+                View Reports
+              </Link>
             </div>
           </div>
         </div>
