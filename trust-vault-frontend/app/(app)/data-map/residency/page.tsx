@@ -119,9 +119,10 @@ export default function DataResidencyPage() {
   }
 
   const regionStats = REGIONS.map(region => {
-    const count = datasources.filter((ds: any) => ds.region === region.id).length
+    const regionDatasources = datasources.filter((ds: any) => ds.region === region.id)
+    const count = regionDatasources.length
     const violationCount = violations.filter((v: any) => v.region === region.id).length
-    return { ...region, count, violationCount, compliant: violationCount === 0 }
+    return { ...region, count, violationCount, compliant: violationCount === 0, datasources: regionDatasources }
   })
 
   const untaggedCount = datasources.filter((ds: any) => !ds.region).length
@@ -209,6 +210,16 @@ export default function DataResidencyPage() {
                       </span>
                     )}
                   </div>
+                  {region.datasources.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-border/50">
+                      {region.datasources.slice(0, 3).map((ds: any) => (
+                        <p key={ds.id} className="text-xs text-muted-foreground truncate">{ds.name}</p>
+                      ))}
+                      {region.datasources.length > 3 && (
+                        <p className="text-xs text-primary font-medium mt-0.5">+{region.datasources.length - 3} more</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

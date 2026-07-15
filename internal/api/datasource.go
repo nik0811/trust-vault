@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
+	"github.com/securelens/securelens/internal/domain"
 	"github.com/securelens/securelens/internal/events"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
@@ -103,6 +104,27 @@ func (s *Server) createDataSource(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+
+	// Auto-detect region asynchronously so create response is not delayed
+	go func(id, tenantID string) {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		fresh, err := s.datasources.FindByID(bgCtx, tenantID, id)
+		if err != nil || fresh == nil || (fresh.Region != nil && *fresh.Region != "") {
+			return
+		}
+		if detected := domain.DetectRegion(bgCtx, fresh); detected != "" {
+			fresh.Region = &detected
+			if err := s.datasources.Update(bgCtx, fresh); err == nil {
+				log.Info().Str("datasource_id", id).Str("region", detected).Msg("auto-detected region on create")
+				events.Emit("datasource.region_detected", map[string]string{
+					"datasource_id": id,
+					"tenant_id":     tenantID,
+					"region":        detected,
+				})
+			}
+		}
+	}(ds.ID, ds.TenantID)
 
 	events.Emit("datasource.created", ds)
 	
@@ -498,6 +520,29 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 			FlowType:        "ingestion",
 		}
 		s.dataFlows.Create(ctx, &dataFlow)
+	}
+
+	// Re-run region detection on scan completion if region not yet set
+	if callback.Status == "completed" {
+		go func(id, tid string) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			fresh, err := s.datasources.FindByID(bgCtx, tid, id)
+			if err != nil || fresh == nil || (fresh.Region != nil && *fresh.Region != "") {
+				return
+			}
+			if detected := domain.DetectRegion(bgCtx, fresh); detected != "" {
+				fresh.Region = &detected
+				if err := s.datasources.Update(bgCtx, fresh); err == nil {
+					log.Info().Str("datasource_id", id).Str("region", detected).Msg("auto-detected region on scan completion")
+					events.Emit("datasource.region_detected", map[string]string{
+						"datasource_id": id,
+						"tenant_id":     tid,
+						"region":        detected,
+					})
+				}
+			}
+		}(datasourceID, tenantID)
 	}
 
 	log.Info().

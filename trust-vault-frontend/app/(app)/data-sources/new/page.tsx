@@ -6,7 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
-import { ArrowLeft, Database } from 'lucide-react'
+import { ArrowLeft, Database, CheckCircle } from 'lucide-react'
 import { useCreateDataSource } from '@/hooks/use-datasources'
 import Link from 'next/link'
 
@@ -136,6 +136,7 @@ export default function NewDataSourcePage() {
   const createDataSource = useCreateDataSource()
   const [selectedType, setSelectedType] = useState<string>('postgres')
   const [searchQuery, setSearchQuery] = useState('')
+  const [regionToast, setRegionToast] = useState<string | null>(null)
 
   const {
     register,
@@ -186,12 +187,38 @@ export default function NewDataSourcePage() {
     }
 
     try {
-      await createDataSource.mutateAsync({
+      const created = await createDataSource.mutateAsync({
         name: data.name,
         type: data.type,
         config: Object.keys(config).length > 0 ? config : undefined,
       })
-      router.push('/data-sources')
+      // If backend already ran detection synchronously show toast; otherwise poll after brief delay
+      const showRegionToast = (region: string) => {
+        setRegionToast(region)
+        setTimeout(() => router.push('/data-sources'), 2500)
+      }
+      if (created?.region) {
+        showRegionToast(created.region)
+      } else {
+        // Poll once after 3 s to catch async detection
+        setTimeout(async () => {
+          try {
+            const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || ''
+            const res = await fetch(`${apiBase}/datasources/${created?.id}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            })
+            if (res.ok) {
+              const ds = await res.json()
+              if (ds.region) {
+                showRegionToast(ds.region)
+                return
+              }
+            }
+          } catch (_) {}
+          router.push('/data-sources')
+        }, 3000)
+      }
     } catch (error) {
       // Error handled by hook
     }

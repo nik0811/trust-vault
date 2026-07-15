@@ -7,6 +7,8 @@ import (
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
+	"github.com/securelens/securelens/internal/domain"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
 )
@@ -150,6 +152,54 @@ func (s *Server) tagDatasourceRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pkg.JSON(w, map[string]any{"datasource_id": id, "region": req.Region, "country": req.Country})
+}
+
+// detectRegionsHandler runs auto-detection on all datasources that have no region set.
+// POST /residency/detect
+func (s *Server) detectRegionsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	sources, err := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 1000})
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	type result struct {
+		ID       string `json:"id"`
+		Name     string `json:"name"`
+		Region   string `json:"region"`
+		Detected bool   `json:"detected"`
+	}
+	var results []result
+	for i := range sources {
+		ds := &sources[i]
+		existing := ""
+		if ds.Region != nil {
+			existing = *ds.Region
+		}
+		if existing != "" {
+			results = append(results, result{ID: ds.ID, Name: ds.Name, Region: existing, Detected: false})
+			continue
+		}
+		detected := domain.DetectRegion(ctx, ds)
+		if detected != "" {
+			ds.Region = &detected
+			if err := s.datasources.Update(ctx, ds); err == nil {
+				log.Info().Str("datasource_id", ds.ID).Str("region", detected).Msg("bulk geo_detect: region set")
+				results = append(results, result{ID: ds.ID, Name: ds.Name, Region: detected, Detected: true})
+			} else {
+				results = append(results, result{ID: ds.ID, Name: ds.Name, Region: "", Detected: false})
+			}
+		} else {
+			results = append(results, result{ID: ds.ID, Name: ds.Name, Region: "", Detected: false})
+		}
+	}
+	if results == nil {
+		results = []result{}
+	}
+	pkg.JSON(w, map[string]any{"results": results, "total": len(results)})
 }
 
 func (s *Server) getConsentWidgetConfig(w http.ResponseWriter, r *http.Request) {

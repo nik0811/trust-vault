@@ -474,6 +474,7 @@ func (s *Server) setupRoutes() {
 				r.Delete("/rules/{id}", s.deleteResidencyRule)
 				r.Get("/violations", s.getResidencyViolations)
 				r.Post("/datasources/{id}/tag-region", s.tagDatasourceRegion)
+				r.Post("/detect", s.detectRegionsHandler)
 			})
 
 			// Consent widget config & preferences
