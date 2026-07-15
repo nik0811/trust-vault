@@ -5,9 +5,10 @@ import { StatCard } from '@/components/base/stat-card'
 import { DataTable, type Column } from '@/components/base/data-table'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { StatusIndicator } from '@/components/base/status-badge'
-import { ArrowLeft, Zap, TrendingUp, Settings, RefreshCw, Loader2, Table, Play, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { ArrowLeft, Zap, TrendingUp, Settings, RefreshCw, Loader2, Table, Play, CheckCircle2, XCircle, Clock, ShieldCheck, AlertTriangle } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { useDatasetClassification, useDatasetColumns, useClassificationRules, useClassificationModels, useReclassifyDataset, type ColumnClassification } from '@/hooks/use-classification'
+import { useAuditTrail } from '@/hooks/use-audit'
 import { toast } from 'sonner'
 
 const getSensitivityColor = (level: string) => {
@@ -84,8 +85,26 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
   const { data: columnsData, isLoading: columnsLoading, error: columnsError, refetch: refetchColumns } = useDatasetColumns(id)
   const { data: rulesData, isLoading: rulesLoading } = useClassificationRules()
   const { data: modelsData, isLoading: modelsLoading } = useClassificationModels()
+  const { data: auditLogs } = useAuditTrail({ limit: 100 })
   const reclassify = useReclassifyDataset()
   const [isClassifying, setIsClassifying] = useState(false)
+
+  // Derive governance status from audit logs for this dataset
+  const governanceLogs = (auditLogs || []).filter(
+    (log: any) => log.resource_id === id && log.action === 'classification.auto_governance'
+  )
+  const gapLogs = (auditLogs || []).filter(
+    (log: any) => log.resource_id === id && log.action === 'compliance.gap_detected'
+  )
+  const latestGovernance = governanceLogs[0]
+  const latestGap = gapLogs[0]
+
+  const autoGovDetails = latestGovernance?.details
+  const gapDetails = latestGap?.details
+  const assignedLabel: string | null = autoGovDetails?.assigned_label ?? null
+  const detectedTypes: string[] = autoGovDetails?.detected_types ?? []
+  const unprotectedTypes: string[] = gapDetails?.unprotected_types ?? []
+  const hasGovernance = !!assignedLabel
 
   useEffect(() => {
     if (datasetError) toast.error('Failed to load dataset classification')
@@ -156,6 +175,46 @@ export default function ClassificationDetailPage({ params }: { params: Promise<{
           <StatCard label="Pending Review" value={String(pendingColumns)} />
           <StatCard label="Avg Confidence" value={`${avgConfidence}%`} icon={<Settings className="h-6 w-6" />} />
         </div>
+
+        {/* Auto-Governance Banner */}
+        {hasGovernance && (
+          <div className="rounded-lg border border-border bg-card overflow-hidden">
+            <div className="flex items-start gap-4 p-4">
+              <div className="mt-0.5 flex-shrink-0">
+                <ShieldCheck className="h-5 w-5 text-green-500" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  Governance auto-applied:{' '}
+                  <span className="font-semibold">
+                    {detectedTypes.length} column{detectedTypes.length !== 1 ? 's' : ''} labeled as{' '}
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold ${
+                      assignedLabel === 'RESTRICTED' ? 'bg-red-500/20 text-red-700 dark:text-red-400' :
+                      assignedLabel === 'CONFIDENTIAL' ? 'bg-orange-500/20 text-orange-700 dark:text-orange-400' :
+                      assignedLabel === 'HIGHLY_CONFIDENTIAL' ? 'bg-purple-500/20 text-purple-700 dark:text-purple-400' :
+                      'bg-blue-500/20 text-blue-700 dark:text-blue-400'
+                    }`}>{assignedLabel}</span>
+                  </span>
+                  {unprotectedTypes.length > 0 && (
+                    <span className="ml-2 text-muted-foreground">
+                      &bull;{' '}
+                      <span className="text-amber-600 dark:text-amber-400 font-medium inline-flex items-center gap-1">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        {unprotectedTypes.length} policy gap{unprotectedTypes.length !== 1 ? 's' : ''} detected
+                      </span>
+                    </span>
+                  )}
+                </p>
+                {unprotectedTypes.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    No active redaction/access policy covers:{' '}
+                    <span className="font-medium text-foreground">{unprotectedTypes.join(', ')}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-lg border border-border bg-card p-6">
           <div className="flex items-center justify-between mb-6">

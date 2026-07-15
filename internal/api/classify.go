@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -38,6 +39,7 @@ func (s *Server) classifyText(w http.ResponseWriter, r *http.Request) {
 	results := s.runBasicClassification(req.Text, req.EntityTypes)
 
 	// Store classification results
+	saved := make([]store.Classification, 0, len(results))
 	for _, res := range results {
 		c := store.Classification{
 			TenantID:   tenantID,
@@ -46,7 +48,11 @@ func (s *Server) classifyText(w http.ResponseWriter, r *http.Request) {
 			Confidence: res["confidence"].(float64),
 		}
 		s.classifications.Create(ctx, &c)
+		saved = append(saved, c)
 	}
+
+	// Auto-governance: non-blocking, fire-and-forget
+	go s.autoApplyGovernance(ctx, tenantID, "", saved)
 
 	pkg.JSON(w, map[string]any{"entities": results})
 }
@@ -882,6 +888,18 @@ func (s *Server) classificationCallback(w http.ResponseWriter, r *http.Request) 
 		"message":            callback.Message,
 		"error":              callback.Error,
 	})
+
+	// Auto-governance: fire-and-forget after async job completes
+	if callback.Status == "completed" && callback.TenantID != "" && callback.DatasetID != "" {
+		go func(tenantID, datasetID string) {
+			bgCtx := context.Background()
+			var clsResults []store.Classification
+			_ = s.db.SelectContext(bgCtx, &clsResults,
+				"SELECT * FROM classifications WHERE tenant_id = $1 AND dataset_id = $2",
+				tenantID, datasetID)
+			s.autoApplyGovernance(bgCtx, tenantID, datasetID, clsResults)
+		}(callback.TenantID, callback.DatasetID)
+	}
 
 	pkg.JSON(w, map[string]string{"status": "ok"})
 }
