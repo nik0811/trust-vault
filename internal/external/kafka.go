@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -265,12 +269,6 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				"message":    fmt.Sprintf("Found %d columns to classify", len(allColumns)),
 			})
 
-			// Parse datasource config for data sampling
-			var dsConfig map[string]any
-			if err := json.Unmarshal(ds.Config, &dsConfig); err != nil {
-				log.Warn().Err(err).Msg("Failed to parse datasource config for sampling")
-			}
-
 			// Fetch classification rules for this tenant (ordered by priority DESC)
 			classificationRules := fetchClassificationRules(ctx, db, job.TenantID)
 			log.Info().Int("rules_count", len(classificationRules)).Msg("Loaded classification rules")
@@ -316,12 +314,12 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					log.Debug().Str("column", col.Name).Str("entity_type", entityType).Str("rule", ruleResult.RuleName).Msg("Rule override applied")
 				}
 
-				// STEP 2: Try ML classification on real sampled values if no override rule matched
-				if entityType == "" && classifierAvailable && isTextColumn(col.Type) && dsConfig != nil {
-					samples, err := sampleColumnData(ctx, ds.Type, dsConfig, col.TableName, col.Name, 20)
-					if err != nil {
-						log.Debug().Err(err).Str("column", col.Name).Msg("Failed to sample column data, using pattern matching")
-					} else if len(samples) > 0 {
+			// STEP 2: Try ML classification on real sampled values if no override rule matched
+			if entityType == "" && classifierAvailable && isTextColumn(col.Type) {
+				samples, err := sampleColumnValues(ctx, &ds, col.TableName, col.Name, 20)
+				if err != nil {
+					log.Debug().Err(err).Str("column", col.Name).Msg("Failed to sample column data, using pattern matching")
+				} else if len(samples) > 0 {
 						rawSamples = samples
 
 						// Send individual values to GLiNER (not joined text) for best accuracy
@@ -748,30 +746,63 @@ var defaultEntityTypes = []string{
 	"bank account", "passport number", "driver license",
 }
 
-// sampleColumnData connects to the datasource and samples data from a column
-func sampleColumnData(ctx context.Context, dsType string, config map[string]any, tableName, columnName string, limit int) ([]string, error) {
+// sampleColumnValues dispatches to the correct sampler based on datasource type.
+// All samplers are strictly read-only — no writes to the source.
+func sampleColumnValues(ctx context.Context, ds *store.DataSource, tableName, columnName string, limit int) ([]string, error) {
 	if limit <= 0 {
-		limit = 10
+		limit = 20
 	}
+	switch ds.Type {
+	case "postgresql", "postgres", "mysql", "mssql", "oracle":
+		var config map[string]any
+		if err := json.Unmarshal(ds.Config, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
+		}
+		return sampleDBValues(ctx, ds.Type, config, tableName, columnName, limit)
+	case "csv", "file", "excel":
+		var config map[string]any
+		if err := json.Unmarshal(ds.Config, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
+		}
+		return sampleFileValues(ctx, config, columnName, limit)
+	case "s3", "gcs", "azure_blob":
+		var config map[string]any
+		if err := json.Unmarshal(ds.Config, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
+		}
+		return sampleObjectStorageValues(ctx, ds.Type, config, columnName, limit)
+	case "rest_api", "api":
+		var config map[string]any
+		if err := json.Unmarshal(ds.Config, &config); err != nil {
+			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
+		}
+		return sampleAPIValues(ctx, config, columnName, limit)
+	default:
+		log.Debug().
+			Str("datasource_type", ds.Type).
+			Str("column", columnName).
+			Str("value_sampling_skipped", "unsupported_type").
+			Msg("Value sampling skipped for unsupported datasource type")
+		return nil, nil
+	}
+}
 
-	// Build connection string based on datasource type
+// sampleDBValues connects to a SQL datasource and samples column values (SELECT only).
+func sampleDBValues(ctx context.Context, dsType string, config map[string]any, tableName, columnName string, limit int) ([]string, error) {
 	connStr, err := buildConnectionString(dsType, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build connection string: %w", err)
 	}
 
-	// Connect to the database
 	db, err := sql.Open(getDriverName(dsType), connStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 	defer db.Close()
 
-	// Set connection timeout
 	db.SetConnMaxLifetime(30 * time.Second)
 	db.SetMaxOpenConns(1)
 
-	// Query distinct values from the column
 	query := fmt.Sprintf("SELECT DISTINCT %s FROM %s WHERE %s IS NOT NULL AND %s != '' LIMIT %d",
 		quoteIdentifier(columnName, dsType),
 		quoteIdentifier(tableName, dsType),
@@ -795,8 +826,380 @@ func sampleColumnData(ctx context.Context, dsType string, config map[string]any,
 			samples = append(samples, value.String)
 		}
 	}
-
 	return samples, nil
+}
+
+// sampleFileValues reads up to limit rows from a CSV/text file and extracts the named column.
+// For Excel files: if the path ends with .xlsx/.xls, value sampling is skipped gracefully.
+// Config keys: "file_path" or "url" (for HTTP-accessible files).
+func sampleFileValues(ctx context.Context, config map[string]any, columnName string, limit int) ([]string, error) {
+	filePath := getConfigString(config, "file_path", "")
+	if filePath == "" {
+		filePath = getConfigString(config, "path", "")
+	}
+	fileURL := getConfigString(config, "url", "")
+
+	if filePath == "" && fileURL == "" {
+		log.Debug().Str("value_sampling_skipped", "no_file_path_or_url").Msg("File sampling skipped: no path or URL in config")
+		return nil, nil
+	}
+
+	// Determine source name for extension check
+	sourceName := filePath
+	if sourceName == "" {
+		sourceName = fileURL
+	}
+	ext := strings.ToLower(filepath.Ext(sourceName))
+	if ext == ".xlsx" || ext == ".xls" {
+		log.Debug().Str("value_sampling_skipped", "excel_not_supported").Msg("Excel value sampling skipped; using column name classification only")
+		return nil, nil
+	}
+
+	var r io.ReadCloser
+	if fileURL != "" {
+		// Fetch via HTTP (read-only GET)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, fileURL, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create file URL request: %w", err)
+		}
+		// Request only first 100KB to keep it lightweight
+		req.Header.Set("Range", "bytes=0-102399")
+		client := &http.Client{Timeout: 15 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch file URL: %w", err)
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("file URL returned HTTP %d", resp.StatusCode)
+		}
+		r = resp.Body
+	} else {
+		// Local file — read-only
+		f, err := os.Open(filePath) // #nosec G304 — read-only open
+		if err != nil {
+			return nil, fmt.Errorf("failed to open file: %w", err)
+		}
+		r = f
+	}
+	defer r.Close()
+
+	return parseCSVColumn(r, columnName, limit)
+}
+
+// parseCSVColumn reads a CSV from r and returns up to limit non-empty values for columnName.
+func parseCSVColumn(r io.Reader, columnName string, limit int) ([]string, error) {
+	cr := csv.NewReader(r)
+	cr.LazyQuotes = true
+	cr.TrimLeadingSpace = true
+
+	header, err := cr.Read()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read CSV header: %w", err)
+	}
+
+	// Find column index (case-insensitive)
+	colIdx := -1
+	lowerTarget := strings.ToLower(columnName)
+	for i, h := range header {
+		if strings.ToLower(strings.TrimSpace(h)) == lowerTarget {
+			colIdx = i
+			break
+		}
+	}
+	if colIdx == -1 {
+		// Column not found; return empty (graceful)
+		log.Debug().Str("column", columnName).Msg("CSV column not found in header, skipping value sampling")
+		return nil, nil
+	}
+
+	var samples []string
+	for len(samples) < limit {
+		record, err := cr.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			continue // skip malformed rows
+		}
+		if colIdx < len(record) {
+			v := strings.TrimSpace(record[colIdx])
+			if v != "" {
+				samples = append(samples, v)
+			}
+		}
+	}
+	return samples, nil
+}
+
+// sampleObjectStorageValues downloads up to 50KB from an object storage source and parses it as CSV.
+// Supports: S3 (via pre-signed URL or public URL), GCS (public URL), Azure Blob.
+// Config keys (S3): "bucket", "key", "region", "url" (pre-signed or public).
+// Config keys (GCS): "bucket", "object", "url".
+// Config keys (azure_blob): "container", "blob", "url".
+func sampleObjectStorageValues(ctx context.Context, dsType string, config map[string]any, columnName string, limit int) ([]string, error) {
+	objectURL := getConfigString(config, "url", "")
+
+	// If no direct URL, try to build one from bucket/key for S3
+	if objectURL == "" && dsType == "s3" {
+		bucket := getConfigString(config, "bucket", "")
+		key := getConfigString(config, "key", "")
+		region := getConfigString(config, "region", "us-east-1")
+		if bucket != "" && key != "" {
+			objectURL = fmt.Sprintf("https://%s.s3.%s.amazonaws.com/%s",
+				bucket, region, url.PathEscape(key))
+		}
+	}
+
+	// GCS: build from bucket + object
+	if objectURL == "" && dsType == "gcs" {
+		bucket := getConfigString(config, "bucket", "")
+		object := getConfigString(config, "object", "")
+		if object == "" {
+			object = getConfigString(config, "key", "")
+		}
+		if bucket != "" && object != "" {
+			objectURL = fmt.Sprintf("https://storage.googleapis.com/%s/%s",
+				url.PathEscape(bucket), url.PathEscape(object))
+		}
+	}
+
+	// Azure Blob: build from account + container + blob
+	if objectURL == "" && dsType == "azure_blob" {
+		account := getConfigString(config, "account", "")
+		container := getConfigString(config, "container", "")
+		blob := getConfigString(config, "blob", "")
+		if account != "" && container != "" && blob != "" {
+			objectURL = fmt.Sprintf("https://%s.blob.core.windows.net/%s/%s",
+				account, url.PathEscape(container), url.PathEscape(blob))
+		}
+	}
+
+	if objectURL == "" {
+		log.Debug().Str("type", dsType).Str("value_sampling_skipped", "no_object_url").Msg("Object storage sampling skipped: cannot determine URL")
+		return nil, nil
+	}
+
+	// Check extension — only parse as CSV if it looks like delimited text
+	ext := strings.ToLower(filepath.Ext(strings.Split(objectURL, "?")[0]))
+	if ext != "" && ext != ".csv" && ext != ".tsv" && ext != ".txt" {
+		log.Debug().Str("ext", ext).Str("value_sampling_skipped", "non_csv_extension").Msg("Object storage sampling skipped: non-CSV extension")
+		return nil, nil
+	}
+
+	// Download first 50KB (read-only GET + Range header)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, objectURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create object storage request: %w", err)
+	}
+	req.Header.Set("Range", "bytes=0-51199") // 50KB
+
+	// Add auth header if token is provided
+	token := getConfigString(config, "auth_token", "")
+	if token == "" {
+		token = getConfigString(config, "access_token", "")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	client := &http.Client{Timeout: 20 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download object: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Debug().Int("status", resp.StatusCode).Str("value_sampling_skipped", "http_error").Msg("Object storage sampling skipped: HTTP error")
+		return nil, nil
+	}
+
+	// Verify it looks like text/csv
+	ct := resp.Header.Get("Content-Type")
+	if ct != "" && !strings.Contains(ct, "text/") && !strings.Contains(ct, "csv") &&
+		!strings.Contains(ct, "octet-stream") && !strings.Contains(ct, "application/json") {
+		log.Debug().Str("content_type", ct).Str("value_sampling_skipped", "non_text_content_type").Msg("Object storage sampling skipped: non-text content-type")
+		return nil, nil
+	}
+
+	return parseCSVColumn(resp.Body, columnName, limit)
+}
+
+// sampleAPIValues makes a read-only GET request to a REST API and extracts string values
+// from the named field. Config keys: "url" or "endpoint", "auth_type" ("bearer"/"basic"/"api_key"),
+// "auth_token", "api_key", "api_key_header", "username", "password".
+func sampleAPIValues(ctx context.Context, config map[string]any, columnName string, limit int) ([]string, error) {
+	endpoint := getConfigString(config, "url", "")
+	if endpoint == "" {
+		endpoint = getConfigString(config, "endpoint", "")
+	}
+	if endpoint == "" {
+		log.Debug().Str("value_sampling_skipped", "no_endpoint").Msg("REST API sampling skipped: no endpoint in config")
+		return nil, nil
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create API request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	// Attach auth (read-only — GET only, no side effects)
+	authType := strings.ToLower(getConfigString(config, "auth_type", ""))
+	switch authType {
+	case "bearer":
+		token := getConfigString(config, "auth_token", "")
+		if token == "" {
+			token = getConfigString(config, "token", "")
+		}
+		if token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
+	case "basic":
+		username := getConfigString(config, "username", "")
+		password := getConfigString(config, "password", "")
+		if username != "" {
+			req.SetBasicAuth(username, password)
+		}
+	case "api_key":
+		apiKey := getConfigString(config, "api_key", "")
+		apiKeyHeader := getConfigString(config, "api_key_header", "X-API-Key")
+		if apiKey != "" {
+			req.Header.Set(apiKeyHeader, apiKey)
+		}
+	default:
+		// Try bearer token as fallback if present
+		if token := getConfigString(config, "auth_token", ""); token != "" {
+			req.Header.Set("Authorization", "Bearer "+token)
+		} else if apiKey := getConfigString(config, "api_key", ""); apiKey != "" {
+			header := getConfigString(config, "api_key_header", "X-API-Key")
+			req.Header.Set(header, apiKey)
+		}
+	}
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to call API: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		log.Debug().Int("status", resp.StatusCode).Str("value_sampling_skipped", "http_error").Msg("REST API sampling skipped: HTTP error")
+		return nil, nil
+	}
+
+	// Read up to 256KB of response
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 256*1024))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read API response: %w", err)
+	}
+
+	return extractJSONFieldValues(body, columnName, limit)
+}
+
+// extractJSONFieldValues parses a JSON response (array or object) and extracts string values
+// for fieldName. Returns up to limit non-empty values.
+func extractJSONFieldValues(body []byte, fieldName string, limit int) ([]string, error) {
+	body = bytes.TrimSpace(body)
+	if len(body) == 0 {
+		return nil, nil
+	}
+
+	lowerField := strings.ToLower(fieldName)
+
+	// Try as array first
+	if body[0] == '[' {
+		var arr []map[string]any
+		if err := json.Unmarshal(body, &arr); err != nil {
+			// Try as array of primitives or mixed — fall through to object
+			goto tryObject
+		}
+		var samples []string
+		for _, item := range arr {
+			if len(samples) >= limit {
+				break
+			}
+			// Case-insensitive key lookup
+			for k, v := range item {
+				if strings.ToLower(k) == lowerField {
+					if s := jsonValueToString(v); s != "" {
+						samples = append(samples, s)
+					}
+					break
+				}
+			}
+		}
+		return samples, nil
+	}
+
+tryObject:
+	// Try as single object
+	if body[0] == '{' {
+		var obj map[string]any
+		if err := json.Unmarshal(body, &obj); err != nil {
+			return nil, fmt.Errorf("failed to parse API JSON response: %w", err)
+		}
+		var samples []string
+		// Look for field at top level
+		for k, v := range obj {
+			if len(samples) >= limit {
+				break
+			}
+			if strings.ToLower(k) == lowerField {
+				if s := jsonValueToString(v); s != "" {
+					samples = append(samples, s)
+				}
+			}
+		}
+		// Also look for an embedded array (e.g. {"data": [...], "items": [...]})
+		if len(samples) == 0 {
+			for _, v := range obj {
+				if arr, ok := v.([]any); ok {
+					for _, item := range arr {
+						if len(samples) >= limit {
+							break
+						}
+						if m, ok := item.(map[string]any); ok {
+							for k, fv := range m {
+								if strings.ToLower(k) == lowerField {
+									if s := jsonValueToString(fv); s != "" {
+										samples = append(samples, s)
+									}
+									break
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		return samples, nil
+	}
+
+	return nil, nil
+}
+
+// jsonValueToString converts a JSON value to a string for sampling.
+func jsonValueToString(v any) string {
+	switch val := v.(type) {
+	case string:
+		return strings.TrimSpace(val)
+	case float64:
+		return strconv.FormatFloat(val, 'f', -1, 64)
+	case bool:
+		if val {
+			return "true"
+		}
+		return "false"
+	default:
+		if v != nil {
+			b, _ := json.Marshal(v)
+			return string(b)
+		}
+		return ""
+	}
 }
 
 // buildConnectionString creates a database connection string from config
