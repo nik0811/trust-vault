@@ -75,7 +75,7 @@ export default function GeographyPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <StatCard label="Regions" value={String(regions.length)} icon={<Globe className="h-6 w-6" />} />
           <StatCard label="Cross-Border Flows" value={String(crossBorderCount)} />
-          <StatCard label="GDPR Transfer Risks" value={String(crossBorderCount)} />
+          <StatCard label="Transfer Risks" value={String(crossBorderCount)} />
           <StatCard label="Data Residency Compliant" value={regions.length > 0 ? `${Math.round((1 - crossBorderCount / regions.length) * 100)}%` : '—'} />
         </div>
 
@@ -123,9 +123,9 @@ export default function GeographyPage() {
               <div className="flex items-start gap-3 rounded-lg border border-orange-500/20 bg-orange-500/10 p-4">
                 <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-orange-600 dark:text-orange-400" />
                 <div>
-                  <p className="text-sm font-medium text-foreground">GDPR Transfer Compliance</p>
+                  <p className="text-sm font-medium text-foreground">Cross-Border Transfer Compliance</p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {crossBorderCount} cross-border data flows detected from EU regions. Verify Standard Contractual Clauses (SCCs) are in place.
+                    {crossBorderCount} cross-border data flows detected from EU/regulated regions. Verify Standard Contractual Clauses (SCCs) are in place for GDPR, and review DPDP Act 2023 / UAE PDPL data localisation requirements as applicable.
                   </p>
                 </div>
               </div>

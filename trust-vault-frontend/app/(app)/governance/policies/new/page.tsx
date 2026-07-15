@@ -169,7 +169,7 @@ export default function NewPolicyPage() {
             <input
               {...register('regulations')}
               type="text"
-              placeholder="GDPR, CCPA, HIPAA (comma-separated)"
+              placeholder="GDPR, CCPA, HIPAA, PCI-DSS, DPDP Act 2023, UAE PDPL, EU AI Act (comma-separated)"
               className="w-full px-4 py-2 rounded-lg border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
             <p className="text-xs text-muted-foreground mt-1">Link this policy to specific regulations</p>

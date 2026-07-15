@@ -170,6 +170,46 @@ export default function ConsentPage() {
                 <li>• Cannot discriminate against users who opt-out</li>
               </ul>
             </div>
+            <div>
+              <h4 className="font-medium text-foreground mb-2">HIPAA (US Healthcare)</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Authorization required for use/disclosure of PHI</li>
+                <li>• Minimum necessary standard applies</li>
+                <li>• Patients have right to access their records</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-foreground mb-2">PCI-DSS (Payment Card)</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Cardholder data must be protected at rest and in transit</li>
+                <li>• Access to card data must be restricted and logged</li>
+                <li>• Regular security testing required</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-foreground mb-2">DPDP Act 2023 (India)</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Consent must be free, specific, informed, and unconditional</li>
+                <li>• Data principals have right to withdraw consent</li>
+                <li>• Purpose limitation and data minimisation required</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-foreground mb-2">UAE PDPL (Federal Decree-Law No. 45/2021)</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Explicit consent required for sensitive data processing</li>
+                <li>• Cross-border transfers require adequate protection</li>
+                <li>• Data subjects have right to access and correction</li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-medium text-foreground mb-2">EU AI Act</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>• Transparency obligations for AI systems using personal data</li>
+                <li>• High-risk AI systems require human oversight</li>
+                <li>• Data governance requirements for training datasets</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

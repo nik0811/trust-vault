@@ -466,33 +466,31 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <div className="space-y-2 pt-2 border-t border-border">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">GDPR</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-blue-500" style={{ width: `${(riskScore?.gdpr_score || 0.75) * 100}%` }} />
+                    {[
+                      { label: 'GDPR',         key: 'gdpr_score',    color: 'bg-blue-500',    fallback: 0.75 },
+                      { label: 'CCPA',         key: 'ccpa_score',    color: 'bg-purple-500',  fallback: 0.82 },
+                      { label: 'HIPAA',        key: 'hipaa_score',   color: 'bg-green-500',   fallback: 0.68 },
+                      { label: 'PCI-DSS',      key: 'pci_score',     color: 'bg-orange-500',  fallback: null },
+                      { label: 'DPDP 2023',    key: 'dpdp_score',    color: 'bg-pink-500',    fallback: null },
+                      { label: 'UAE PDPL',     key: 'uae_pdpl_score',color: 'bg-cyan-500',    fallback: null },
+                      { label: 'EU AI Act',    key: 'eu_ai_act_score',color: 'bg-yellow-500', fallback: null },
+                    ].map(({ label, key, color, fallback }) => {
+                      const raw = riskScore?.[key as keyof typeof riskScore]
+                      const pct = raw != null ? Math.round((raw as number) * 100) : (fallback != null ? Math.round(fallback * 100) : null)
+                      return (
+                        <div key={label} className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground w-20 shrink-0">{label}</span>
+                          <div className="flex items-center gap-2">
+                            <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
+                              <div className={`h-full ${color}`} style={{ width: pct != null ? `${pct}%` : '0%' }} />
+                            </div>
+                            <span className="text-sm font-medium w-14 text-right">
+                              {pct != null ? `${pct}%` : 'N/A'}
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-sm font-medium w-10 text-right">{Math.round((riskScore?.gdpr_score || 0.75) * 100)}%</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">CCPA</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-purple-500" style={{ width: `${(riskScore?.ccpa_score || 0.82) * 100}%` }} />
-                        </div>
-                        <span className="text-sm font-medium w-10 text-right">{Math.round((riskScore?.ccpa_score || 0.82) * 100)}%</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">HIPAA</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-20 h-2 bg-muted rounded-full overflow-hidden">
-                          <div className="h-full bg-green-500" style={{ width: `${(riskScore?.hipaa_score || 0.68) * 100}%` }} />
-                        </div>
-                        <span className="text-sm font-medium w-10 text-right">{Math.round((riskScore?.hipaa_score || 0.68) * 100)}%</span>
-                      </div>
-                    </div>
+                      )
+                    })}
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
                     {Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0} compliance gaps to address

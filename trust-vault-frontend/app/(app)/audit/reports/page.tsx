@@ -71,7 +71,7 @@ const REPORT_TYPES: { value: ReportType; label: string; description: string; ico
   {
     value: 'compliance',
     label: 'Compliance Report',
-    description: 'GDPR, CCPA, HIPAA compliance status and gaps',
+    description: 'GDPR, CCPA, HIPAA, PCI-DSS, DPDP Act, UAE PDPL & EU AI Act compliance status and gaps',
     icon: ShieldCheck,
   },
   {
@@ -183,6 +183,10 @@ function GenerateModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+const ALL_FRAMEWORKS = [
+  'GDPR', 'CCPA', 'HIPAA', 'PCI-DSS', 'DPDP Act 2023', 'UAE PDPL', 'EU AI Act',
+]
+
 // ─── Compliance Report Viewer ─────────────────────────────────────────────────
 
 function ComplianceViewer({ content }: { content: ComplianceContent }) {
@@ -205,8 +209,20 @@ function ComplianceViewer({ content }: { content: ComplianceContent }) {
     })
   }
 
-  const { executive_summary: es, regulations, findings } = content
+  const { executive_summary: es, findings } = content
   const score = Math.round(es.overall_score)
+
+  // Merge API-provided regulations with the full list of 7 frameworks
+  const apiRegMap = new Map((content.regulations || []).map((r) => [r.name, r]))
+  const regulations = ALL_FRAMEWORKS.map((name) =>
+    apiRegMap.get(name) ?? {
+      name,
+      score: 0,
+      status: 'Not Assessed',
+      findings_count: 0,
+      articles_assessed: [] as string[],
+    }
+  )
 
   const scoreColor =
     score >= 90 ? 'text-green-500' : score >= 75 ? 'text-yellow-500' : score >= 50 ? 'text-orange-500' : 'text-red-500'
@@ -286,11 +302,12 @@ function ComplianceViewer({ content }: { content: ComplianceContent }) {
         </div>
       </div>
 
-      {/* Regulations */}
+      {/* Regulations - always show all 7 frameworks */}
       {regulations && regulations.length > 0 && (
         <div className="rounded-lg border border-border bg-card">
           <div className="p-4 border-b border-border">
             <h3 className="text-base font-semibold text-foreground">Regulations Coverage</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">All 7 supported frameworks — &ldquo;Not Assessed&rdquo; means no data collected yet</p>
           </div>
           <div className="divide-y divide-border">
             {regulations.map((reg) => (
@@ -308,6 +325,8 @@ function ComplianceViewer({ content }: { content: ComplianceContent }) {
                           ? 'bg-green-500/10 text-green-500'
                           : reg.status === 'Non-Compliant'
                           ? 'bg-red-500/10 text-red-500'
+                          : reg.status === 'Not Assessed'
+                          ? 'bg-muted text-muted-foreground'
                           : 'bg-yellow-500/10 text-yellow-600',
                       )}
                     >

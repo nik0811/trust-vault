@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs items={[{ label: 'Privacy', active: true }]} />
         <h1 className="text-3xl font-bold text-foreground mt-4">Privacy Compliance</h1>
-        <p className="text-sm text-muted-foreground mt-1">Manage GDPR, CCPA, and other privacy requirements</p>
+        <p className="text-sm text-muted-foreground mt-1">Manage GDPR, CCPA, HIPAA, PCI-DSS, DPDP Act 2023, UAE PDPL, EU AI Act and other privacy requirements</p>
       </div>
 
       {/* Content */}
