@@ -343,6 +343,7 @@ func (s *Server) setupRoutes() {
 
 			// Reports
 			r.Route("/reports", func(r chi.Router) {
+				r.Post("/", s.generateReport)
 				r.Post("/generate", s.generateReport)
 				r.Get("/", s.listReports)
 				r.Get("/{id}", s.downloadReport)
