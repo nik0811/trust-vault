@@ -307,15 +307,141 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// For non-compliance report types, keep async via Kafka
-	s.kafka.Produce(ctx, "report-jobs", tenantID, map[string]any{
-		"report_id": report.ID,
-		"type":      req.Type,
-		"date_from": req.DateFrom,
-		"date_to":   req.DateTo,
-	})
+	// For non-compliance report types, generate synchronously
+	var reportContent map[string]any
 
-	pkg.JSON(w, report)
+	switch req.Type {
+	case "quality":
+		var qualityStats []struct {
+			DatasetID   string  `db:"dataset_id"`
+			Overall     float64 `db:"overall"`
+			Completeness float64 `db:"completeness"`
+			Accuracy    float64 `db:"accuracy"`
+			IssueCount  int     `db:"issue_count"`
+		}
+		s.db.SelectContext(ctx, &qualityStats,
+			`SELECT dataset_id, overall_score as overall, completeness_score as completeness, accuracy_score as accuracy, issue_count FROM quality_assessments WHERE tenant_id = $1 ORDER BY assessed_at DESC LIMIT 50`, tenantID)
+
+		avgOverall, avgCompleteness, avgAccuracy := 0.0, 0.0, 0.0
+		if len(qualityStats) > 0 {
+			for _, q := range qualityStats {
+				avgOverall += q.Overall
+				avgCompleteness += q.Completeness
+				avgAccuracy += q.Accuracy
+			}
+			n := float64(len(qualityStats))
+			avgOverall /= n
+			avgCompleteness /= n
+			avgAccuracy /= n
+		}
+
+		reportContent = map[string]any{
+			"title":        "SecureLens Data Quality Report",
+			"generated_at": report.CreatedAt,
+			"tenant_id":    tenantID,
+			"executive_summary": map[string]any{
+				"total_assessments":    len(qualityStats),
+				"avg_overall_score":    avgOverall,
+				"avg_completeness":     avgCompleteness,
+				"avg_accuracy":         avgAccuracy,
+				"status":               func() string { if avgOverall >= 0.8 { return "Good" } else if avgOverall >= 0.6 { return "Fair" } else { return "Poor" } }(),
+			},
+			"datasets":    qualityStats,
+			"methodology": "Quality scored across 4 dimensions: completeness, accuracy, consistency, and uniqueness",
+			"assessor":    "SecureLens Data Quality Engine v1.0",
+		}
+
+	case "ai_usage":
+		var gateStats struct {
+			TotalQueries   int     `db:"total"`
+			AllowedQueries int     `db:"allowed"`
+			BlockedQueries int     `db:"blocked"`
+			RedactedCount  int     `db:"redacted"`
+		}
+		s.db.GetContext(ctx, &gateStats.TotalQueries, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1`, tenantID)
+		s.db.GetContext(ctx, &gateStats.AllowedQueries, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND action = 'allow'`, tenantID)
+		s.db.GetContext(ctx, &gateStats.BlockedQueries, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND action = 'block'`, tenantID)
+		s.db.GetContext(ctx, &gateStats.RedactedCount, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND action = 'redact'`, tenantID)
+
+		var recentQueries []map[string]any
+		rows, _ := s.db.QueryxContext(ctx, `SELECT id, query_text, action, created_at FROM gate_queries WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20`, tenantID)
+		if rows != nil {
+			defer rows.Close()
+			for rows.Next() {
+				row := map[string]any{}
+				rows.MapScan(row)
+				recentQueries = append(recentQueries, row)
+			}
+		}
+
+		blockRate := 0.0
+		if gateStats.TotalQueries > 0 {
+			blockRate = float64(gateStats.BlockedQueries) / float64(gateStats.TotalQueries) * 100
+		}
+
+		reportContent = map[string]any{
+			"title":        "SecureLens AI Usage Report",
+			"generated_at": report.CreatedAt,
+			"tenant_id":    tenantID,
+			"executive_summary": map[string]any{
+				"total_queries":   gateStats.TotalQueries,
+				"allowed_queries": gateStats.AllowedQueries,
+				"blocked_queries": gateStats.BlockedQueries,
+				"redacted_count":  gateStats.RedactedCount,
+				"block_rate_pct":  blockRate,
+				"risk_level":      func() string { if blockRate > 20 { return "High" } else if blockRate > 5 { return "Medium" } else { return "Low" } }(),
+			},
+			"recent_queries": recentQueries,
+			"methodology":    "AI Gate intercepts all LLM queries and evaluates against governance policies",
+			"assessor":       "SecureLens AI Gate Engine v1.0",
+		}
+
+	case "audit":
+		var auditStats struct {
+			TotalEvents  int `db:"total"`
+			LoginEvents  int `db:"logins"`
+			DataEvents   int `db:"data_events"`
+			PolicyEvents int `db:"policy_events"`
+		}
+		s.db.GetContext(ctx, &auditStats.TotalEvents, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1`, tenantID)
+		s.db.GetContext(ctx, &auditStats.LoginEvents, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'user.%'`, tenantID)
+		s.db.GetContext(ctx, &auditStats.DataEvents, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'datasource.%'`, tenantID)
+		s.db.GetContext(ctx, &auditStats.PolicyEvents, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'policy.%'`, tenantID)
+
+		var recentLogs []store.AuditLog
+		s.db.SelectContext(ctx, &recentLogs,
+			`SELECT id, tenant_id, COALESCE(user_id,'') as user_id, action, resource, COALESCE(resource_id,'') as resource_id, details, COALESCE(ip,'') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`, tenantID)
+
+		reportContent = map[string]any{
+			"title":        "SecureLens Audit Report",
+			"generated_at": report.CreatedAt,
+			"tenant_id":    tenantID,
+			"executive_summary": map[string]any{
+				"total_events":  auditStats.TotalEvents,
+				"login_events":  auditStats.LoginEvents,
+				"data_events":   auditStats.DataEvents,
+				"policy_events": auditStats.PolicyEvents,
+				"period":        "All time",
+			},
+			"audit_log":   recentLogs,
+			"methodology": "Complete immutable audit trail of all system actions with user attribution and IP tracking",
+			"assessor":    "SecureLens Audit Engine v1.0",
+		}
+
+	default:
+		reportContent = map[string]any{
+			"title":        "SecureLens Report",
+			"generated_at": report.CreatedAt,
+			"tenant_id":    tenantID,
+			"type":         req.Type,
+		}
+	}
+
+	contentBytes, _ := json.Marshal(reportContent)
+	report.Status = "completed"
+	report.Content = store.JSON(contentBytes)
+	s.reports.Update(ctx, &report)
+	pkg.JSON(w, report, http.StatusCreated)
 }
 
 // complianceRegEntry accumulates per-regulation stats
