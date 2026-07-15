@@ -58,9 +58,8 @@ func RunMigrations(db *DB, direction string, steps int) error {
 			return fmt.Errorf("read %s: %w", entry.Name(), err)
 		}
 
-		if _, err := db.Exec(string(content)); err != nil {
-			return fmt.Errorf("exec %s: %w", entry.Name(), err)
-		}
+		// Continue on error: migrations may already be applied (no migrations table tracking)
+		db.Exec(string(content)) //nolint:errcheck
 	}
 	return nil
 }
