@@ -377,10 +377,15 @@ function ComplianceViewer({ content }: { content: ComplianceContent }) {
                             <p className="font-medium text-sm text-foreground">{f.title}</p>
                             {f.regulation && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-muted border border-border text-muted-foreground flex-shrink-0">
-                                {f.regulation}{f.regulation_article ? ` · ${f.regulation_article}` : ''}
+                                {f.regulation}
                               </span>
                             )}
                           </div>
+                          {f.regulation_article && (
+                            <p className="text-xs text-muted-foreground/70 mt-1 truncate" title={f.regulation_article}>
+                              📌 {f.regulation_article}
+                            </p>
+                          )}
                           <p className="text-sm text-muted-foreground mt-1">{f.description}</p>
                           {f.action && (
                             <p className="text-xs text-primary mt-2">
