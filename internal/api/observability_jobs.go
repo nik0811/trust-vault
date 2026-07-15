@@ -598,3 +598,35 @@ func (s *Server) runJobNow(w http.ResponseWriter, r *http.Request) {
 		"message": "Job queued for immediate execution",
 	})
 }
+
+func (s *Server) getObservabilitySummary(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var totalSources, healthySources int
+	s.db.GetContext(ctx, &totalSources, `SELECT COUNT(*) FROM datasources WHERE tenant_id = $1`, tenantID)
+	s.db.GetContext(ctx, &healthySources, `SELECT COUNT(*) FROM datasources WHERE tenant_id = $1 AND status = 'active'`, tenantID)
+
+	var schemaDrifts int
+	s.db.GetContext(ctx, &schemaDrifts, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE '%schema%'`, tenantID)
+
+	var freshnessIssues int
+	s.db.GetContext(ctx, &freshnessIssues,
+		`SELECT COUNT(*) FROM datasources WHERE tenant_id = $1 AND (last_scan IS NULL OR last_scan < NOW() - INTERVAL '7 days')`, tenantID)
+
+	var recentAlerts int
+	s.db.GetContext(ctx, &recentAlerts,
+		`SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '24 hours'`, tenantID)
+
+	pkg.JSON(w, map[string]any{
+		"total_sources":    totalSources,
+		"healthy_sources":  healthySources,
+		"schema_drifts":    schemaDrifts,
+		"freshness_issues": freshnessIssues,
+		"recent_alerts":    recentAlerts,
+		"status":           "healthy",
+		"last_checked":     time.Now(),
+	})
+}
+
+

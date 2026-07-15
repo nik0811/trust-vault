@@ -626,3 +626,31 @@ type ClassificationRule struct {
 	CreatedAt     time.Time `db:"created_at" json:"created_at"`
 	UpdatedAt     time.Time `db:"updated_at" json:"updated_at"`
 }
+
+// EndpointScan represents a registered API endpoint being scanned for PII exposure
+type EndpointScan struct {
+	ID         string     `db:"id" json:"id"`
+	TenantID   string     `db:"tenant_id" json:"-"`
+	Name       string     `db:"name" json:"name" validate:"required"`
+	URL        string     `db:"url" json:"url" validate:"required"`
+	Method     string     `db:"method" json:"method"`
+	Headers    JSON       `db:"headers" json:"headers"`
+	AuthType   string     `db:"auth_type" json:"auth_type"`
+	AuthConfig JSON       `db:"auth_config" json:"auth_config"`
+	Status     string     `db:"status" json:"status"`
+	LastScan   *time.Time `db:"last_scan" json:"last_scan"`
+	Findings   JSON       `db:"findings" json:"findings"`
+	RiskLevel  string     `db:"risk_level" json:"risk_level"`
+	CreatedAt  time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time  `db:"updated_at" json:"updated_at"`
+}
+
+// ConsentPreference stores per-subject consent preferences persistently
+type ConsentPreference struct {
+	ID          string    `db:"id" json:"id"`
+	TenantID    string    `db:"tenant_id" json:"-"`
+	SubjectID   string    `db:"subject_id" json:"subject_id" validate:"required"`
+	Preferences JSON      `db:"preferences" json:"preferences"`
+	IP          string    `db:"ip" json:"ip"`
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+}

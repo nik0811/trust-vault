@@ -45,6 +45,9 @@ func (s *Server) listEndpoints(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	limit, offset := pkg.ParseListOpts(r)
 	agents, _ := s.endpointAgents.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
+	if agents == nil {
+		agents = []store.EndpointAgent{}
+	}
 	pkg.JSON(w, map[string]any{"endpoints": agents, "total": len(agents)})
 }
 

@@ -65,6 +65,8 @@ type Server struct {
 	documentClassifications  *store.Repository[store.DocumentClassification]
 	endpointAgents           *store.Repository[store.EndpointAgent]
 	residencyRules           *store.Repository[store.ResidencyRule]
+	endpointScans            *store.Repository[store.EndpointScan]
+	consentPreferences       *store.Repository[store.ConsentPreference]
 }
 
 func NewServer(db *store.DB, kafka *external.Kafka) *Server {
@@ -114,6 +116,8 @@ func NewServer(db *store.DB, kafka *external.Kafka) *Server {
 		documentClassifications:  store.NewRepo[store.DocumentClassification](db, "document_classifications"),
 		endpointAgents:           store.NewRepo[store.EndpointAgent](db, "endpoint_agents"),
 		residencyRules:           store.NewRepo[store.ResidencyRule](db, "residency_rules"),
+		endpointScans:            store.NewRepo[store.EndpointScan](db, "endpoint_scans"),
+		consentPreferences:       store.NewRepo[store.ConsentPreference](db, "consent_preferences"),
 	}
 
 	s.setupRoutes()
@@ -271,6 +275,7 @@ func (s *Server) setupRoutes() {
 				r.Post("/thresholds", s.setQualityThresholds)
 				r.Post("/profile/{datasource_id}", s.autoProfileDataSource)
 				r.Get("/profile/{datasource_id}", s.getDataProfile)
+				r.Get("/summary", s.getQualitySummary)
 			})
 
 			// Critical Data Elements
@@ -290,6 +295,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/dsar/{id}/package", s.getDSARPackage)
 				r.Post("/dsar/{id}/execute", s.executeDSAR)
 				r.Post("/pia", s.generatePIA)
+				r.Get("/pia", s.listPIAs)
 				r.Get("/pia/{dataset_id}", s.getPIA)
 				r.Get("/ropa", s.listRoPA)
 				r.Post("/ropa", s.createRoPA)
@@ -321,10 +327,12 @@ func (s *Server) setupRoutes() {
 			// Compliance
 			r.Route("/compliance", func(r chi.Router) {
 				r.Get("/recommendations", s.getRecommendations)
+				r.Get("/advisor", s.getRecommendations)
 				r.Get("/gaps", s.getComplianceGaps)
 				r.Get("/report", s.getComplianceReport)
 				r.Get("/risk-score", s.getRiskScore)
 				r.Post("/assess", s.runComplianceAssessment)
+				r.Get("/frameworks", s.listComplianceFrameworks)
 			})
 
 			// Observability
@@ -334,6 +342,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/metrics", s.getMetrics)
 				r.Get("/alerts", s.getAlerts)
 				r.Post("/alerts/rules", s.createAlertRule)
+				r.Get("/summary", s.getObservabilitySummary)
 			})
 
 			// AI Governance
@@ -367,6 +376,7 @@ func (s *Server) setupRoutes() {
 
 			// Remediation
 			r.Route("/remediation", func(r chi.Router) {
+				r.Get("/", s.listRemediationActions)
 				r.Get("/actions", s.listRemediationActions)
 				r.Post("/actions", s.createRemediationAction)
 				r.Post("/actions/{id}/execute", s.executeRemediation)
@@ -394,6 +404,27 @@ func (s *Server) setupRoutes() {
 				r.Delete("/rules/{id}", s.deleteLabelRule)
 				r.Get("/summary", s.getLabelSummary)
 			})
+
+			// Sensitivity rules alias (maps to labels/rules)
+			r.Route("/sensitivity", func(r chi.Router) {
+				r.Get("/rules", s.getLabelRules)
+				r.Post("/rules", s.createLabelRule)
+				r.Put("/rules/{id}", s.updateLabelRule)
+				r.Delete("/rules/{id}", s.deleteLabelRule)
+			})
+
+			// AI Gate alias (maps to /gate)
+			r.Route("/ai-gate", func(r chi.Router) {
+				r.Get("/stats", s.gateStats)
+				r.Get("/queries", s.listGateQueries)
+				r.Get("/queries/{id}", s.getGateQuery)
+				r.Post("/query", s.gateQuery)
+				r.Post("/retrieve", s.gateRetrieve)
+				r.Post("/validate", s.gateValidate)
+			})
+
+			// Lineage top-level endpoint
+			r.Get("/lineage", s.getLineageSummary)
 
 			// Feedback
 			r.Route("/feedback", func(r chi.Router) {
@@ -458,13 +489,24 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}/classifications", s.getDocumentClassifications)
 			})
 
-			// Endpoint scanning
-			r.Route("/endpoints", func(r chi.Router) {
+			// Endpoint agents (legacy device-level scanning)
+			r.Route("/endpoints/agents", func(r chi.Router) {
 				r.Post("/register", s.registerEndpoint)
 				r.Get("/", s.listEndpoints)
 				r.Post("/{id}/scan", s.triggerEndpointScan)
 				r.Post("/{id}/scan-results", s.receiveEndpointScanResults)
 				r.Get("/{id}/results", s.getEndpointResults)
+			})
+
+			// Endpoint URL scanning (API endpoint PII scanning)
+			r.Route("/endpoints", func(r chi.Router) {
+				r.Get("/", s.listEndpointScans)
+				r.Post("/", s.createEndpointScan)
+				r.Get("/{id}", s.getEndpointScan)
+				r.Put("/{id}", s.updateEndpointScan)
+				r.Delete("/{id}", s.deleteEndpointScan)
+				r.Post("/{id}/scan", s.runEndpointScan)
+				r.Get("/{id}/findings", s.getEndpointScanFindings)
 			})
 
 			// Data residency

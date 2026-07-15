@@ -48,6 +48,9 @@ func (s *Server) listResidencyRules(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	limit, offset := pkg.ParseListOpts(r)
 	rules, _ := s.residencyRules.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
+	if rules == nil {
+		rules = []store.ResidencyRule{}
+	}
 	pkg.JSON(w, map[string]any{"rules": rules, "total": len(rules)})
 }
 
@@ -257,17 +260,19 @@ func (s *Server) getConsentPreferences(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	subjectID := chi.URLParam(r, "subject_id")
 
-	var prefs map[string]any
-	var prefsJSON []byte
-	err := s.db.GetContext(ctx, &prefsJSON,
-		`SELECT COALESCE(details::text,'{}')::json FROM audit_logs
-		 WHERE tenant_id = $1 AND resource = 'consent_preferences' AND resource_id = $2
-		 ORDER BY created_at DESC LIMIT 1`, tenantID, subjectID)
-	if err != nil || len(prefsJSON) == 0 {
-		prefs = map[string]any{"analytics": false, "marketing": false, "necessary": true}
-	} else {
-		json.Unmarshal(prefsJSON, &prefs)
+	var pref store.ConsentPreference
+	err := s.db.GetContext(ctx, &pref,
+		`SELECT * FROM consent_preferences WHERE tenant_id = $1 AND subject_id = $2`, tenantID, subjectID)
+	if err != nil {
+		// Return defaults
+		pkg.JSON(w, map[string]any{
+			"subject_id":  subjectID,
+			"preferences": map[string]any{"analytics": false, "marketing": false, "necessary": true},
+		})
+		return
 	}
+	var prefs map[string]any
+	json.Unmarshal(pref.Preferences, &prefs)
 	pkg.JSON(w, map[string]any{"subject_id": subjectID, "preferences": prefs})
 }
 
@@ -281,14 +286,17 @@ func (s *Server) updateConsentPreferences(w http.ResponseWriter, r *http.Request
 		return
 	}
 	prefsJSON, _ := json.Marshal(prefs)
-	auditLog := store.AuditLog{
-		TenantID:   tenantID,
-		Action:     "consent_preferences_updated",
-		Resource:   "consent_preferences",
-		ResourceID: subjectID,
-		Details:    store.JSON(prefsJSON),
+	ip := r.RemoteAddr
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO consent_preferences (tenant_id, subject_id, preferences, ip, updated_at)
+		 VALUES ($1, $2, $3, $4, NOW())
+		 ON CONFLICT (tenant_id, subject_id) DO UPDATE SET
+		   preferences = EXCLUDED.preferences, ip = EXCLUDED.ip, updated_at = NOW()`,
+		tenantID, subjectID, prefsJSON, ip)
+	if err != nil {
+		pkg.Error(w, err)
+		return
 	}
-	s.auditLogs.Create(ctx, &auditLog)
 	pkg.JSON(w, map[string]any{"subject_id": subjectID, "preferences": prefs, "status": "updated"})
 }
 

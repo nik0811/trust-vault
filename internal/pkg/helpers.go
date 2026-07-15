@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -177,6 +178,15 @@ func JSON(w http.ResponseWriter, data any, status ...int) {
 		code = status[0]
 	}
 	w.WriteHeader(code)
+	// Coerce nil slices/maps to empty so JSON encodes [] / {} instead of null
+	if data != nil {
+		v := reflect.ValueOf(data)
+		if v.Kind() == reflect.Slice && v.IsNil() {
+			data = reflect.MakeSlice(v.Type(), 0, 0).Interface()
+		} else if v.Kind() == reflect.Map && v.IsNil() {
+			data = reflect.MakeMap(v.Type()).Interface()
+		}
+	}
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Error().Err(err).Msg("Failed to encode JSON response")
 	}
