@@ -226,6 +226,12 @@ export default function NewDataSourcePage() {
 
   return (
     <div className="min-h-screen bg-background">
+      {regionToast && (
+        <div className="fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg shadow-lg text-sm font-medium">
+          <CheckCircle className="w-4 h-4" />
+          Region auto-detected: {regionToast}
+        </div>
+      )}
       {/* Header */}
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs
