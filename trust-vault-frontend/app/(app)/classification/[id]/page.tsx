@@ -53,17 +53,20 @@ const columns: Column<ColumnClassification>[] = [
   {
     id: 'confidence',
     header: 'Confidence',
-    cell: (row) => (
-      <div className="flex items-center gap-2">
-        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all"
-            style={{ width: `${row.confidence}%` }}
-          />
+    cell: (row) => {
+      const pct = row.confidence <= 1 ? row.confidence * 100 : row.confidence
+      return (
+        <div className="flex items-center gap-2">
+          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className="text-sm font-medium">{pct.toFixed(0)}%</span>
         </div>
-        <span className="text-sm font-medium">{row.confidence}%</span>
-      </div>
-    ),
+      )
+    },
   },
   {
     id: 'status',
