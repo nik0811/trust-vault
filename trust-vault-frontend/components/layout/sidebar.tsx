@@ -20,6 +20,7 @@ import {
   UserCheck,
   Sparkles,
   ClipboardList,
+  FileText,
   Plug,
   CalendarClock,
   Activity,
@@ -90,6 +91,7 @@ const navGroups: NavGroup[] = [
       { icon: UserCheck, label: 'Privacy Center', href: '/privacy', description: 'DSAR & consent' },
       { icon: Sparkles, label: 'Advisor', href: '/advisor', description: 'AI recommendations' },
       { icon: ClipboardList, label: 'Audit Trail', href: '/audit', description: 'Full history' },
+      { icon: FileText, label: 'Reports', href: '/audit/reports', description: 'Compliance & analytics reports' },
     ],
   },
   {
