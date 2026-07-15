@@ -55,7 +55,12 @@ func (s *Server) createDPIA(w http.ResponseWriter, r *http.Request) {
 
 	steps := defaultDPIASteps()
 	stepsJSON, _ := json.Marshal(steps)
-	dtJSON, _ := json.Marshal(req.DataTypes)
+
+	dataTypes := req.DataTypes
+	if dataTypes == nil {
+		dataTypes = []string{}
+	}
+	dtJSON, _ := json.Marshal(dataTypes)
 
 	riskLevel := req.RiskLevel
 	if riskLevel == "" {
@@ -592,16 +597,30 @@ func (s *Server) createCDE(w http.ResponseWriter, r *http.Request) {
 
 	cde := store.CriticalDataElement{
 		TenantID:           tenantID,
-		DatasourceID:       req.DatasourceID,
 		ColumnName:         req.ColumnName,
 		TableName:          req.TableName,
 		BusinessDefinition: req.BusinessDefinition,
 		DataOwner:          req.DataOwner,
 		Criticality:        criticality,
 	}
-	if err := s.criticalDataElements.Create(ctx, &cde); err != nil {
-		pkg.Error(w, err, http.StatusInternalServerError)
-		return
+
+	// Use raw insert to avoid empty UUID issue with datasource_id
+	if req.DatasourceID != "" {
+		cde.DatasourceID = req.DatasourceID
+		if err := s.criticalDataElements.Create(ctx, &cde); err != nil {
+			pkg.Error(w, err, http.StatusInternalServerError)
+			return
+		}
+	} else {
+		err := s.db.QueryRowContext(ctx,
+			`INSERT INTO critical_data_elements (tenant_id, column_name, table_name, business_definition, data_owner, criticality)
+			 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at, updated_at`,
+			tenantID, cde.ColumnName, cde.TableName, cde.BusinessDefinition, cde.DataOwner, cde.Criticality,
+		).Scan(&cde.ID, &cde.CreatedAt, &cde.UpdatedAt)
+		if err != nil {
+			pkg.Error(w, err, http.StatusInternalServerError)
+			return
+		}
 	}
 
 	s.auditLogs.Create(ctx, &store.AuditLog{
