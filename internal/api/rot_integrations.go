@@ -923,9 +923,7 @@ func (s *Server) getGeography(w http.ResponseWriter, r *http.Request) {
 		FROM datasources
 		WHERE ($1::text = '' OR tenant_id::text = $1::text)
 		  AND (NULLIF(region, '') IS NOT NULL OR NULLIF(country, '') IS NOT NULL)
-		GROUP BY
-			COALESCE(NULLIF(region, ''), NULLIF(country, '')),
-			COALESCE(NULLIF(country, ''), NULLIF(region, ''))
+		GROUP BY region, country
 	`
 
 	_ = s.db.SelectContext(ctx, &regions, query, tenantID)
