@@ -139,9 +139,12 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 
 		// Obsolete: datasources not scanned in 90+ days
 		res, _ := s.db.ExecContext(bgCtx,
-			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, created_at)
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, last_access, created_at)
 			 SELECT gen_random_uuid(), $1, 'obsolete', id::text,
-			        'Datasource not scanned in 90+ days', 0.85, 0, NOW()
+			        'Datasource not scanned in 90+ days', 0.85,
+			        0,
+			        COALESCE(last_scanned, updated_at, created_at),
+			        NOW()
 			 FROM datasources
 			 WHERE tenant_id = $1
 			   AND (last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '90 days')
@@ -152,14 +155,18 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 
 		// Redundant: dataset_ids with 3+ classification entries (scanned multiple times)
 		res, _ = s.db.ExecContext(bgCtx,
-			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, created_at)
-			 SELECT gen_random_uuid(), $1, 'redundant', dataset_id,
-			        'Dataset appears in multiple classification runs', 0.7, 0, NOW()
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, last_access, created_at)
+			 SELECT gen_random_uuid(), $1, 'redundant', sub.dataset_id,
+			        'Dataset appears in multiple classification runs', 0.7,
+			        sub.cnt * 1024,
+			        COALESCE(d.last_scanned, d.updated_at, d.created_at),
+			        NOW()
 			 FROM (
 			   SELECT dataset_id, COUNT(*) as cnt
 			   FROM classifications WHERE tenant_id = $1
 			   GROUP BY dataset_id HAVING COUNT(*) >= 3
 			 ) sub
+			 LEFT JOIN datasources d ON d.id::text = sub.dataset_id
 			 ON CONFLICT DO NOTHING`, tenantID)
 		if res != nil {
 			redundant, _ = res.RowsAffected()
@@ -167,15 +174,19 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 
 		// Trivial: classifications with very low confidence (< 0.2)
 		res, _ = s.db.ExecContext(bgCtx,
-			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, created_at)
-			 SELECT gen_random_uuid(), $1, 'trivial', dataset_id,
-			        'All classifications have low confidence (< 20%)', 0.3, 0, NOW()
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, last_access, created_at)
+			 SELECT gen_random_uuid(), $1, 'trivial', sub.dataset_id,
+			        'All classifications have low confidence (< 20%)', 0.3,
+			        sub.cnt * 512,
+			        COALESCE(d.last_scanned, d.updated_at, d.created_at),
+			        NOW()
 			 FROM (
-			   SELECT dataset_id
+			   SELECT dataset_id, COUNT(*) as cnt
 			   FROM classifications WHERE tenant_id = $1
 			   GROUP BY dataset_id
 			   HAVING MAX(confidence) < 0.2
 			 ) sub
+			 LEFT JOIN datasources d ON d.id::text = sub.dataset_id
 			 ON CONFLICT DO NOTHING`, tenantID)
 		if res != nil {
 			trivial, _ = res.RowsAffected()
