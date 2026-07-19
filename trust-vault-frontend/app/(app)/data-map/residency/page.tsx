@@ -7,7 +7,10 @@ import { Breadcrumbs } from '@/components/base/breadcrumbs'
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
 function authHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
+  // Token is stored in cookies as 'accessToken' (same as axios api client)
+  const token = typeof document !== 'undefined'
+    ? document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('accessToken='))?.split('=')[1] ?? ''
+    : ''
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
