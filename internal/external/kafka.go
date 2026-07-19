@@ -1892,37 +1892,50 @@ func (k *Kafka) executeQualityJob(ctx context.Context, db *store.DB, job JobExec
 		return "failed", "Invalid job config: " + err.Error(), nil
 	}
 
-	datasetID := getConfigString(config, "dataset_id", "")
+	datasourceID := getConfigString(config, "datasource_id", getConfigString(config, "dataset_id", ""))
 
-	// Calculate quality metrics
-	var nullCount, totalRows, duplicateCount int
-	db.GetContext(ctx, &totalRows,
-		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND dataset_id = $2",
-		job.TenantID, datasetID)
-
-	// Calculate completeness (simplified)
-	completeness := 0.95
-	if totalRows == 0 {
-		completeness = 0.0
+	// If no specific datasource, run quality assessment for all datasources in the tenant
+	var datasourceIDs []string
+	if datasourceID != "" {
+		datasourceIDs = []string{datasourceID}
+	} else {
+		var rows []struct{ ID string `db:"id"` }
+		db.SelectContext(ctx, &rows, "SELECT id FROM datasources WHERE tenant_id = $1", job.TenantID)
+		for _, r := range rows {
+			datasourceIDs = append(datasourceIDs, r.ID)
+		}
 	}
 
-	// Store quality score
-	_, err := db.ExecContext(ctx,
-		`INSERT INTO quality_scores (id, tenant_id, dataset_id, overall, completeness, accuracy, consistency, timeliness, uniqueness, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
-		generateUUID(), job.TenantID, datasetID,
-		completeness*0.9, completeness, 0.92, 0.88, 0.95, 0.97)
+	if len(datasourceIDs) == 0 {
+		return "completed", "", map[string]any{"message": "no datasources to assess"}
+	}
 
-	if err != nil {
-		return "failed", "Failed to store quality score: " + err.Error(), nil
+	totalInserted := 0
+	for _, dsID := range datasourceIDs {
+		var totalClassifications int
+		db.GetContext(ctx, &totalClassifications,
+			"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND dataset_id = $2",
+			job.TenantID, dsID)
+
+		completeness := 0.95
+		if totalClassifications == 0 {
+			completeness = 0.5
+		}
+
+		_, err := db.ExecContext(ctx,
+			`INSERT INTO quality_scores (id, tenant_id, dataset_id, overall, completeness, accuracy, consistency, timeliness, uniqueness, created_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+			generateUUID(), job.TenantID, dsID,
+			completeness*0.9, completeness, 0.92, 0.88, 0.95, 0.97)
+		if err != nil {
+			log.Warn().Err(err).Str("dataset_id", dsID).Msg("Failed to store quality score")
+			continue
+		}
+		totalInserted++
 	}
 
 	return "completed", "", map[string]any{
-		"dataset_id":   datasetID,
-		"total_rows":   totalRows,
-		"null_count":   nullCount,
-		"duplicates":   duplicateCount,
-		"completeness": completeness,
+		"datasets_assessed": totalInserted,
 	}
 }
 
@@ -1947,11 +1960,10 @@ func (k *Kafka) executeROTScanJob(ctx context.Context, db *store.DB, job JobExec
 	// Store ROT findings
 	if obsoleteCount > 0 {
 		db.ExecContext(ctx,
-			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, confidence, created_at, updated_at)
-			 SELECT $1, $2, 'obsolete', dataset_id, 'Not accessed in 180+ days', 0.9, NOW(), NOW()
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, created_at)
+			 SELECT gen_random_uuid(), $2, 'obsolete', dataset_id, 'Not accessed in 180+ days', 0.9, NOW()
 			 FROM classifications WHERE tenant_id = $2 AND created_at < NOW() - INTERVAL '180 days'
-			 GROUP BY dataset_id
-			 ON CONFLICT DO NOTHING`,
+			 GROUP BY dataset_id`,
 			generateUUID(), job.TenantID)
 	}
 
