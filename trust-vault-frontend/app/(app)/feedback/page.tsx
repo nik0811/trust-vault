@@ -35,7 +35,7 @@ export default function FeedbackPage() {
   }, [correctionsError])
 
   const corrections: Correction[] = correctionsRaw || []
-  const trend: number[] = trendRaw || []
+  const trend: {week: string, count: number}[] = trendRaw || []
   const isLoading = correctionsLoading || trendLoading || statsLoading
 
   return (
@@ -76,16 +76,16 @@ export default function FeedbackPage() {
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
             <div className="rounded-lg border border-border bg-card p-6">
               <h3 className="mb-2 text-lg font-semibold text-foreground">Correction Trend</h3>
-              {trend.length > 0 ? (
+              {trend.length > 0 && trend.some(t => t.count > 0) ? (
                 <>
                   <p className="mb-6 text-sm text-green-600 dark:text-green-400">
-                    {trend[0] > trend[trend.length - 1] ? 'Decreasing — model is improving' : 'Stable'}
+                    {trend[0].count > trend[trend.length - 1].count ? 'Decreasing — model is improving' : 'Stable'}
                   </p>
                   <div className="flex h-36 items-end gap-2" role="img" aria-label="Weekly corrections trend">
-                    {trend.map((v, i) => (
+                    {trend.map((t, i) => (
                       <div key={i} className="flex flex-1 flex-col items-center gap-1">
-                        <div className="w-full rounded-t bg-primary/70" style={{ height: `${(v / Math.max(...trend, 1)) * 100}%` }} />
-                        <span className="text-[10px] text-muted-foreground">W{i + 1}</span>
+                        <div className="w-full rounded-t bg-primary/70" style={{ height: `${(t.count / Math.max(...trend.map(x => x.count), 1)) * 100}%` }} />
+                        <span className="text-[10px] text-muted-foreground">{t.week}</span>
                       </div>
                     ))}
                   </div>

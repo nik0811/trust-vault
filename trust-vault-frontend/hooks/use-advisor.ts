@@ -453,7 +453,7 @@ export function useCorrectionTrend() {
   return useQuery({
     queryKey: ['correction-trend'],
     queryFn: async () => {
-      const response = await api.get<number[]>('/feedback/trend')
+      const response = await api.get<{week: string, count: number}[]>('/feedback/trend')
       return response.data
     },
   })

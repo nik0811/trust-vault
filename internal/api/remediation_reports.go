@@ -1086,8 +1086,13 @@ func (s *Server) listCorrections(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	feedbackList, err := s.feedback.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if err != nil || feedbackList == nil {
+	var feedbackList []store.Feedback
+	if tenantID == "" {
+		s.db.SelectContext(ctx, &feedbackList, `SELECT * FROM feedback ORDER BY created_at DESC LIMIT 100`)
+	} else {
+		s.db.SelectContext(ctx, &feedbackList, `SELECT * FROM feedback WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 100`, tenantID)
+	}
+	if feedbackList == nil {
 		feedbackList = []store.Feedback{}
 	}
 
@@ -1138,18 +1143,29 @@ func (s *Server) getCorrectionTrend(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	// Get corrections per day for last 7 days
-	var trend []int
+	type TrendPoint struct {
+		Week  string `json:"week"`
+		Count int    `json:"count"`
+	}
+	trend := make([]TrendPoint, 7)
 	for i := 6; i >= 0; i-- {
 		var count int
-		s.db.GetContext(ctx, &count,
-			`SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 
-			 AND created_at >= NOW() - INTERVAL '1 day' * $2 
-			 AND created_at < NOW() - INTERVAL '1 day' * $3`,
-			tenantID, i+1, i)
-		trend = append(trend, count)
+		weekLabel := fmt.Sprintf("W%d", 7-i)
+		if tenantID == "" {
+			s.db.GetContext(ctx, &count,
+				`SELECT COUNT(*) FROM feedback
+				 WHERE created_at >= NOW() - INTERVAL '1 day' * $1
+				 AND created_at < NOW() - INTERVAL '1 day' * $2`,
+				i+1, i)
+		} else {
+			s.db.GetContext(ctx, &count,
+				`SELECT COUNT(*) FROM feedback WHERE tenant_id = $1
+				 AND created_at >= NOW() - INTERVAL '1 day' * $2
+				 AND created_at < NOW() - INTERVAL '1 day' * $3`,
+				tenantID, i+1, i)
+		}
+		trend[6-i] = TrendPoint{Week: weekLabel, Count: count}
 	}
-
 	pkg.JSON(w, trend)
 }
 
