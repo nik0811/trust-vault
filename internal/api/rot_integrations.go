@@ -96,82 +96,81 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	// Create a scan log for tracking
-	scanLog := store.ScanLog{
-		TenantID:     tenantID,
-		DatasourceID: "rot-scan",
-		Status:       "running",
-		Message:      "ROT scan started",
-	}
-	s.scanLogs.Create(ctx, &scanLog)
-
 	// Emit SSE event for scan started
 	events.Emit("rot.scan.started", map[string]any{
-		"scan_id":   scanLog.ID,
 		"tenant_id": tenantID,
 		"status":    "running",
 		"message":   "ROT scan started - analyzing data for redundant, obsolete, and trivial content",
 	})
 
-	s.kafka.Produce(ctx, "job-executions", tenantID, map[string]any{
-		"job_id":    "",
-		"tenant_id": tenantID,
-		"type":      "rot_scan",
-		"config": map[string]any{
-			"scan_id": scanLog.ID,
-		},
-	})
+	scanID := pkg.GenerateID()
+	pkg.JSON(w, map[string]any{"status": "scanning", "scan_id": scanID})
 
-	// Poll scan_log from gateway side so SSE completion fires in the gateway process
-	// (worker's events.Emit goes to its own isolated bus, not the gateway's SSE clients)
-	startedAt := time.Now()
+	// Run synchronously in gateway goroutine — avoids cross-container SSE bus problem
 	go func() {
-		deadline := time.Now().Add(90 * time.Second)
-		for time.Now().Before(deadline) {
-			time.Sleep(3 * time.Second)
-			var logStatus string
-			s.db.GetContext(context.Background(), &logStatus,
-				`SELECT status FROM scan_logs WHERE id = $1`, scanLog.ID)
-			if logStatus == "success" || logStatus == "failed" || logStatus == "completed" {
-				var summary struct {
-					Total     int `db:"total"`
-					Redundant int `db:"redundant"`
-					Obsolete  int `db:"obsolete"`
-					Trivial   int `db:"trivial"`
-				}
-				s.db.GetContext(context.Background(), &summary,
-					`SELECT COUNT(*) as total,
-					        COUNT(*) FILTER (WHERE category='redundant') as redundant,
-					        COUNT(*) FILTER (WHERE category='obsolete') as obsolete,
-					        COUNT(*) FILTER (WHERE category='trivial') as trivial
-					 FROM rot_data WHERE tenant_id = $1`, tenantID)
-				events.Emit("rot.scan.completed", map[string]any{
-					"tenant_id": tenantID,
-					"scan_id":   scanLog.ID,
-					"message": fmt.Sprintf("ROT scan completed: %d items found (%d redundant, %d obsolete, %d trivial)",
-						summary.Total, summary.Redundant, summary.Obsolete, summary.Trivial),
-					"total":     summary.Total,
-					"redundant": summary.Redundant,
-					"obsolete":  summary.Obsolete,
-					"trivial":   summary.Trivial,
-				})
-				return
-			}
+		bgCtx := context.Background()
+
+		// Clear previous findings
+		s.db.ExecContext(bgCtx, `DELETE FROM rot_data WHERE tenant_id = $1`, tenantID)
+
+		var obsolete, redundant, trivial int64
+
+		// Obsolete: datasources not scanned in 90+ days
+		res, _ := s.db.ExecContext(bgCtx,
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, created_at)
+			 SELECT gen_random_uuid(), $1, 'obsolete', id::text,
+			        'Datasource not scanned in 90+ days', 0.85, 0, NOW()
+			 FROM datasources
+			 WHERE tenant_id = $1
+			   AND (last_scanned IS NULL OR last_scanned < NOW() - INTERVAL '90 days')
+			 ON CONFLICT DO NOTHING`, tenantID)
+		if res != nil {
+			obsolete, _ = res.RowsAffected()
 		}
-		_ = startedAt
-		// Timeout — emit completion so UI never hangs
+
+		// Redundant: dataset_ids with 3+ classification entries (scanned multiple times)
+		res, _ = s.db.ExecContext(bgCtx,
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, created_at)
+			 SELECT gen_random_uuid(), $1, 'redundant', dataset_id,
+			        'Dataset appears in multiple classification runs', 0.7, 0, NOW()
+			 FROM (
+			   SELECT dataset_id, COUNT(*) as cnt
+			   FROM classifications WHERE tenant_id = $1
+			   GROUP BY dataset_id HAVING COUNT(*) >= 3
+			 ) sub
+			 ON CONFLICT DO NOTHING`, tenantID)
+		if res != nil {
+			redundant, _ = res.RowsAffected()
+		}
+
+		// Trivial: classifications with very low confidence (< 0.2)
+		res, _ = s.db.ExecContext(bgCtx,
+			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, created_at)
+			 SELECT gen_random_uuid(), $1, 'trivial', dataset_id,
+			        'All classifications have low confidence (< 20%)', 0.3, 0, NOW()
+			 FROM (
+			   SELECT dataset_id
+			   FROM classifications WHERE tenant_id = $1
+			   GROUP BY dataset_id
+			   HAVING MAX(confidence) < 0.2
+			 ) sub
+			 ON CONFLICT DO NOTHING`, tenantID)
+		if res != nil {
+			trivial, _ = res.RowsAffected()
+		}
+
+		total := obsolete + redundant + trivial
 		events.Emit("rot.scan.completed", map[string]any{
 			"tenant_id": tenantID,
-			"scan_id":   scanLog.ID,
-			"message":   "ROT scan completed (timeout)",
-			"total":     0,
+			"scan_id":   scanID,
+			"message": fmt.Sprintf("ROT scan completed: %d items found (%d redundant, %d obsolete, %d trivial)",
+				total, redundant, obsolete, trivial),
+			"total":     total,
+			"redundant": redundant,
+			"obsolete":  obsolete,
+			"trivial":   trivial,
 		})
 	}()
-
-	pkg.JSON(w, map[string]any{
-		"status":  "scanning",
-		"scan_id": scanLog.ID,
-	})
 }
 
 func (s *Server) remediateROT(w http.ResponseWriter, r *http.Request) {
