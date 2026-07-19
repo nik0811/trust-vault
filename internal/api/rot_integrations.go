@@ -67,18 +67,30 @@ func (s *Server) getROTDatasets(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	limit, offset := pkg.ParseListOpts(r)
 
-	var rotData []store.ROTData
+	type rotDatasetRow struct {
+		store.ROTData
+		DatasetName string `db:"dataset_name" json:"dataset_name"`
+	}
+
+	var rows []rotDatasetRow
 	if tenantID == "" {
-		s.db.SelectContext(ctx, &rotData,
-			`SELECT * FROM rot_data ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+		s.db.SelectContext(ctx, &rows,
+			`SELECT r.*, COALESCE(d.name, r.dataset_id) AS dataset_name
+			 FROM rot_data r
+			 LEFT JOIN datasources d ON d.id::text = r.dataset_id
+			 ORDER BY r.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
 	} else {
-		s.db.SelectContext(ctx, &rotData,
-			`SELECT * FROM rot_data WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, tenantID, limit, offset)
+		s.db.SelectContext(ctx, &rows,
+			`SELECT r.*, COALESCE(d.name, r.dataset_id) AS dataset_name
+			 FROM rot_data r
+			 LEFT JOIN datasources d ON d.id::text = r.dataset_id
+			 WHERE r.tenant_id = $1
+			 ORDER BY r.created_at DESC LIMIT $2 OFFSET $3`, tenantID, limit, offset)
 	}
-	if rotData == nil {
-		rotData = []store.ROTData{}
+	if rows == nil {
+		rows = []rotDatasetRow{}
 	}
-	pkg.JSON(w, rotData)
+	pkg.JSON(w, rows)
 }
 
 func (s *Server) listROTItems(w http.ResponseWriter, r *http.Request) {

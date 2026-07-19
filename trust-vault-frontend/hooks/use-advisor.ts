@@ -164,6 +164,7 @@ export interface ROTSummary {
 export interface ROTDataset {
   id: string
   dataset_id: string
+  dataset_name: string
   category: 'redundant' | 'obsolete' | 'trivial'
   score: number
   reason: string
