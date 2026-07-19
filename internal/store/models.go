@@ -304,15 +304,15 @@ type Integration struct {
 
 // ROTData stores ROT analysis results
 type ROTData struct {
-	ID          string    `db:"id" json:"id"`
-	TenantID    string    `db:"tenant_id" json:"-"`
-	DatasetID   string    `db:"dataset_id" json:"dataset_id"`
-	Category    string    `db:"category" json:"category" validate:"oneof=redundant obsolete trivial"`
-	Score       float64   `db:"score" json:"score"`
-	Reason      string    `db:"reason" json:"reason"`
-	SizeBytes   int64     `db:"size_bytes" json:"size_bytes"`
-	LastAccess  time.Time `db:"last_access" json:"last_access"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	ID         string     `db:"id" json:"id"`
+	TenantID   string     `db:"tenant_id" json:"-"`
+	DatasetID  string     `db:"dataset_id" json:"dataset_id"`
+	Category   string     `db:"category" json:"category" validate:"oneof=redundant obsolete trivial"`
+	Score      float64    `db:"score" json:"score"`
+	Reason     string     `db:"reason" json:"reason"`
+	SizeBytes  int64      `db:"size_bytes" json:"size_bytes"`
+	LastAccess *time.Time `db:"last_access" json:"last_access"`
+	CreatedAt  time.Time  `db:"created_at" json:"created_at"`
 }
 
 // RemediationAction stores remediation tasks
