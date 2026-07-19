@@ -47,13 +47,18 @@ func (s *Server) getROTSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSON(w, map[string]any{
-		"total_rot":      stats.TotalROT,
-		"redundant":      stats.Redundant,
-		"obsolete":       stats.Obsolete,
-		"trivial":        stats.Trivial,
-		"total_size_gb":  float64(stats.TotalBytes) / 1e9,
-		"percentage":     percentage,
-		"estimated_cost": float64(stats.TotalBytes) / 1e9 * 100,
+		"total_rot":           stats.TotalROT,
+		"total_rot_data":      stats.TotalROT,
+		"redundant":           stats.Redundant,
+		"redundant_count":     stats.Redundant,
+		"obsolete":            stats.Obsolete,
+		"obsolete_count":      stats.Obsolete,
+		"trivial":             stats.Trivial,
+		"trivial_count":       stats.Trivial,
+		"total_size_gb":       float64(stats.TotalBytes) / 1e9,
+		"potential_savings_gb": float64(stats.TotalBytes) / 1e9,
+		"percentage":          percentage,
+		"estimated_cost":      float64(stats.TotalBytes) / 1e9 * 100,
 	})
 }
 
@@ -64,6 +69,18 @@ func (s *Server) getROTDatasets(w http.ResponseWriter, r *http.Request) {
 
 	rotData, _ := s.rotData.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
 	pkg.JSON(w, rotData)
+}
+
+func (s *Server) listROTItems(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	limit, offset := pkg.ParseListOpts(r)
+
+	items, _ := s.rotData.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
+	if items == nil {
+		items = []store.ROTData{}
+	}
+	pkg.JSON(w, items)
 }
 
 func (s *Server) getDuplicates(w http.ResponseWriter, r *http.Request) {
@@ -96,9 +113,13 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 		"message":   "ROT scan started - analyzing data for redundant, obsolete, and trivial content",
 	})
 
-	s.kafka.Produce(ctx, "rot-scan-jobs", tenantID, map[string]any{
+	s.kafka.Produce(ctx, "job-executions", tenantID, map[string]any{
+		"job_id":    "",
 		"tenant_id": tenantID,
-		"scan_id":   scanLog.ID,
+		"type":      "rot_scan",
+		"config": map[string]any{
+			"scan_id": scanLog.ID,
+		},
 	})
 
 	pkg.JSON(w, map[string]any{

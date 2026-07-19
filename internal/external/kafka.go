@@ -209,8 +209,13 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		
 		// Extract database name from config
 		var configMap map[string]any
-		if err := json.Unmarshal(ds.Config, &configMap); err != nil {
-			log.Warn().Err(err).Msg("Failed to parse datasource config")
+		if !isEmptyConfig(ds.Config) {
+			if err := json.Unmarshal(ds.Config, &configMap); err != nil {
+				log.Warn().Err(err).Msg("Failed to parse datasource config")
+			}
+		}
+		if configMap == nil {
+			configMap = map[string]any{}
 		}
 		databaseName := ""
 		if db, ok := configMap["database"].(string); ok {
@@ -754,24 +759,40 @@ func sampleColumnValues(ctx context.Context, ds *store.DataSource, tableName, co
 	}
 	switch ds.Type {
 	case "postgresql", "postgres", "mysql", "mssql", "oracle":
+		if isEmptyConfig(ds.Config) {
+			log.Debug().Str("datasource_id", ds.ID).Msg("value_sampling_skipped: empty config")
+			return nil, nil
+		}
 		var config map[string]any
 		if err := json.Unmarshal(ds.Config, &config); err != nil {
 			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
 		}
 		return sampleDBValues(ctx, ds.Type, config, tableName, columnName, limit)
 	case "csv", "file", "excel":
+		if isEmptyConfig(ds.Config) {
+			log.Debug().Str("datasource_id", ds.ID).Msg("value_sampling_skipped: empty config")
+			return nil, nil
+		}
 		var config map[string]any
 		if err := json.Unmarshal(ds.Config, &config); err != nil {
 			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
 		}
 		return sampleFileValues(ctx, config, columnName, limit)
 	case "s3", "gcs", "azure_blob":
+		if isEmptyConfig(ds.Config) {
+			log.Debug().Str("datasource_id", ds.ID).Msg("value_sampling_skipped: empty config")
+			return nil, nil
+		}
 		var config map[string]any
 		if err := json.Unmarshal(ds.Config, &config); err != nil {
 			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
 		}
 		return sampleObjectStorageValues(ctx, ds.Type, config, columnName, limit)
 	case "rest_api", "api":
+		if isEmptyConfig(ds.Config) {
+			log.Debug().Str("datasource_id", ds.ID).Msg("value_sampling_skipped: empty config")
+			return nil, nil
+		}
 		var config map[string]any
 		if err := json.Unmarshal(ds.Config, &config); err != nil {
 			return nil, fmt.Errorf("failed to parse datasource config: %w", err)
@@ -1655,6 +1676,17 @@ func (k *Kafka) ConsumeScanJobs(ctx context.Context, db *store.DB) {
 }
 
 // Helper functions for config parsing
+
+// isEmptyConfig returns true when the raw JSON config is absent, null, "none", or "{}".
+// This guards against the "none" string stored for datasources created without a config.
+func isEmptyConfig(raw []byte) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	s := strings.TrimSpace(string(raw))
+	return s == "" || s == "null" || s == "none" || s == `""` || s == "{}"
+}
+
 func getConfigString(config map[string]any, key, defaultVal string) string {
 	if v, ok := config[key]; ok {
 		if s, ok := v.(string); ok {
@@ -1956,37 +1988,99 @@ func (k *Kafka) executeQualityJob(ctx context.Context, db *store.DB, job JobExec
 
 // executeROTScanJob scans for redundant, obsolete, trivial data
 func (k *Kafka) executeROTScanJob(ctx context.Context, db *store.DB, job JobExecutionMessage) (string, string, map[string]any) {
-	// Find datasets not accessed in 6+ months
-	var obsoleteCount int
-	db.GetContext(ctx, &obsoleteCount,
-		`SELECT COUNT(DISTINCT dataset_id) FROM classifications 
-		 WHERE tenant_id = $1 AND created_at < NOW() - INTERVAL '180 days'`,
-		job.TenantID)
+	tenantID := job.TenantID
 
-	// Find duplicate datasets (same hash)
-	var duplicateCount int
-	db.GetContext(ctx, &duplicateCount,
-		`SELECT COUNT(*) FROM (
-			SELECT dataset_id, COUNT(*) as cnt FROM classifications 
-			WHERE tenant_id = $1 GROUP BY dataset_id, value HAVING COUNT(*) > 1
-		) as dups`,
-		job.TenantID)
+	// Clear previous ROT findings for this tenant to avoid stale data
+	db.ExecContext(ctx, `DELETE FROM rot_data WHERE tenant_id = $1`, tenantID)
 
-	// Store ROT findings
-	if obsoleteCount > 0 {
-		db.ExecContext(ctx,
-			`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, created_at)
-			 SELECT gen_random_uuid(), $2, 'obsolete', dataset_id, 'Not accessed in 180+ days', 0.9, NOW()
-			 FROM classifications WHERE tenant_id = $2 AND created_at < NOW() - INTERVAL '180 days'
-			 GROUP BY dataset_id`,
-			generateUUID(), job.TenantID)
+	// Obsolete: datasources not scanned in 90+ days
+	var obsoleteInserted int64
+	result, err := db.ExecContext(ctx,
+		`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, last_access, created_at)
+		 SELECT gen_random_uuid(), $1, 'obsolete', id::text,
+		        'Datasource not scanned in 90+ days',
+		        0.85,
+		        0,
+		        COALESCE(updated_at, created_at),
+		        NOW()
+		 FROM datasources
+		 WHERE tenant_id = $1
+		   AND COALESCE(updated_at, created_at) < NOW() - INTERVAL '90 days'
+		 ON CONFLICT DO NOTHING`,
+		tenantID)
+	if err == nil {
+		obsoleteInserted, _ = result.RowsAffected()
 	}
 
-	return "completed", "", map[string]any{
-		"obsolete_datasets":  obsoleteCount,
-		"duplicate_datasets": duplicateCount,
-		"total_rot":          obsoleteCount + duplicateCount,
+	// Redundant: datasets (by name pattern) that appear in multiple datasources
+	// We detect this by finding dataset_id values that share the same column names across different scan results
+	var redundantInserted int64
+	r2, err := db.ExecContext(ctx,
+		`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, last_access, created_at)
+		 SELECT gen_random_uuid(), $1, 'redundant', dataset_id,
+		        'Same dataset appears in multiple classification results',
+		        0.75,
+		        0,
+		        NOW(),
+		        NOW()
+		 FROM (
+		   SELECT dataset_id, COUNT(*) AS scan_count
+		   FROM classifications
+		   WHERE tenant_id = $1
+		   GROUP BY dataset_id
+		   HAVING COUNT(*) > 3
+		 ) dups
+		 ON CONFLICT DO NOTHING`,
+		tenantID)
+	if err == nil {
+		redundantInserted, _ = r2.RowsAffected()
 	}
+
+	// Trivial: columns with very low cardinality (< 2 distinct values across all scans)
+	// Proxy: classification results where entity_type is empty or value is a single repeated token
+	var trivialInserted int64
+	r3, err := db.ExecContext(ctx,
+		`INSERT INTO rot_data (id, tenant_id, category, dataset_id, reason, score, size_bytes, last_access, created_at)
+		 SELECT gen_random_uuid(), $1, 'trivial', dataset_id,
+		        'Dataset has only trivial/low-value classifications',
+		        0.6,
+		        0,
+		        NOW(),
+		        NOW()
+		 FROM (
+		   SELECT dataset_id
+		   FROM classifications
+		   WHERE tenant_id = $1
+		     AND (entity_type = '' OR entity_type IS NULL OR confidence < 0.2)
+		   GROUP BY dataset_id
+		   HAVING COUNT(*) > 0
+		 ) trivial_ds
+		 WHERE trivial_ds.dataset_id NOT IN (
+		   SELECT DISTINCT dataset_id FROM rot_data WHERE tenant_id = $1
+		 )
+		 ON CONFLICT DO NOTHING`,
+		tenantID)
+	if err == nil {
+		trivialInserted, _ = r3.RowsAffected()
+	}
+
+	totalROT := obsoleteInserted + redundantInserted + trivialInserted
+
+	result_ := map[string]any{
+		"obsolete_datasets":  obsoleteInserted,
+		"redundant_datasets": redundantInserted,
+		"trivial_datasets":   trivialInserted,
+		"total_rot":          totalROT,
+	}
+
+	// Emit SSE so the frontend can close the spinner
+	events.Emit("rot.scan.completed", map[string]any{
+		"tenant_id": tenantID,
+		"result":    result_,
+		"message":   fmt.Sprintf("ROT scan completed: %d items found (%d obsolete, %d redundant, %d trivial)", totalROT, obsoleteInserted, redundantInserted, trivialInserted),
+	})
+
+	return "completed", "", result_
 }
 
 // executeComplianceJob checks compliance status

@@ -100,6 +100,12 @@ func (s *Server) createDataSource(w http.ResponseWriter, r *http.Request) {
 	ds.TenantID = tenantID
 	ds.Status = "pending"
 
+	// Normalize config: ensure it's valid JSON, not "none" or empty
+	configStr := strings.TrimSpace(string(ds.Config))
+	if configStr == "" || configStr == "null" || configStr == "none" || configStr == `""` {
+		ds.Config = store.JSON(`{}`)
+	}
+
 	if err := s.datasources.Create(ctx, &ds); err != nil {
 		pkg.Error(w, err)
 		return

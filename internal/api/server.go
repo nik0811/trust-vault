@@ -456,8 +456,10 @@ func (s *Server) setupRoutes() {
 			r.Route("/rot", func(r chi.Router) {
 				r.Get("/summary", s.getROTSummary)
 				r.Get("/datasets", s.getROTDatasets)
+				r.Get("/items", s.listROTItems)
 				r.Get("/duplicates", s.getDuplicates)
 				r.Post("/scan", s.triggerROTScan)
+				r.Post("/analyze", s.triggerROTScan)
 				r.Get("/scan/{id}/status", s.getROTScanStatus)
 				r.Post("/remediate", s.remediateROT)
 			})
