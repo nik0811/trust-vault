@@ -922,9 +922,10 @@ func (s *Server) getGeography(w http.ResponseWriter, r *http.Request) {
 			false AS cross_border
 		FROM datasources
 		WHERE ($1::text = '' OR tenant_id::text = $1::text)
-		  AND (region IS NOT NULL AND region != '' OR country IS NOT NULL AND country != '')
-		GROUP BY COALESCE(NULLIF(region, ''), NULLIF(country, '')),
-		         COALESCE(NULLIF(country, ''), NULLIF(region, ''))
+		  AND (NULLIF(region, '') IS NOT NULL OR NULLIF(country, '') IS NOT NULL)
+		GROUP BY
+			COALESCE(NULLIF(region, ''), NULLIF(country, '')),
+			COALESCE(NULLIF(country, ''), NULLIF(region, ''))
 	`
 
 	_ = s.db.SelectContext(ctx, &regions, query, tenantID)
