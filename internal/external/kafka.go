@@ -2073,12 +2073,17 @@ func (k *Kafka) executeROTScanJob(ctx context.Context, db *store.DB, job JobExec
 		"total_rot":          totalROT,
 	}
 
-	// Emit SSE so the frontend can close the spinner
-	events.Emit("rot.scan.completed", map[string]any{
-		"tenant_id": tenantID,
-		"result":    result_,
-		"message":   fmt.Sprintf("ROT scan completed: %d items found (%d obsolete, %d redundant, %d trivial)", totalROT, obsoleteInserted, redundantInserted, trivialInserted),
-	})
+	// Update scan_log so the gateway SSE poller detects completion
+	var scanCfg map[string]any
+	if len(job.Config) > 0 && string(job.Config) != "null" {
+		json.Unmarshal(job.Config, &scanCfg)
+	}
+	if scanCfg != nil {
+		if scanID, ok := scanCfg["scan_id"].(string); ok && scanID != "" {
+			db.ExecContext(ctx, `UPDATE scan_logs SET status = 'success', message = $1, updated_at = NOW() WHERE id = $2`,
+				fmt.Sprintf("ROT scan completed: %d items found", totalROT), scanID)
+		}
+	}
 
 	return "completed", "", result_
 }

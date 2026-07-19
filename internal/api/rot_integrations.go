@@ -122,19 +122,17 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	// Poll from gateway side so SSE completion event reaches connected clients.
-	// (Worker emits to its own in-process bus; gateway has the SSE clients.)
+	// Poll scan_log from gateway side so SSE completion fires in the gateway process
+	// (worker's events.Emit goes to its own isolated bus, not the gateway's SSE clients)
+	startedAt := time.Now()
 	go func() {
 		deadline := time.Now().Add(90 * time.Second)
-		var prevCount int
-		s.db.GetContext(context.Background(), &prevCount,
-			`SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1`, tenantID)
 		for time.Now().Before(deadline) {
 			time.Sleep(3 * time.Second)
-			var cur int
-			s.db.GetContext(context.Background(), &cur,
-				`SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1`, tenantID)
-			if cur != prevCount {
+			var logStatus string
+			s.db.GetContext(context.Background(), &logStatus,
+				`SELECT status FROM scan_logs WHERE id = $1`, scanLog.ID)
+			if logStatus == "success" || logStatus == "failed" || logStatus == "completed" {
 				var summary struct {
 					Total     int `db:"total"`
 					Redundant int `db:"redundant"`
@@ -160,11 +158,12 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		// Timeout — emit completion anyway so UI doesn't stay stuck
+		_ = startedAt
+		// Timeout — emit completion so UI never hangs
 		events.Emit("rot.scan.completed", map[string]any{
 			"tenant_id": tenantID,
 			"scan_id":   scanLog.ID,
-			"message":   "ROT scan completed",
+			"message":   "ROT scan completed (timeout)",
 			"total":     0,
 		})
 	}()
