@@ -18,8 +18,81 @@ func (s *Server) listRemediationActions(w http.ResponseWriter, r *http.Request) 
 	tenantID := pkg.TenantFromCtx(ctx)
 	limit, offset := pkg.ParseListOpts(r)
 
-	actions, _ := s.remediationActions.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
-	pkg.JSON(w, actions)
+	type actionRow struct {
+		store.RemediationAction
+		DatasetName string `db:"dataset_name" json:"dataset_name"`
+	}
+
+	var rows []actionRow
+	if tenantID == "" {
+		s.db.SelectContext(ctx, &rows,
+			`SELECT r.*, COALESCE(d.name, r.dataset_id::text) AS dataset_name
+			 FROM remediation_actions r
+			 LEFT JOIN datasources d ON d.id::text = r.dataset_id
+			 ORDER BY r.created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+	} else {
+		s.db.SelectContext(ctx, &rows,
+			`SELECT r.*, COALESCE(d.name, r.dataset_id::text) AS dataset_name
+			 FROM remediation_actions r
+			 LEFT JOIN datasources d ON d.id::text = r.dataset_id
+			 WHERE r.tenant_id = $1
+			 ORDER BY r.created_at DESC LIMIT $2 OFFSET $3`, tenantID, limit, offset)
+	}
+	if rows == nil {
+		rows = []actionRow{}
+	}
+	pkg.JSON(w, rows)
+}
+
+func (s *Server) getRemediationLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	actionID := chi.URLParam(r, "id")
+
+	var logs []store.AuditLog
+	s.db.SelectContext(ctx, &logs,
+		`SELECT * FROM audit_logs WHERE tenant_id = $1 AND resource_id = $2 ORDER BY created_at DESC`,
+		tenantID, actionID)
+	if logs == nil {
+		logs = []store.AuditLog{}
+	}
+	pkg.JSON(w, logs)
+}
+
+func (s *Server) executeRemediationAction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	userID := pkg.UserFromCtx(ctx)
+	actionID := chi.URLParam(r, "id")
+
+	action, _ := s.remediationActions.FindByID(ctx, tenantID, actionID)
+	if action == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	now := time.Now()
+	action.Status = "running"
+	action.ExecutedAt = &now
+	s.remediationActions.Update(ctx, action)
+
+	// For ROT remediation: remove matching rot_data rows and log the action.
+	s.db.ExecContext(ctx,
+		`DELETE FROM rot_data WHERE tenant_id = $1 AND dataset_id = $2`,
+		tenantID, action.DatasetID)
+
+	action.Status = "completed"
+	s.remediationActions.Update(ctx, action)
+
+	s.db.ExecContext(ctx,
+		`INSERT INTO audit_logs (tenant_id, user_id, action, resource, resource_id, details, ip)
+		 VALUES ($1, $2, 'remediation.executed', 'remediation_action', $3,
+		         $4::jsonb, '')`,
+		tenantID, userID, actionID,
+		fmt.Sprintf(`{"action_type":"%s","dataset_id":"%s","status":"completed"}`,
+			action.ActionType, action.DatasetID))
+
+	pkg.JSON(w, action)
 }
 
 func (s *Server) createRemediationAction(w http.ResponseWriter, r *http.Request) {
@@ -27,21 +100,27 @@ func (s *Server) createRemediationAction(w http.ResponseWriter, r *http.Request)
 	tenantID := pkg.TenantFromCtx(ctx)
 
 	var req struct {
-		Type      string `json:"type" validate:"required,oneof=redact encrypt delete quarantine label"`
-		DatasetID string `json:"dataset_id" validate:"required"`
-		Reason    string `json:"reason"`
+		Type       string `json:"type" validate:"required,oneof=redact encrypt delete quarantine label archive deduplicate flag"`
+		ActionType string `json:"action_type"`
+		DatasetID  string `json:"dataset_id" validate:"required"`
+		Reason     string `json:"reason"`
 	}
 	if err := pkg.Bind(r, &req); err != nil {
 		pkg.Error(w, err, http.StatusBadRequest)
 		return
 	}
 
+	if req.ActionType == "" {
+		req.ActionType = req.Type
+	}
+
 	action := store.RemediationAction{
-		TenantID:  tenantID,
-		Type:      req.Type,
-		DatasetID: req.DatasetID,
-		Reason:    req.Reason,
-		Status:    "pending",
+		TenantID:   tenantID,
+		Type:       req.Type,
+		ActionType: req.ActionType,
+		DatasetID:  req.DatasetID,
+		Reason:     req.Reason,
+		Status:     "pending",
 	}
 	s.remediationActions.Create(ctx, &action)
 

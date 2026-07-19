@@ -319,7 +319,8 @@ type ROTData struct {
 type RemediationAction struct {
 	ID         string     `db:"id" json:"id"`
 	TenantID   string     `db:"tenant_id" json:"-"`
-	Type       string     `db:"type" json:"type" validate:"required,oneof=redact encrypt delete quarantine label"`
+	Type       string     `db:"type" json:"type" validate:"required,oneof=redact encrypt delete quarantine label archive deduplicate flag"`
+	ActionType string     `db:"action_type" json:"action_type"`
 	DatasetID  string     `db:"dataset_id" json:"dataset_id"`
 	Reason     string     `db:"reason" json:"reason"`
 	Status     string     `db:"status" json:"status"`

@@ -30,3 +30,6 @@ export * from './use-jobs'
 
 // Data Map, Lineage, AI Governance, Reports hooks
 export * from './use-datamap'
+
+// Remediation hooks
+export * from './use-remediation'

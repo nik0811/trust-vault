@@ -210,11 +210,12 @@ func (s *Server) remediateROT(w http.ResponseWriter, r *http.Request) {
 
 	for _, datasetID := range req.DatasetIDs {
 		action := store.RemediationAction{
-			TenantID:  tenantID,
-			Type:      req.Action,
-			DatasetID: datasetID,
-			Reason:    "ROT remediation",
-			Status:    "pending",
+			TenantID:   tenantID,
+			Type:       req.Action,
+			ActionType: "quarantine",
+			DatasetID:  datasetID,
+			Reason:     "ROT remediation",
+			Status:     "pending",
 		}
 		s.remediationActions.Create(ctx, &action)
 	}

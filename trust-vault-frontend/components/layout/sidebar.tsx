@@ -75,7 +75,7 @@ const navGroups: NavGroup[] = [
     items: [
       { icon: ShieldCheck, label: 'Policies', href: '/governance', description: 'Governance rules' },
       { icon: Bot, label: 'AI Gate', href: '/ai-gate', description: 'LLM guardrails' },
-      { icon: Wrench, label: 'Remediation', href: '/ai-governance', description: 'Fix data issues' },
+      { icon: Wrench, label: 'Remediation', href: '/remediation', description: 'Fix data issues' },
     ],
   },
   {
