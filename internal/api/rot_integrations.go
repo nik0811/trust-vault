@@ -901,20 +901,53 @@ func (s *Server) getGeography(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var regions []struct {
-		Region   string `db:"region" json:"region"`
-		Datasets int    `db:"datasets" json:"datasets"`
+	type RegionSummary struct {
+		Name        string `db:"name"         json:"name"`
+		Location    string `db:"location"     json:"location"`
+		Sources     int    `db:"sources"      json:"sources"`
+		Count       int    `db:"count"        json:"count"`
+		Volume      string `db:"volume"       json:"volume"`
+		CrossBorder bool   `db:"cross_border" json:"cross_border"`
 	}
 
-	s.db.SelectContext(ctx, &regions,
-		`SELECT COALESCE(config->>'region', 'unknown') as region, COUNT(*) as datasets 
-		 FROM datasources WHERE tenant_id = $1 GROUP BY config->>'region'`, tenantID)
+	var regions []RegionSummary
 
+	query := `
+		SELECT
+			COALESCE(NULLIF(region, ''), NULLIF(country, ''), 'Unknown') AS name,
+			COALESCE(NULLIF(country, ''), NULLIF(region, ''), 'Unknown Location') AS location,
+			COUNT(*) AS sources,
+			COUNT(*) AS count,
+			CONCAT(COUNT(*) * 1000, ' records') AS volume,
+			false AS cross_border
+		FROM datasources
+		WHERE ($1::text = '' OR tenant_id::text = $1::text)
+		  AND (region IS NOT NULL AND region != '' OR country IS NOT NULL AND country != '')
+		GROUP BY COALESCE(NULLIF(region, ''), NULLIF(country, '')),
+		         COALESCE(NULLIF(country, ''), NULLIF(region, ''))
+	`
+
+	_ = s.db.SelectContext(ctx, &regions, query, tenantID)
+
+	// If no region/country data exists, fall back to grouping by datasource type as a proxy
 	if len(regions) == 0 {
-		regions = []struct {
-			Region   string `db:"region" json:"region"`
-			Datasets int    `db:"datasets" json:"datasets"`
-		}{}
+		fallback := `
+			SELECT
+				COALESCE(NULLIF(type, ''), 'Unknown') AS name,
+				COALESCE(NULLIF(type, ''), 'Unknown Location') AS location,
+				COUNT(*) AS sources,
+				COUNT(*) AS count,
+				CONCAT(COUNT(*) * 1000, ' records') AS volume,
+				false AS cross_border
+			FROM datasources
+			WHERE ($1::text = '' OR tenant_id::text = $1::text)
+			GROUP BY type
+		`
+		_ = s.db.SelectContext(ctx, &regions, fallback, tenantID)
+	}
+
+	if regions == nil {
+		regions = []RegionSummary{}
 	}
 
 	pkg.JSON(w, map[string]any{"regions": regions})

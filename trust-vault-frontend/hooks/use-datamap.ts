@@ -26,8 +26,17 @@ export interface DataMapCoverage {
   coverage_percentage: number
 }
 
+export interface DataMapRegion {
+  name: string
+  location: string
+  sources: number
+  count: number
+  volume: string
+  cross_border: boolean
+}
+
 export interface DataMapGeography {
-  regions: { name: string; count: number }[]
+  regions: DataMapRegion[]
 }
 
 export function useDataMap() {
