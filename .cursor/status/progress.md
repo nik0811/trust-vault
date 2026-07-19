@@ -3,9 +3,9 @@
 > This file is the single source of truth for project progress.
 > Updated after every work session. Read this FIRST in any new session.
 
-## Last Updated: 2026-07-15
+## Last Updated: 2026-07-20
 
-## Current Phase: ENTERPRISE CLASSIFICATION PIPELINE COMPLETE
+## Current Phase: ENTERPRISE CLASSIFICATION PIPELINE COMPLETE + PRODUCT AUDIT FIXES
 
 ## Overall Progress: 32/32 modules (Backend: 31/31, Frontend: INTEGRATED, Tests: DONE, Security: HARDENED, Monitoring: DONE)
 
@@ -112,6 +112,7 @@
 | 2026-07-15 | #18 | **INTEGRATION CRUD E2E FIX.** Fixed all 7 integration endpoints: GET returns [] not null, POST returns fully populated object (last_sync: null), PUT preserves config on partial updates, DELETE returns 404 on missing, testIntegration returns {success, message} format covering 15+ types (slack/teams/webhook/rest_api/jira/servicenow/pagerduty/splunk/siem/sentinel/email/dlp/catalog/onetrust/custom), syncIntegration updates last_sync. Frontend: 18 integration types grouped in 5 categories, widened type from enum to string. All 7 endpoints E2E verified on production. |
 | 2026-07-15 | #19 | **AUTO GEOGRAPHIC REGION DETECTION.** New internal/domain/geo_detect.go: DetectRegion() uses 4-level detection (config key → Snowflake account → hostname pattern matching for AWS/Azure/GCP/Snowflake/Redshift → ip-api.com geolocation). Hooked into createDataSource (async goroutine) and scanCallback (on completion). New POST /residency/detect bulk endpoint. Frontend residency page shows datasource names per region card (up to 3 + "+N more"). New datasource page shows "Region auto-detected: X" toast. Verified on production: AWS RDS us-east-1 → US-EAST, Azure westeurope → EU, Snowflake ap-southeast-1 → APAC. |
 | 2026-07-15 | #20 | **COMPREHENSIVE API HEALTH FIXES.** All 25 monitored endpoints return 200. Added 9 missing route aliases; fixed nil→[] coercion globally via pkg.JSON reflection; improved getQualitySummary/getObservabilitySummary/getLineageSummary/listPIAs/listComplianceFrameworks implementations; fixed endpoints and residency/rules nil map wrapping. |
+| 2026-07-20 | #21 | **PRODUCT AUDIT CRITICAL FIXES.** Fixed worker crash (classifications.updated_at column mismatch). Fixed Math.random() bluffs in classification page (new /classify/stats endpoint). Removed hardcoded COALESCE fallbacks in quality summary (now returns real 0 when no data). Fixed gate history NULL panic (COALESCE in listGateQueries). Replaced document upload setTimeout simulation with real multipart POST. Added mark-all-read + delete notification endpoints. Job.LastRun/NextRun changed to *time.Time so nulls show as null not 0001-01-01. Lineage graph now shows nodes+edges from classifications+AI gate. Quality assessment runs across all datasources. ROT scan fixed (removed non-existent columns from INSERT). Defensive JSON config unmarshal in all job executors. |
 
 ---
 
