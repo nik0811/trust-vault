@@ -1827,8 +1827,13 @@ func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobEx
 // executeClassificationJob runs classification on datasets
 func (k *Kafka) executeClassificationJob(ctx context.Context, db *store.DB, job JobExecutionMessage) (string, string, map[string]any) {
 	var config map[string]any
-	if err := json.Unmarshal(job.Config, &config); err != nil {
-		return "failed", "Invalid job config: " + err.Error(), nil
+	if len(job.Config) > 0 && string(job.Config) != "null" {
+		if err := json.Unmarshal(job.Config, &config); err != nil {
+			config = map[string]any{}
+		}
+	}
+	if config == nil {
+		config = map[string]any{}
 	}
 
 	datasetID := getConfigString(config, "dataset_id", "")
@@ -1887,9 +1892,15 @@ func (k *Kafka) executeClassificationJob(ctx context.Context, db *store.DB, job 
 
 // executeQualityJob runs quality assessment
 func (k *Kafka) executeQualityJob(ctx context.Context, db *store.DB, job JobExecutionMessage) (string, string, map[string]any) {
+	// Config may be null, empty, or a valid object — normalize to map
 	var config map[string]any
-	if err := json.Unmarshal(job.Config, &config); err != nil {
-		return "failed", "Invalid job config: " + err.Error(), nil
+	if len(job.Config) > 0 && string(job.Config) != "null" {
+		if err := json.Unmarshal(job.Config, &config); err != nil {
+			config = map[string]any{}
+		}
+	}
+	if config == nil {
+		config = map[string]any{}
 	}
 
 	datasourceID := getConfigString(config, "datasource_id", getConfigString(config, "dataset_id", ""))
@@ -2019,8 +2030,13 @@ func (k *Kafka) executeComplianceJob(ctx context.Context, db *store.DB, job JobE
 // executeDataSyncJob syncs data with external systems
 func (k *Kafka) executeDataSyncJob(ctx context.Context, db *store.DB, job JobExecutionMessage) (string, string, map[string]any) {
 	var config map[string]any
-	if err := json.Unmarshal(job.Config, &config); err != nil {
-		return "failed", "Invalid job config: " + err.Error(), nil
+	if len(job.Config) > 0 && string(job.Config) != "null" {
+		if err := json.Unmarshal(job.Config, &config); err != nil {
+			config = map[string]any{}
+		}
+	}
+	if config == nil {
+		config = map[string]any{}
 	}
 
 	integrationID := getConfigString(config, "integration_id", "")
@@ -2055,8 +2071,13 @@ func (k *Kafka) executeDataSyncJob(ctx context.Context, db *store.DB, job JobExe
 // executeReportJob generates reports
 func (k *Kafka) executeReportJob(ctx context.Context, db *store.DB, job JobExecutionMessage) (string, string, map[string]any) {
 	var config map[string]any
-	if err := json.Unmarshal(job.Config, &config); err != nil {
-		return "failed", "Invalid job config: " + err.Error(), nil
+	if len(job.Config) > 0 && string(job.Config) != "null" {
+		if err := json.Unmarshal(job.Config, &config); err != nil {
+			config = map[string]any{}
+		}
+	}
+	if config == nil {
+		config = map[string]any{}
 	}
 
 	reportType := getConfigString(config, "report_type", "compliance")
