@@ -208,6 +208,103 @@ func (s *Server) detectRegionsHandler(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, map[string]any{"results": results, "total": len(results)})
 }
 
+// getResidencyStats returns real aggregate counts for the residency dashboard.
+// GET /residency/stats
+func (s *Server) getResidencyStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	datasources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 10000})
+	rules, _ := s.residencyRules.List(ctx, tenantID, store.ListOpts{Limit: 10000})
+
+	untagged := 0
+	violationCount := 0
+	for _, ds := range datasources {
+		if ds.Region == nil || *ds.Region == "" {
+			untagged++
+			if len(rules) > 0 {
+				violationCount++
+			}
+			continue
+		}
+		for _, rule := range rules {
+			if !rule.Active {
+				continue
+			}
+			var allowedRegions []string
+			if err := json.Unmarshal(rule.AllowedRegions, &allowedRegions); err != nil {
+				continue
+			}
+			allowed := false
+			for _, ar := range allowedRegions {
+				if ar == *ds.Region {
+					allowed = true
+					break
+				}
+			}
+			if !allowed {
+				violationCount++
+			}
+		}
+	}
+
+	pkg.JSON(w, map[string]any{
+		"total_datasources": len(datasources),
+		"violations":        violationCount,
+		"residency_rules":   len(rules),
+		"untagged_sources":  untagged,
+	})
+}
+
+// getResidencyRegions returns the geographic distribution of datasources grouped by region.
+// GET /residency/regions
+func (s *Server) getResidencyRegions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	datasources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 10000})
+
+	type RegionEntry struct {
+		Region      string   `json:"region"`
+		Country     string   `json:"country"`
+		Count       int      `json:"count"`
+		Datasources []string `json:"datasource_names"`
+	}
+
+	grouped := map[string]*RegionEntry{}
+	untaggedNames := []string{}
+
+	for _, ds := range datasources {
+		if ds.Region == nil || *ds.Region == "" {
+			untaggedNames = append(untaggedNames, ds.Name)
+			continue
+		}
+		key := *ds.Region
+		entry, ok := grouped[key]
+		if !ok {
+			country := ""
+			if ds.Country != nil {
+				country = *ds.Country
+			}
+			entry = &RegionEntry{Region: key, Country: country}
+			grouped[key] = entry
+		}
+		entry.Count++
+		entry.Datasources = append(entry.Datasources, ds.Name)
+	}
+
+	regions := make([]RegionEntry, 0, len(grouped))
+	for _, v := range grouped {
+		regions = append(regions, *v)
+	}
+
+	pkg.JSON(w, map[string]any{
+		"regions":         regions,
+		"untagged_names":  untaggedNames,
+		"untagged_count":  len(untaggedNames),
+	})
+}
+
 func (s *Server) getConsentWidgetConfig(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)

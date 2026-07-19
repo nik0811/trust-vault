@@ -11,21 +11,69 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
-const REGIONS = [
-  { id: 'EU', label: 'European Union', flag: '🇪🇺', countries: ['DE', 'FR', 'NL', 'SE', 'IT'] },
-  { id: 'UK', label: 'United Kingdom', flag: '🇬🇧', countries: ['GB'] },
-  { id: 'US-EAST', label: 'US East', flag: '🇺🇸', countries: ['USA'] },
-  { id: 'US-WEST', label: 'US West', flag: '🇺🇸', countries: ['USA'] },
-  { id: 'APAC', label: 'Asia Pacific', flag: '🌏', countries: ['JP', 'AU', 'SG', 'IN'] },
-  { id: 'CA', label: 'Canada', flag: '🇨🇦', countries: ['CAN'] },
-  { id: 'LATAM', label: 'Latin America', flag: '🌎', countries: ['BR', 'MX', 'AR'] },
-  { id: 'MEA', label: 'Middle East & Africa', flag: '🌍', countries: ['AE', 'ZA', 'SA'] },
+// Used for the rule creation UI — canonical region options
+const CANONICAL_REGIONS = [
+  { id: 'EU', label: 'European Union', flag: '🇪🇺' },
+  { id: 'UK', label: 'United Kingdom', flag: '🇬🇧' },
+  { id: 'US-EAST', label: 'US East', flag: '🇺🇸' },
+  { id: 'US-WEST', label: 'US West', flag: '🇺🇸' },
+  { id: 'APAC', label: 'Asia Pacific', flag: '🌏' },
+  { id: 'CA', label: 'Canada', flag: '🇨🇦' },
+  { id: 'LATAM', label: 'Latin America', flag: '🌎' },
+  { id: 'MEA', label: 'Middle East & Africa', flag: '🌍' },
 ]
+
+// Lookup table: known region strings → display metadata
+const REGION_META: Record<string, { label: string; flag: string }> = {
+  'EU': { label: 'European Union', flag: '🇪🇺' },
+  'UK': { label: 'United Kingdom', flag: '🇬🇧' },
+  'US-EAST': { label: 'US East', flag: '🇺🇸' },
+  'US-WEST': { label: 'US West', flag: '🇺🇸' },
+  'APAC': { label: 'Asia Pacific', flag: '🌏' },
+  'CA': { label: 'Canada', flag: '🇨🇦' },
+  'LATAM': { label: 'Latin America', flag: '🌎' },
+  'MEA': { label: 'Middle East & Africa', flag: '🌍' },
+  // AWS regions
+  'us-east-1': { label: 'US East (N. Virginia)', flag: '🇺🇸' },
+  'us-east-2': { label: 'US East (Ohio)', flag: '🇺🇸' },
+  'us-west-1': { label: 'US West (N. California)', flag: '🇺🇸' },
+  'us-west-2': { label: 'US West (Oregon)', flag: '🇺🇸' },
+  'ap-south-1': { label: 'Asia Pacific (Mumbai)', flag: '🇮🇳' },
+  'ap-southeast-1': { label: 'Asia Pacific (Singapore)', flag: '🇸🇬' },
+  'ap-southeast-2': { label: 'Asia Pacific (Sydney)', flag: '🇦🇺' },
+  'ap-northeast-1': { label: 'Asia Pacific (Tokyo)', flag: '🇯🇵' },
+  'eu-west-1': { label: 'Europe (Ireland)', flag: '🇮🇪' },
+  'eu-west-2': { label: 'Europe (London)', flag: '🇬🇧' },
+  'eu-central-1': { label: 'Europe (Frankfurt)', flag: '🇩🇪' },
+  'ca-central-1': { label: 'Canada (Central)', flag: '🇨🇦' },
+  'sa-east-1': { label: 'South America (São Paulo)', flag: '🇧🇷' },
+}
+
+function regionMeta(regionId: string, country?: string): { label: string; flag: string } {
+  if (REGION_META[regionId]) return REGION_META[regionId]
+  // Derive flag from country if known
+  const countryFlags: Record<string, string> = {
+    India: '🇮🇳', Germany: '🇩🇪', France: '🇫🇷', UK: '🇬🇧', 'United Kingdom': '🇬🇧',
+    USA: '🇺🇸', 'United States': '🇺🇸', Canada: '🇨🇦', Japan: '🇯🇵',
+    Australia: '🇦🇺', Singapore: '🇸🇬', Brazil: '🇧🇷',
+  }
+  const flag = (country && countryFlags[country]) ? countryFlags[country] : '🌐'
+  const label = country ? `${regionId} (${country})` : regionId
+  return { label, flag }
+}
+
+interface Stats {
+  total_datasources: number
+  violations: number
+  residency_rules: number
+  untagged_sources: number
+}
 
 export default function DataResidencyPage() {
   const [rules, setRules] = useState<any[]>([])
   const [violations, setViolations] = useState<any[]>([])
   const [datasources, setDatasources] = useState<any[]>([])
+  const [stats, setStats] = useState<Stats>({ total_datasources: 0, violations: 0, residency_rules: 0, untagged_sources: 0 })
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<'map' | 'rules' | 'violations'>('map')
   const [showCreateRule, setShowCreateRule] = useState(false)
@@ -43,20 +91,25 @@ export default function DataResidencyPage() {
   const loadAll = async () => {
     setLoading(true)
     try {
-      const [rulesRes, vioRes, dsRes] = await Promise.all([
+      const [rulesRes, vioRes, dsRes, statsRes] = await Promise.all([
         fetch(`${API_BASE}/residency/rules`, { headers: authHeaders() }),
         fetch(`${API_BASE}/residency/violations`, { headers: authHeaders() }),
         fetch(`${API_BASE}/datasources`, { headers: authHeaders() }),
+        fetch(`${API_BASE}/residency/stats`, { headers: authHeaders() }),
       ])
-      if (!rulesRes.ok) throw new Error(`HTTP ${rulesRes.status}`)
-      if (!vioRes.ok) throw new Error(`HTTP ${vioRes.status}`)
-      if (!dsRes.ok) throw new Error(`HTTP ${dsRes.status}`)
-      const rulesData = await rulesRes.json()
-      const vioData = await vioRes.json()
-      const dsData = await dsRes.json()
+      const rulesData = rulesRes.ok ? await rulesRes.json() : {}
+      const vioData = vioRes.ok ? await vioRes.json() : {}
+      const dsData = dsRes.ok ? await dsRes.json() : []
+      const statsData = statsRes.ok ? await statsRes.json() : {}
       setRules(rulesData.rules || [])
       setViolations(vioData.violations || [])
-      setDatasources(Array.isArray(dsData) ? dsData : dsData.datasources || [])
+      setDatasources(Array.isArray(dsData) ? dsData : (dsData.datasources || []))
+      setStats({
+        total_datasources: statsData.total_datasources ?? 0,
+        violations: statsData.violations ?? 0,
+        residency_rules: statsData.residency_rules ?? 0,
+        untagged_sources: statsData.untagged_sources ?? 0,
+      })
     } catch (err) {
       console.error('Failed to load residency data:', err)
     } finally {
@@ -118,14 +171,24 @@ export default function DataResidencyPage() {
     }))
   }
 
-  const regionStats = REGIONS.map(region => {
-    const regionDatasources = datasources.filter((ds: any) => ds.region === region.id)
-    const count = regionDatasources.length
-    const violationCount = violations.filter((v: any) => v.region === region.id).length
-    return { ...region, count, violationCount, compliant: violationCount === 0, datasources: regionDatasources }
-  })
+  // Build region cards dynamically from actual datasource data
+  const regionMap = new Map<string, { regionId: string; label: string; flag: string; country: string; dsList: any[] }>()
+  for (const ds of datasources) {
+    if (!ds.region) continue
+    if (!regionMap.has(ds.region)) {
+      const meta = regionMeta(ds.region, ds.country)
+      regionMap.set(ds.region, { regionId: ds.region, label: meta.label, flag: meta.flag, country: ds.country || '', dsList: [] })
+    }
+    regionMap.get(ds.region)!.dsList.push(ds)
+  }
 
-  const untaggedCount = datasources.filter((ds: any) => !ds.region).length
+  const activeRegions = Array.from(regionMap.values()).map(r => ({
+    ...r,
+    count: r.dsList.length,
+    violationCount: violations.filter((v: any) => v.region === r.regionId).length,
+  }))
+
+  const untaggedSources = datasources.filter((ds: any) => !ds.region)
 
   return (
     <div className="min-h-screen bg-background">
@@ -165,10 +228,10 @@ export default function DataResidencyPage() {
         {/* Stats bar */}
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Total Datasources', value: datasources.length, icon: <Globe className="w-5 h-5 text-blue-500" /> },
-            { label: 'Violations', value: violations.length, icon: <AlertTriangle className="w-5 h-5 text-orange-500" />, alert: violations.length > 0 },
-            { label: 'Residency Rules', value: rules.length, icon: <ShieldCheck className="w-5 h-5 text-green-500" /> },
-            { label: 'Untagged Sources', value: untaggedCount, icon: <MapPin className="w-5 h-5 text-gray-400" />, alert: untaggedCount > 0 },
+            { label: 'Total Datasources', value: stats.total_datasources, icon: <Globe className="w-5 h-5 text-blue-500" /> },
+            { label: 'Violations', value: stats.violations, icon: <AlertTriangle className="w-5 h-5 text-orange-500" />, alert: stats.violations > 0 },
+            { label: 'Residency Rules', value: stats.residency_rules, icon: <ShieldCheck className="w-5 h-5 text-green-500" /> },
+            { label: 'Untagged Sources', value: stats.untagged_sources, icon: <MapPin className="w-5 h-5 text-gray-400" />, alert: stats.untagged_sources > 0 },
           ].map(stat => (
             <div key={stat.label} className={`border rounded-xl p-4 bg-card flex items-center gap-3 ${stat.alert ? 'border-orange-200' : 'border-border'}`}>
               <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">{stat.icon}</div>
@@ -183,55 +246,62 @@ export default function DataResidencyPage() {
         {activeTab === 'map' && (
           <div>
             <h2 className="text-base font-semibold mb-4">Geographic Data Distribution</h2>
-            <div className="grid grid-cols-4 gap-4">
-              {regionStats.map(region => (
-                <div
-                  key={region.id}
-                  className={`border rounded-xl p-4 bg-card hover:shadow-sm transition-shadow ${region.violationCount > 0 ? 'border-orange-200' : region.count > 0 ? 'border-green-200' : 'border-border'}`}
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <span className="text-2xl">{region.flag}</span>
-                    {region.count > 0 && (
-                      region.violationCount > 0
+            {activeRegions.length === 0 ? (
+              <div className="text-center py-12 border border-dashed border-border rounded-xl">
+                <Globe className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">No region-tagged datasources yet</p>
+                <p className="text-xs text-muted-foreground mt-1">Tag a datasource below or run auto-detection</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-4 gap-4">
+                {activeRegions.map(region => (
+                  <div
+                    key={region.regionId}
+                    className={`border rounded-xl p-4 bg-card hover:shadow-sm transition-shadow ${region.violationCount > 0 ? 'border-orange-200' : 'border-green-200'}`}
+                  >
+                    <div className="flex items-start justify-between mb-2">
+                      <span className="text-2xl">{region.flag}</span>
+                      {region.violationCount > 0
                         ? <span className="flex items-center gap-1 text-xs text-orange-600 font-medium"><AlertTriangle className="w-3 h-3" /> At Risk</span>
                         : <span className="flex items-center gap-1 text-xs text-green-600 font-medium"><CheckCircle className="w-3 h-3" /> Compliant</span>
-                    )}
-                  </div>
-                  <p className="font-semibold text-sm">{region.label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{region.id}</p>
-                  <div className="mt-3 flex items-end justify-between">
-                    <div>
-                      <p className="text-xl font-bold">{region.count}</p>
-                      <p className="text-xs text-muted-foreground">datasources</p>
+                      }
                     </div>
-                    {region.violationCount > 0 && (
-                      <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
-                        {region.violationCount} violation{region.violationCount !== 1 ? 's' : ''}
-                      </span>
-                    )}
-                  </div>
-                  {region.datasources.length > 0 && (
-                    <div className="mt-2 pt-2 border-t border-border/50">
-                      {region.datasources.slice(0, 3).map((ds: any) => (
-                        <p key={ds.id} className="text-xs text-muted-foreground truncate">{ds.name}</p>
-                      ))}
-                      {region.datasources.length > 3 && (
-                        <p className="text-xs text-primary font-medium mt-0.5">+{region.datasources.length - 3} more</p>
+                    <p className="font-semibold text-sm">{region.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{region.regionId}</p>
+                    <div className="mt-3 flex items-end justify-between">
+                      <div>
+                        <p className="text-xl font-bold">{region.count}</p>
+                        <p className="text-xs text-muted-foreground">datasource{region.count !== 1 ? 's' : ''}</p>
+                      </div>
+                      {region.violationCount > 0 && (
+                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                          {region.violationCount} violation{region.violationCount !== 1 ? 's' : ''}
+                        </span>
                       )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                    {region.dsList.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        {region.dsList.slice(0, 3).map((ds: any) => (
+                          <p key={ds.id} className="text-xs text-muted-foreground truncate">{ds.name}</p>
+                        ))}
+                        {region.dsList.length > 3 && (
+                          <p className="text-xs text-primary font-medium mt-0.5">+{region.dsList.length - 3} more</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
-            {untaggedCount > 0 && (
+            {untaggedSources.length > 0 && (
               <div className="mt-6">
                 <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
                   <MapPin className="w-4 h-4 text-gray-500" /> Untagged Datasources
-                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{untaggedCount}</span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{untaggedSources.length}</span>
                 </h2>
                 <div className="grid grid-cols-2 gap-3">
-                  {datasources.filter((ds: any) => !ds.region).map((ds: any) => (
+                  {untaggedSources.map((ds: any) => (
                     <div key={ds.id} className="border border-dashed border-border rounded-lg p-3 flex items-center justify-between bg-card">
                       <div>
                         <p className="text-sm font-medium">{ds.name}</p>
@@ -292,7 +362,7 @@ export default function DataResidencyPage() {
                 <div className="mb-4">
                   <label className="text-xs text-muted-foreground font-medium">Allowed Regions</label>
                   <div className="grid grid-cols-4 gap-2 mt-2">
-                    {REGIONS.map(r => (
+                    {CANONICAL_REGIONS.map(r => (
                       <button
                         key={r.id}
                         onClick={() => toggleRegion(r.id)}
@@ -398,7 +468,7 @@ export default function DataResidencyPage() {
             <div className="mb-4">
               <label className="text-xs text-muted-foreground font-medium">Region *</label>
               <div className="grid grid-cols-2 gap-2 mt-2">
-                {REGIONS.map(r => (
+                {CANONICAL_REGIONS.map(r => (
                   <button
                     key={r.id}
                     onClick={() => setTagRegion(r.id)}

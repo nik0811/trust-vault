@@ -523,6 +523,8 @@ func (s *Server) setupRoutes() {
 				r.Get("/violations", s.getResidencyViolations)
 				r.Post("/datasources/{id}/tag-region", s.tagDatasourceRegion)
 				r.Post("/detect", s.detectRegionsHandler)
+				r.Get("/stats", s.getResidencyStats)
+				r.Get("/regions", s.getResidencyRegions)
 			})
 
 			// Consent widget config & preferences
