@@ -1730,12 +1730,14 @@ func (k *Kafka) ConsumeJobExecutions(ctx context.Context, db *store.DB) {
 
 // processJobExecution handles a single job execution with real logic
 func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobExecutionMessage) {
-	// Update job status to running
-	_, err := db.ExecContext(ctx,
-		`UPDATE jobs SET status = 'running', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
-		job.JobID, job.TenantID)
-	if err != nil {
-		log.Error().Err(err).Str("job_id", job.JobID).Msg("Failed to update job status to running")
+	// Update job status to running (only if job_id is a valid non-empty UUID)
+	if job.JobID != "" {
+		_, err := db.ExecContext(ctx,
+			`UPDATE jobs SET status = 'running', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+			job.JobID, job.TenantID)
+		if err != nil {
+			log.Error().Err(err).Str("job_id", job.JobID).Msg("Failed to update job status to running")
+		}
 	}
 
 	// Emit job started event
@@ -1791,20 +1793,22 @@ func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobEx
 			Msg("Job failed")
 	}
 
-	// Update job status in database, and compute next_run from schedule if present
-	_, err = db.ExecContext(ctx, `
-		UPDATE jobs SET
-			status = $1,
-			last_run = NOW(),
-			next_run = CASE
-				WHEN schedule IS NOT NULL AND schedule <> '' THEN NOW() + INTERVAL '1 day'
-				ELSE next_run
-			END,
-			updated_at = NOW()
-		WHERE id = $2 AND tenant_id = $3`,
-		status, job.JobID, job.TenantID)
-	if err != nil {
-		log.Error().Err(err).Str("job_id", job.JobID).Msg("Failed to update job status")
+	// Update job status in database (only if job_id is a valid non-empty UUID)
+	if job.JobID != "" {
+		_, err := db.ExecContext(ctx, `
+			UPDATE jobs SET
+				status = $1,
+				last_run = NOW(),
+				next_run = CASE
+					WHEN schedule IS NOT NULL AND schedule <> '' THEN NOW() + INTERVAL '1 day'
+					ELSE next_run
+				END,
+				updated_at = NOW()
+			WHERE id = $2 AND tenant_id = $3`,
+			status, job.JobID, job.TenantID)
+		if err != nil {
+			log.Error().Err(err).Str("job_id", job.JobID).Msg("Failed to update job status")
+		}
 	}
 
 	// Emit SSE event
