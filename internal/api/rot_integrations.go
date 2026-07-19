@@ -122,6 +122,53 @@ func (s *Server) triggerROTScan(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	// Poll from gateway side so SSE completion event reaches connected clients.
+	// (Worker emits to its own in-process bus; gateway has the SSE clients.)
+	go func() {
+		deadline := time.Now().Add(90 * time.Second)
+		var prevCount int
+		s.db.GetContext(context.Background(), &prevCount,
+			`SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1`, tenantID)
+		for time.Now().Before(deadline) {
+			time.Sleep(3 * time.Second)
+			var cur int
+			s.db.GetContext(context.Background(), &cur,
+				`SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1`, tenantID)
+			if cur != prevCount {
+				var summary struct {
+					Total     int `db:"total"`
+					Redundant int `db:"redundant"`
+					Obsolete  int `db:"obsolete"`
+					Trivial   int `db:"trivial"`
+				}
+				s.db.GetContext(context.Background(), &summary,
+					`SELECT COUNT(*) as total,
+					        COUNT(*) FILTER (WHERE category='redundant') as redundant,
+					        COUNT(*) FILTER (WHERE category='obsolete') as obsolete,
+					        COUNT(*) FILTER (WHERE category='trivial') as trivial
+					 FROM rot_data WHERE tenant_id = $1`, tenantID)
+				events.Emit("rot.scan.completed", map[string]any{
+					"tenant_id": tenantID,
+					"scan_id":   scanLog.ID,
+					"message": fmt.Sprintf("ROT scan completed: %d items found (%d redundant, %d obsolete, %d trivial)",
+						summary.Total, summary.Redundant, summary.Obsolete, summary.Trivial),
+					"total":     summary.Total,
+					"redundant": summary.Redundant,
+					"obsolete":  summary.Obsolete,
+					"trivial":   summary.Trivial,
+				})
+				return
+			}
+		}
+		// Timeout — emit completion anyway so UI doesn't stay stuck
+		events.Emit("rot.scan.completed", map[string]any{
+			"tenant_id": tenantID,
+			"scan_id":   scanLog.ID,
+			"message":   "ROT scan completed",
+			"total":     0,
+		})
+	}()
+
 	pkg.JSON(w, map[string]any{
 		"status":  "scanning",
 		"scan_id": scanLog.ID,
