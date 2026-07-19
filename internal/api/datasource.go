@@ -119,14 +119,18 @@ func (s *Server) createDataSource(w http.ResponseWriter, r *http.Request) {
 		if err != nil || fresh == nil || (fresh.Region != nil && *fresh.Region != "") {
 			return
 		}
-		if detected := domain.DetectRegion(bgCtx, fresh); detected != "" {
-			fresh.Region = &detected
+		if info := domain.DetectRegionInfo(bgCtx, fresh); info.Region != "" {
+			fresh.Region = &info.Region
+			if info.Country != "" {
+				fresh.Country = &info.Country
+			}
 			if err := s.datasources.Update(bgCtx, fresh); err == nil {
-				log.Info().Str("datasource_id", id).Str("region", detected).Msg("auto-detected region on create")
+				log.Info().Str("datasource_id", id).Str("region", info.Region).Str("country", info.Country).Msg("auto-detected region on create")
 				events.Emit("datasource.region_detected", map[string]string{
 					"datasource_id": id,
 					"tenant_id":     tenantID,
-					"region":        detected,
+					"region":        info.Region,
+					"country":       info.Country,
 				})
 			}
 		}
@@ -537,14 +541,18 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 			if err != nil || fresh == nil || (fresh.Region != nil && *fresh.Region != "") {
 				return
 			}
-			if detected := domain.DetectRegion(bgCtx, fresh); detected != "" {
-				fresh.Region = &detected
+			if info := domain.DetectRegionInfo(bgCtx, fresh); info.Region != "" {
+				fresh.Region = &info.Region
+				if info.Country != "" {
+					fresh.Country = &info.Country
+				}
 				if err := s.datasources.Update(bgCtx, fresh); err == nil {
-					log.Info().Str("datasource_id", id).Str("region", detected).Msg("auto-detected region on scan completion")
+					log.Info().Str("datasource_id", id).Str("region", info.Region).Str("country", info.Country).Msg("auto-detected region on scan completion")
 					events.Emit("datasource.region_detected", map[string]string{
 						"datasource_id": id,
 						"tenant_id":     tid,
-						"region":        detected,
+						"region":        info.Region,
+						"country":       info.Country,
 					})
 				}
 			}

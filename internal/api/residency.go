@@ -186,12 +186,15 @@ func (s *Server) detectRegionsHandler(w http.ResponseWriter, r *http.Request) {
 			results = append(results, result{ID: ds.ID, Name: ds.Name, Region: existing, Detected: false})
 			continue
 		}
-		detected := domain.DetectRegion(ctx, ds)
-		if detected != "" {
-			ds.Region = &detected
+		detected := domain.DetectRegionInfo(ctx, ds)
+		if detected.Region != "" {
+			ds.Region = &detected.Region
+			if detected.Country != "" {
+				ds.Country = &detected.Country
+			}
 			if err := s.datasources.Update(ctx, ds); err == nil {
-				log.Info().Str("datasource_id", ds.ID).Str("region", detected).Msg("bulk geo_detect: region set")
-				results = append(results, result{ID: ds.ID, Name: ds.Name, Region: detected, Detected: true})
+				log.Info().Str("datasource_id", ds.ID).Str("region", detected.Region).Str("country", detected.Country).Msg("bulk geo_detect: region set")
+				results = append(results, result{ID: ds.ID, Name: ds.Name, Region: detected.Region, Detected: true})
 			} else {
 				results = append(results, result{ID: ds.ID, Name: ds.Name, Region: "", Detected: false})
 			}
