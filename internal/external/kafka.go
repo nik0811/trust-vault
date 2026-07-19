@@ -143,8 +143,8 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		// Store classification results
 		for _, entity := range result.Entities {
 			_, err := db.ExecContext(ctx,
-				`INSERT INTO classifications (id, tenant_id, entity_type, value, confidence, created_at, updated_at)
-				 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+				`INSERT INTO classifications (id, tenant_id, entity_type, value, confidence, created_at)
+				 VALUES ($1, $2, $3, $4, $5, NOW())`,
 				generateUUID(), job.TenantID, entity.Type, entity.Value, entity.Confidence)
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to store classification result")
@@ -1791,9 +1791,17 @@ func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobEx
 			Msg("Job failed")
 	}
 
-	// Update job status in database
-	_, err = db.ExecContext(ctx,
-		`UPDATE jobs SET status = $1, last_run = NOW(), updated_at = NOW() WHERE id = $2 AND tenant_id = $3`,
+	// Update job status in database, and compute next_run from schedule if present
+	_, err = db.ExecContext(ctx, `
+		UPDATE jobs SET
+			status = $1,
+			last_run = NOW(),
+			next_run = CASE
+				WHEN schedule IS NOT NULL AND schedule <> '' THEN NOW() + INTERVAL '1 day'
+				ELSE next_run
+			END,
+			updated_at = NOW()
+		WHERE id = $2 AND tenant_id = $3`,
 		status, job.JobID, job.TenantID)
 	if err != nil {
 		log.Error().Err(err).Str("job_id", job.JobID).Msg("Failed to update job status")
@@ -1900,10 +1908,8 @@ func (k *Kafka) executeQualityJob(ctx context.Context, db *store.DB, job JobExec
 
 	// Store quality score
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO quality_scores (id, tenant_id, dataset_id, overall, completeness, accuracy, consistency, timeliness, uniqueness, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-		 ON CONFLICT (tenant_id, dataset_id) DO UPDATE SET
-		 overall = $4, completeness = $5, accuracy = $6, consistency = $7, timeliness = $8, uniqueness = $9, updated_at = NOW()`,
+		`INSERT INTO quality_scores (id, tenant_id, dataset_id, overall, completeness, accuracy, consistency, timeliness, uniqueness, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
 		generateUUID(), job.TenantID, datasetID,
 		completeness*0.9, completeness, 0.92, 0.88, 0.95, 0.97)
 

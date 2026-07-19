@@ -5,12 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
 	"github.com/securelens/securelens/internal/events"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
@@ -838,6 +842,74 @@ func (s *Server) extractDocument(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
+	contentType := r.Header.Get("Content-Type")
+
+	// Multipart file upload path
+	if strings.Contains(contentType, "multipart/form-data") {
+		if err := r.ParseMultipartForm(50 << 20); err != nil { // 50 MB limit
+			pkg.Error(w, fmt.Errorf("file too large or invalid form data"), http.StatusBadRequest)
+			return
+		}
+
+		file, header, err := r.FormFile("file")
+		if err != nil {
+			pkg.Error(w, fmt.Errorf("missing file field"), http.StatusBadRequest)
+			return
+		}
+		defer file.Close()
+
+		docserviceURL := os.Getenv("DOCSERVICE_URL")
+		if docserviceURL == "" {
+			docserviceURL = "http://securelens-docservice:8088"
+		}
+
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		fw, err := mw.CreateFormFile("file", header.Filename)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		if _, err = io.Copy(fw, file); err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		mw.Close()
+
+		docReq, err := http.NewRequestWithContext(ctx, http.MethodPost, docserviceURL+"/extract", &body)
+		if err != nil {
+			pkg.Error(w, err)
+			return
+		}
+		docReq.Header.Set("Content-Type", mw.FormDataContentType())
+
+		httpClient := &http.Client{Timeout: 120 * time.Second}
+		resp, err := httpClient.Do(docReq)
+		if err != nil {
+			// Docservice unavailable — return a graceful response
+			log.Warn().Err(err).Str("filename", header.Filename).Msg("Docservice unavailable, using sync classification")
+			data, _ := io.ReadAll(file)
+			text := string(data)
+			entities := s.runBasicClassification(text, nil)
+			pkg.JSON(w, map[string]any{
+				"status":     "classified",
+				"filename":   header.Filename,
+				"entities":   entities,
+				"entity_count": len(entities),
+				"tenant_id":  tenantID,
+			})
+			return
+		}
+		defer resp.Body.Close()
+
+		respBody, _ := io.ReadAll(resp.Body)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(resp.StatusCode)
+		w.Write(respBody)
+		return
+	}
+
+	// JSON path (legacy)
 	var req struct {
 		DocumentID string `json:"document_id" validate:"required"`
 		URL        string `json:"url"`

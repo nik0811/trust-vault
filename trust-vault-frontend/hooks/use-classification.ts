@@ -33,6 +33,24 @@ interface ClassifyDatasetRequest {
   async?: boolean
 }
 
+export interface ClassifyStats {
+  total_classified: number
+  avg_confidence: number
+  high_risk: number
+  last_run: string | null
+  per_dataset: Array<{ dataset_id: string; classified_columns: number; avg_confidence: number }>
+}
+
+export function useClassifyStats() {
+  return useQuery({
+    queryKey: ['classify-stats'],
+    queryFn: async () => {
+      const response = await api.get<ClassifyStats>('/classify/stats')
+      return response.data
+    },
+  })
+}
+
 export function useClassifyText() {
   return useMutation({
     mutationFn: async (data: ClassifyTextRequest) => {

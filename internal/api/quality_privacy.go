@@ -676,10 +676,37 @@ func (s *Server) getLineageSummary(w http.ResponseWriter, r *http.Request) {
 
 	sources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
 	nodes := make([]LineageNode, 0, len(sources))
+	sourceIDs := map[string]bool{}
 	for _, ds := range sources {
 		nodes = append(nodes, LineageNode{ID: ds.ID, Name: ds.Name, Type: ds.Type})
+		sourceIDs[ds.ID] = true
 	}
 
+	// Build edges: datasource → classified dataset (distinct dataset_ids from classifications)
+	var classRows []struct {
+		DatasetID string `db:"dataset_id"`
+		SourceID  string `db:"source_id"`
+	}
+	s.db.SelectContext(ctx, &classRows,
+		`SELECT DISTINCT dataset_id, COALESCE(source_id::text,'') AS source_id
+		 FROM classifications WHERE tenant_id = $1 AND dataset_id IS NOT NULL AND dataset_id <> ''
+		 LIMIT 200`, tenantID)
+
+	edges := make([]LineageEdge, 0)
+	seenDatasets := map[string]bool{}
+	for _, row := range classRows {
+		if !seenDatasets[row.DatasetID] {
+			seenDatasets[row.DatasetID] = true
+			if !sourceIDs[row.DatasetID] {
+				nodes = append(nodes, LineageNode{ID: row.DatasetID, Name: row.DatasetID, Type: "dataset"})
+			}
+		}
+		if row.SourceID != "" && row.SourceID != row.DatasetID {
+			edges = append(edges, LineageEdge{Source: row.SourceID, Target: row.DatasetID, Label: "has_data"})
+		}
+	}
+
+	// Add model lineage edges
 	var mlRows []struct {
 		DatasetID string `db:"dataset_id"`
 		ModelID   string `db:"model_id"`
@@ -688,13 +715,27 @@ func (s *Server) getLineageSummary(w http.ResponseWriter, r *http.Request) {
 		"SELECT DISTINCT dataset_id, model_id FROM model_lineage WHERE tenant_id = $1 LIMIT 200", tenantID)
 
 	modelIDs := map[string]bool{}
-	edges := make([]LineageEdge, 0)
 	for _, row := range mlRows {
 		edges = append(edges, LineageEdge{Source: row.DatasetID, Target: row.ModelID, Label: "used_by"})
 		if !modelIDs[row.ModelID] {
 			modelIDs[row.ModelID] = true
 			nodes = append(nodes, LineageNode{ID: row.ModelID, Name: row.ModelID, Type: "model"})
 		}
+	}
+
+	// Add AI gate query lineage: datasource → gate → endpoint
+	var gateRows []struct {
+		LLMEndpoint string `db:"llm_endpoint"`
+	}
+	s.db.SelectContext(ctx, &gateRows,
+		`SELECT DISTINCT COALESCE(llm_endpoint,'') AS llm_endpoint FROM gate_queries
+		 WHERE tenant_id = $1 AND llm_endpoint IS NOT NULL AND llm_endpoint <> '' LIMIT 20`, tenantID)
+	for _, row := range gateRows {
+		nodes = append(nodes, LineageNode{ID: "gate-" + row.LLMEndpoint, Name: row.LLMEndpoint, Type: "llm_endpoint"})
+		edges = append(edges, LineageEdge{Source: "ai-gate", Target: "gate-" + row.LLMEndpoint, Label: "routes_to"})
+	}
+	if len(gateRows) > 0 {
+		nodes = append(nodes, LineageNode{ID: "ai-gate", Name: "AI Gate", Type: "gateway"})
 	}
 
 	pkg.JSON(w, map[string]any{"nodes": nodes, "edges": edges})
@@ -745,20 +786,20 @@ func (s *Server) getQualitySummary(w http.ResponseWriter, r *http.Request) {
 		Uniqueness   float64 `db:"avg_uniqueness"`
 	}
 	err := s.db.GetContext(ctx, &avgs,
-		`SELECT COALESCE(AVG(overall),85) as avg_overall,
-		        COALESCE(AVG(completeness),90) as avg_completeness,
-		        COALESCE(AVG(accuracy),80) as avg_accuracy,
-		        COALESCE(AVG(consistency),88) as avg_consistency,
-		        COALESCE(AVG(timeliness),82) as avg_timeliness,
-		        COALESCE(AVG(uniqueness),79) as avg_uniqueness
+		`SELECT COALESCE(AVG(overall),0) as avg_overall,
+		        COALESCE(AVG(completeness),0) as avg_completeness,
+		        COALESCE(AVG(accuracy),0) as avg_accuracy,
+		        COALESCE(AVG(consistency),0) as avg_consistency,
+		        COALESCE(AVG(timeliness),0) as avg_timeliness,
+		        COALESCE(AVG(uniqueness),0) as avg_uniqueness
 		 FROM quality_scores WHERE tenant_id = $1`, tenantID)
 	if err != nil {
-		avgs.Overall = 85
-		avgs.Completeness = 90
-		avgs.Accuracy = 80
-		avgs.Consistency = 88
-		avgs.Timeliness = 82
-		avgs.Uniqueness = 79
+		avgs.Overall = 0
+		avgs.Completeness = 0
+		avgs.Accuracy = 0
+		avgs.Consistency = 0
+		avgs.Timeliness = 0
+		avgs.Uniqueness = 0
 	}
 
 	pkg.JSON(w, map[string]any{

@@ -543,6 +543,32 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}(datasourceID, tenantID)
+
+		// Trigger quality assessment for this datasource after scan
+		go func(id, tid string) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			if err := s.kafka.Produce(bgCtx, "job-executions", tid, map[string]any{
+				"tenant_id": tid,
+				"type":      "quality_assessment",
+				"config":    map[string]any{"datasource_id": id},
+			}); err != nil {
+				log.Warn().Err(err).Str("datasource_id", id).Msg("Failed to queue quality assessment after scan")
+			}
+		}(datasourceID, tenantID)
+
+		// Trigger ROT scan after successful scan
+		go func(id, tid string) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+			defer cancel()
+			if err := s.kafka.Produce(bgCtx, "job-executions", tid, map[string]any{
+				"tenant_id": tid,
+				"type":      "rot_scan",
+				"config":    map[string]any{"datasource_id": id},
+			}); err != nil {
+				log.Warn().Err(err).Str("datasource_id", id).Msg("Failed to queue ROT scan after scan")
+			}
+		}(datasourceID, tenantID)
 	}
 
 	log.Info().

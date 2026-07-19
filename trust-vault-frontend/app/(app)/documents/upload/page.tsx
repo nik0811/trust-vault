@@ -1,31 +1,66 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
-import { Upload, FileText, CheckCircle2, Loader2 } from 'lucide-react'
+import { Upload, FileText, CheckCircle2, Loader2, AlertCircle } from 'lucide-react'
+import { api } from '@/lib/api'
+
+interface FileResult {
+  name: string
+  size: string
+  status: 'uploading' | 'done' | 'error'
+  findings: number
+  error?: string
+}
 
 export default function DocumentUploadPage() {
   const [dragging, setDragging] = useState(false)
-  const [files, setFiles] = useState<{ name: string; size: string; status: 'scanning' | 'done'; findings: number }[]>([])
+  const [files, setFiles] = useState<FileResult[]>([])
+  const uploadingRef = useRef(new Set<string>())
+
+  const uploadFile = async (file: File) => {
+    if (uploadingRef.current.has(file.name)) return
+    uploadingRef.current.add(file.name)
+
+    const entry: FileResult = {
+      name: file.name,
+      size: `${(file.size / 1024).toFixed(1)} KB`,
+      status: 'uploading',
+      findings: 0,
+    }
+    setFiles(prev => [...prev, entry])
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const response = await api.post('/documents/extract', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      const data = response.data as any
+      const entityCount = data.entity_count ?? data.entities?.length ?? 0
+
+      setFiles(prev =>
+        prev.map(f =>
+          f.name === file.name ? { ...f, status: 'done', findings: entityCount } : f
+        )
+      )
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.error || 'Upload failed'
+      setFiles(prev =>
+        prev.map(f =>
+          f.name === file.name ? { ...f, status: 'error', error: errMsg } : f
+        )
+      )
+    } finally {
+      uploadingRef.current.delete(file.name)
+    }
+  }
 
   const addFiles = (list: FileList | null) => {
     if (!list) return
-    const newFiles = Array.from(list).map((f) => ({
-      name: f.name,
-      size: `${(f.size / 1024).toFixed(1)} KB`,
-      status: 'scanning' as const,
-      findings: 0,
-    }))
-    setFiles((prev) => [...prev, ...newFiles])
-    newFiles.forEach((nf, i) => {
-      setTimeout(() => {
-        setFiles((prev) =>
-          prev.map((f) =>
-            f.name === nf.name ? { ...f, status: 'done', findings: Math.floor(Math.random() * 6) } : f
-          )
-        )
-      }, 1200 + i * 600)
-    })
+    Array.from(list).forEach(uploadFile)
   }
 
   return (
@@ -64,10 +99,15 @@ export default function DocumentUploadPage() {
                   <p className="text-xs text-muted-foreground">{f.size}</p>
                 </div>
               </div>
-              {f.status === 'scanning' ? (
+              {f.status === 'uploading' ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Scanning...
+                </div>
+              ) : f.status === 'error' ? (
+                <div className="flex items-center gap-2 text-sm text-red-500">
+                  <AlertCircle className="h-4 w-4" />
+                  {f.error || 'Upload failed'}
                 </div>
               ) : (
                 <div className="flex items-center gap-2 text-sm">

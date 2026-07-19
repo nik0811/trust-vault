@@ -222,17 +222,17 @@ type DSAR struct {
 
 // Job represents a scheduled task
 type Job struct {
-	ID          string    `db:"id" json:"id"`
-	TenantID    string    `db:"tenant_id" json:"-"`
-	Name        string    `db:"name" json:"name"`
-	Type        string    `db:"type" json:"type"`
-	Schedule    string    `db:"schedule" json:"schedule"`
-	Config      JSON      `db:"config" json:"config"`
-	Status      string    `db:"status" json:"status"`
-	LastRun     time.Time `db:"last_run" json:"last_run"`
-	NextRun     time.Time `db:"next_run" json:"next_run"`
-	CreatedAt   time.Time `db:"created_at" json:"created_at"`
-	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+	ID        string     `db:"id" json:"id"`
+	TenantID  string     `db:"tenant_id" json:"-"`
+	Name      string     `db:"name" json:"name"`
+	Type      string     `db:"type" json:"type"`
+	Schedule  string     `db:"schedule" json:"schedule"`
+	Config    JSON       `db:"config" json:"config"`
+	Status    string     `db:"status" json:"status"`
+	LastRun   *time.Time `db:"last_run" json:"last_run,omitempty"`
+	NextRun   *time.Time `db:"next_run" json:"next_run,omitempty"`
+	CreatedAt time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // Notification stores alerts and events

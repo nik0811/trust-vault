@@ -14,6 +14,57 @@ import (
 	"github.com/securelens/securelens/internal/store"
 )
 
+// getClassifyStats returns aggregate classification statistics for the tenant.
+func (s *Server) getClassifyStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var stats struct {
+		TotalClassified int     `db:"total_classified" json:"total_classified"`
+		AvgConfidence   float64 `db:"avg_confidence" json:"avg_confidence"`
+		HighRisk        int     `db:"high_risk" json:"high_risk"`
+	}
+	s.db.GetContext(ctx, &stats, `
+		SELECT
+			COUNT(*) AS total_classified,
+			COALESCE(AVG(confidence), 0) AS avg_confidence,
+			COUNT(*) FILTER (WHERE entity_type IN ('SSN','CREDIT_CARD','PASSPORT','DRIVER_LICENSE','BANK_ACCOUNT','IBAN')) AS high_risk
+		FROM classifications WHERE tenant_id = $1`, tenantID)
+
+	var lastRun *string
+	var lr struct{ LastRun *string `db:"last_run"` }
+	if err := s.db.GetContext(ctx, &lr,
+		`SELECT TO_CHAR(MAX(created_at), 'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS last_run FROM classifications WHERE tenant_id = $1`, tenantID); err == nil {
+		lastRun = lr.LastRun
+	}
+
+	// Per-datasource breakdown
+	type dsStats struct {
+		DatasetID         string  `db:"dataset_id" json:"dataset_id"`
+		ClassifiedColumns int     `db:"classified_columns" json:"classified_columns"`
+		AvgConfidence     float64 `db:"avg_confidence" json:"avg_confidence"`
+	}
+	var perDS []dsStats
+	s.db.SelectContext(ctx, &perDS, `
+		SELECT dataset_id,
+		       COUNT(*) AS classified_columns,
+		       COALESCE(AVG(confidence), 0) AS avg_confidence
+		FROM classifications
+		WHERE tenant_id = $1 AND dataset_id IS NOT NULL AND dataset_id <> ''
+		GROUP BY dataset_id`, tenantID)
+	if perDS == nil {
+		perDS = []dsStats{}
+	}
+
+	pkg.JSON(w, map[string]any{
+		"total_classified": stats.TotalClassified,
+		"avg_confidence":   stats.AvgConfidence,
+		"high_risk":        stats.HighRisk,
+		"last_run":         lastRun,
+		"per_dataset":      perDS,
+	})
+}
+
 func (s *Server) classifyText(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)

@@ -22,7 +22,8 @@ const columns: Column<Job>[] = [
       />
     ),
   },
-  { id: 'last_run', header: 'Last Run', cell: (row) => row.last_run ? new Date(row.last_run).toLocaleString() : 'Never' },
+  { id: 'last_run', header: 'Last Run', cell: (row) => row.last_run ? new Date(row.last_run).toLocaleString() : '—' },
+  { id: 'next_run', header: 'Next Run', cell: (row) => row.next_run ? new Date(row.next_run).toLocaleString() : '—' },
 ]
 
 export default function JobsPage() {

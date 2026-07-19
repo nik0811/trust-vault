@@ -241,6 +241,7 @@ func (s *Server) setupRoutes() {
 			r.Route("/classify", func(r chi.Router) {
 				r.Post("/text", s.classifyText)
 				r.Post("/dataset", s.classifyDataset)
+				r.Get("/stats", s.getClassifyStats)
 				r.Get("/results/{dataset_id}", s.getClassificationResults)
 				r.Get("/rules", s.listClassificationRules)
 				r.Post("/rules", s.createClassificationRule)
@@ -359,6 +360,8 @@ func (s *Server) setupRoutes() {
 			r.Route("/notifications", func(r chi.Router) {
 				r.Get("/", s.listNotifications)
 				r.Put("/{id}/read", s.markNotificationRead)
+				r.Put("/read-all", s.markAllNotificationsRead)
+				r.Delete("/{id}", s.deleteNotification)
 				r.Post("/webhooks", s.createWebhook)
 				r.Get("/webhooks", s.listWebhooks)
 				r.Delete("/webhooks/{id}", s.deleteWebhook)

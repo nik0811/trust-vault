@@ -374,6 +374,23 @@ func (s *Server) markNotificationRead(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, map[string]string{"status": "read"})
 }
 
+func (s *Server) markAllNotificationsRead(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	s.db.ExecContext(ctx, "UPDATE notifications SET read = true WHERE tenant_id = $1", tenantID)
+	pkg.JSON(w, map[string]string{"status": "all_read"})
+}
+
+func (s *Server) deleteNotification(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	s.db.ExecContext(ctx, "DELETE FROM notifications WHERE tenant_id = $1 AND id = $2", tenantID, id)
+	pkg.JSON(w, map[string]string{"status": "deleted"})
+}
+
 func (s *Server) createWebhook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
@@ -491,7 +508,8 @@ func (s *Server) createJob(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate next run time if schedule is provided
 	if job.Schedule != "" {
-		job.NextRun = calculateNextRunTime(job.Schedule)
+		nextRun := calculateNextRunTime(job.Schedule)
+		job.NextRun = &nextRun
 	}
 
 	s.jobs.Create(ctx, &job)

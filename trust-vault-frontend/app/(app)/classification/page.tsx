@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/base/skeleton'
 import { EmptyState } from '@/components/base/empty-state'
 import Link from 'next/link'
 import { Zap, TrendingUp, Settings, Search, FileText } from 'lucide-react'
-import { useClassifyText, useClassificationModels, useClassificationRules } from '@/hooks/use-classification'
+import { useClassifyText, useClassificationModels, useClassificationRules, useClassifyStats } from '@/hooks/use-classification'
 import { useDataSources } from '@/hooks/use-datasources'
 import { useFeedbackStats } from '@/hooks/use-advisor'
 
@@ -33,13 +33,13 @@ const columns: Column<ClassificationEntry>[] = [
   },
   {
     id: 'progress',
-    header: 'Progress',
+    header: 'Classified Columns',
     cell: (row) => (
       <div className="flex items-center gap-2">
         <div className="w-32 h-2 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full bg-primary transition-all"
-            style={{ width: `${(row.classifiedColumns / row.totalColumns) * 100}%` }}
+            style={{ width: row.totalColumns > 0 ? `${(row.classifiedColumns / row.totalColumns) * 100}%` : '0%' }}
           />
         </div>
         <span className="text-sm">
@@ -70,30 +70,35 @@ export default function ClassificationPage() {
   const { data: models, isLoading: modelsLoading } = useClassificationModels()
   const { data: rules, isLoading: rulesLoading } = useClassificationRules()
   const { data: feedbackStats } = useFeedbackStats()
+  const { data: classifyStats } = useClassifyStats()
   const classifyText = useClassifyText()
 
   const classifications = useMemo(() => {
     if (!Array.isArray(dataSources)) return []
-    return dataSources.map(ds => ({
-      id: ds.id,
-      dataset: ds.name,
-      classifiedColumns: Math.floor(Math.random() * 20) + 5,
-      totalColumns: Math.floor(Math.random() * 10) + 20,
-      confidence: Math.floor(Math.random() * 15) + 85,
-      lastClassified: new Date(ds.last_scan || ds.created_at),
-    }))
-  }, [dataSources])
+    const perDataset = classifyStats?.per_dataset ?? []
+    return dataSources.map(ds => {
+      const dsData = perDataset.find(p => p.dataset_id === ds.id)
+      return {
+        id: ds.id,
+        dataset: ds.name,
+        classifiedColumns: dsData?.classified_columns ?? 0,
+        totalColumns: dsData?.classified_columns ?? 0, // we only know classified count
+        confidence: dsData ? Math.round(dsData.avg_confidence * 100) : 0,
+        lastClassified: new Date(ds.last_scan || ds.created_at),
+      }
+    }).filter(c => c.classifiedColumns > 0 || dsLoading)
+  }, [dataSources, classifyStats, dsLoading])
 
   const stats = useMemo(() => {
-    const totalClassified = classifications.reduce((acc, c) => acc + c.classifiedColumns, 0)
-    const avgConfidence = classifications.length > 0
-      ? (classifications.reduce((acc, c) => acc + c.confidence, 0) / classifications.length).toFixed(1)
+    const totalClassified = classifyStats?.total_classified ?? 0
+    const avgConfidence = classifyStats?.avg_confidence != null
+      ? (classifyStats.avg_confidence * 100).toFixed(1)
       : '0'
-    const pendingReview = feedbackStats?.pending_corrections || 0
+    const pendingReview = (feedbackStats as any)?.total_corrections || 0
     const modelCount = Array.isArray(models) ? models.length : 0
 
     return { totalClassified, avgConfidence, pendingReview, modelCount }
-  }, [classifications, feedbackStats, models])
+  }, [classifyStats, feedbackStats, models])
 
   const handleTestClassify = async () => {
     if (!testText.trim()) return

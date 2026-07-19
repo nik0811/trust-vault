@@ -506,12 +506,38 @@ func (s *Server) listGateQueries(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	limit, offset := pkg.ParseListOpts(r)
 
-	queries, err := s.gateQueries.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
+	type GateQueryRow struct {
+		ID          string    `db:"id" json:"id"`
+		UserID      string    `db:"user_id" json:"user_id"`
+		Query       string    `db:"query" json:"query"`
+		Response    string    `db:"response" json:"response"`
+		Decision    string    `db:"decision" json:"decision"`
+		LatencyMs   int       `db:"latency_ms" json:"latency_ms"`
+		LLMEndpoint string    `db:"llm_endpoint" json:"llm_endpoint"`
+		CreatedAt   string    `db:"created_at" json:"created_at"`
+	}
+	var rows []GateQueryRow
+	err := s.db.SelectContext(ctx, &rows, `
+		SELECT id,
+		       COALESCE(user_id::text, '') AS user_id,
+		       query,
+		       COALESCE(response, '') AS response,
+		       COALESCE(decision, '') AS decision,
+		       COALESCE(latency_ms, 0) AS latency_ms,
+		       COALESCE(llm_endpoint, '') AS llm_endpoint,
+		       created_at::text AS created_at
+		FROM gate_queries
+		WHERE tenant_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3`, tenantID, limit, offset)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
-	pkg.JSON(w, queries)
+	if rows == nil {
+		rows = []GateQueryRow{}
+	}
+	pkg.JSON(w, rows)
 }
 
 func (s *Server) getGateQuery(w http.ResponseWriter, r *http.Request) {
