@@ -163,6 +163,10 @@ func shouldBroadcast(eventName string) bool {
 		"classification.queued":     true,
 		"policy.violated":           true,
 		"notification.created":      true,
+		"rot.scan.started":          true,
+		"rot.scan.progress":         true,
+		"rot.scan.completed":        true,
+		"rot.scan.failed":           true,
 	}
 	return broadcastEvents[eventName]
 }
