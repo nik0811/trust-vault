@@ -67,7 +67,17 @@ func (s *Server) getROTDatasets(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	limit, offset := pkg.ParseListOpts(r)
 
-	rotData, _ := s.rotData.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
+	var rotData []store.ROTData
+	if tenantID == "" {
+		s.db.SelectContext(ctx, &rotData,
+			`SELECT * FROM rot_data ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+	} else {
+		s.db.SelectContext(ctx, &rotData,
+			`SELECT * FROM rot_data WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, tenantID, limit, offset)
+	}
+	if rotData == nil {
+		rotData = []store.ROTData{}
+	}
 	pkg.JSON(w, rotData)
 }
 
