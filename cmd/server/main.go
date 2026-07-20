@@ -124,6 +124,9 @@ func bootstrapSuperAdmin(ctx context.Context, db *store.DB) {
 func runGateway(ctx context.Context, db *store.DB, kafka *external.Kafka, port, internalPort string) {
 	server := api.NewServer(db, kafka)
 
+	// Start scan watchdog: marks scans stuck in 'running' for >30 minutes as failed.
+	go runScanWatchdog(ctx, db)
+
 	// Start servers in goroutines
 	go server.RunInternal(internalPort)
 	go server.Run(port)
@@ -283,5 +286,33 @@ func calculateNextRun(schedule string) time.Time {
 		}
 		// Default to daily if unparseable
 		return now.Add(24 * time.Hour)
+	}
+}
+
+// runScanWatchdog periodically marks scans stuck in 'running' for over 30 minutes as failed.
+// This handles cases where the ingestion sidecar is unreachable or crashes without calling back.
+func runScanWatchdog(ctx context.Context, db *store.DB) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			result, err := db.ExecContext(ctx,
+				`UPDATE scan_logs
+				 SET status = 'failed',
+				     message = 'Timed out: no completion callback received within 30 minutes',
+				     completed_at = NOW()
+				 WHERE status = 'running'
+				   AND started_at < NOW() - INTERVAL '30 minutes'`)
+			if err != nil {
+				log.Error().Err(err).Msg("scan watchdog: failed to mark timed-out scans")
+				continue
+			}
+			if n, _ := result.RowsAffected(); n > 0 {
+				log.Warn().Int64("count", n).Msg("scan watchdog: marked timed-out scans as failed")
+			}
+		}
 	}
 }

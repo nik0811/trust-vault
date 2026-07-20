@@ -2222,7 +2222,7 @@ func (k *Kafka) executeROTScanJob(ctx context.Context, db *store.DB, job JobExec
 	}
 	if scanCfg != nil {
 		if scanID, ok := scanCfg["scan_id"].(string); ok && scanID != "" {
-			db.ExecContext(ctx, `UPDATE scan_logs SET status = 'success', message = $1, updated_at = NOW() WHERE id = $2`,
+			db.ExecContext(ctx, `UPDATE scan_logs SET status = 'success', message = $1, completed_at = NOW() WHERE id = $2`,
 				fmt.Sprintf("ROT scan completed: %d items found", totalROT), scanID)
 		}
 	}
