@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
 	"github.com/securelens/securelens/internal/domain"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
@@ -1931,7 +1932,7 @@ func countUnscanned(sources []store.DataSource) int {
 // to avoid sqlx scan errors when nullable UUID columns contain NULL values.
 func (s *Server) loadClassifications(ctx context.Context, tenantID string) []store.Classification {
 	var result []store.Classification
-	s.db.SelectContext(ctx, &result, //nolint:errcheck
+	err := s.db.SelectContext(ctx, &result,
 		`SELECT id, tenant_id, dataset_id,
 		 source_id::text AS source_id,
 		 entity_type, value, confidence, context,
@@ -1939,6 +1940,9 @@ func (s *Server) loadClassifications(ctx context.Context, tenantID string) []sto
 		 rule_id::text AS rule_id,
 		 classification_source, value_sample, created_at
 		 FROM classifications WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1000`, tenantID)
+	if err != nil {
+		log.Error().Err(err).Str("tenant_id", tenantID).Msg("loadClassifications failed")
+	}
 	if result == nil {
 		result = []store.Classification{}
 	}
