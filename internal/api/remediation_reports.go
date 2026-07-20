@@ -824,15 +824,36 @@ func (s *Server) getLabelSummary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var summary []struct {
-		Label string `db:"label" json:"label"`
-		Count int    `db:"count" json:"count"`
+	var rows []struct {
+		Label string `db:"label"`
+		Count int    `db:"count"`
 	}
-	s.db.SelectContext(ctx, &summary,
+	s.db.SelectContext(ctx, &rows,
 		"SELECT label, COUNT(*) as count FROM labels WHERE tenant_id = $1 GROUP BY label",
 		tenantID)
 
-	pkg.JSON(w, summary)
+	result := map[string]int{
+		"total":        0,
+		"public":       0,
+		"internal":     0,
+		"confidential": 0,
+		"restricted":   0,
+	}
+	for _, row := range rows {
+		result["total"] += row.Count
+		switch row.Label {
+		case "PUBLIC":
+			result["public"] += row.Count
+		case "INTERNAL":
+			result["internal"] += row.Count
+		case "CONFIDENTIAL", "HIGHLY_CONFIDENTIAL":
+			result["confidential"] += row.Count
+		case "RESTRICTED":
+			result["restricted"] += row.Count
+		}
+	}
+
+	pkg.JSON(w, result)
 }
 
 func (s *Server) submitFeedback(w http.ResponseWriter, r *http.Request) {

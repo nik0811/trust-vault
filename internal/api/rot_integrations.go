@@ -1090,67 +1090,78 @@ func (s *Server) classifyDocument(w http.ResponseWriter, r *http.Request) {
 	}
 	s.reviewQueue.Create(ctx, &item)
 
-	// If text is provided, classify synchronously and store governance results
+	// If text is provided, classify synchronously so the response includes results immediately.
 	if req.Text != "" {
-		go func() {
-			results := s.runBasicClassification(req.Text, nil)
-			if len(results) == 0 {
-				return
-			}
+		results := s.runBasicClassification(req.Text, nil)
 
-			entityTypes := make([]string, 0)
-			seen := map[string]bool{}
-			findings := make([]map[string]any, 0, len(results))
-			for _, r := range results {
-				et, _ := r["entity_type"].(string)
-				if et == "" {
-					continue
+		entityTypes := make([]string, 0)
+		seen := map[string]bool{}
+		findings := make([]map[string]any, 0, len(results))
+		for _, result := range results {
+			// runBasicClassification uses "entity" key, normalise to "entity_type" for storage.
+			et, _ := result["entity"].(string)
+			if et == "" {
+				et, _ = result["entity_type"].(string)
+			}
+			if et == "" {
+				continue
+			}
+			finding := map[string]any{
+				"entity_type": et,
+				"value":       result["value"],
+				"confidence":  result["confidence"],
+				"start":       result["start"],
+				"end":         result["end"],
+			}
+			if !seen[et] {
+				seen[et] = true
+				entityTypes = append(entityTypes, et)
+			}
+			findings = append(findings, finding)
+		}
+
+		etJSON, _ := json.Marshal(entityTypes)
+		findJSON, _ := json.Marshal(findings)
+
+		governed := len(entityTypes) > 0
+		highestLabel := ""
+		for _, et := range entityTypes {
+			if label, ok := entityLabelMap[et]; ok {
+				if labelPriority[label] > labelPriority[highestLabel] {
+					highestLabel = label
 				}
-				if !seen[et] {
-					seen[et] = true
-					entityTypes = append(entityTypes, et)
-				}
-				findings = append(findings, r)
 			}
+		}
 
-			etJSON, _ := json.Marshal(entityTypes)
-			findJSON, _ := json.Marshal(findings)
+		docName := req.DocumentName
+		if docName == "" {
+			docName = req.DocumentID
+		}
 
-			// Determine governance label
-			governed := len(entityTypes) > 0
-			labelApplied := ""
-			highestLabel := ""
-			for _, et := range entityTypes {
-				if label, ok := entityLabelMap[et]; ok {
-					if labelPriority[label] > labelPriority[highestLabel] {
-						highestLabel = label
-					}
-				}
-			}
-			if highestLabel != "" {
-				labelApplied = highestLabel
-			}
+		docClass := store.DocumentClassification{
+			TenantID:     tenantID,
+			DocumentID:   req.DocumentID,
+			DocumentName: docName,
+			EntityTypes:  store.JSON(etJSON),
+			Findings:     store.JSON(findJSON),
+			Governed:     governed,
+			LabelApplied: highestLabel,
+		}
+		s.documentClassifications.Create(ctx, &docClass)
 
-			docName := req.DocumentName
-			if docName == "" {
-				docName = req.DocumentID
-			}
-
-			docClass := store.DocumentClassification{
-				TenantID:     tenantID,
-				DocumentID:   req.DocumentID,
-				DocumentName: docName,
-				EntityTypes:  store.JSON(etJSON),
-				Findings:     store.JSON(findJSON),
-				Governed:     governed,
-				LabelApplied: labelApplied,
-			}
-			s.documentClassifications.Create(context.Background(), &docClass)
-		}()
+		pkg.JSON(w, map[string]any{
+			"status":       "classified",
+			"document_id":  req.DocumentID,
+			"entity_types": entityTypes,
+			"findings":     findings,
+			"governed":     governed,
+			"label_applied": highestLabel,
+		})
+		return
 	}
 
 	pkg.JSON(w, map[string]any{
-		"status":      "classifying",
+		"status":      "queued",
 		"document_id": req.DocumentID,
 	})
 }
