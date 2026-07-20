@@ -293,8 +293,9 @@ func (s *Server) executeDSAR(w http.ResponseWriter, r *http.Request) {
 		for _, c := range classifications {
 			// Find the source for this classification
 			var sourceName, sourceType string
+			cSourceID := pkg.DerefStr(c.SourceID)
 			for _, src := range sources {
-				if src.ID == c.SourceID {
+				if src.ID == cSourceID {
 					sourceName = src.Name
 					sourceType = src.Type
 					break
@@ -307,7 +308,7 @@ func (s *Server) executeDSAR(w http.ResponseWriter, r *http.Request) {
 			}
 
 			results = append(results, DSARResult{
-				SourceID:   c.SourceID,
+				SourceID:   cSourceID,
 				SourceName: sourceName,
 				SourceType: sourceType,
 				DatasetID:  c.DatasetID,

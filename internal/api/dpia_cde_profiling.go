@@ -341,7 +341,7 @@ func (s *Server) getDocumentClassifications(w http.ResponseWriter, r *http.Reque
 
 	var docs []store.DocumentClassification
 	s.db.SelectContext(ctx, &docs,
-		"SELECT * FROM document_classifications WHERE ($1::text = '' OR tenant_id = $1) AND document_id = $2 ORDER BY created_at DESC",
+		"SELECT * FROM document_classifications WHERE ($1::text = '' OR tenant_id::text = $1) AND document_id = $2 ORDER BY created_at DESC",
 		tenantID, docID)
 	if docs == nil {
 		docs = []store.DocumentClassification{}
