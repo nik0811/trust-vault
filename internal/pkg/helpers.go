@@ -280,3 +280,11 @@ func IsValidUUID(s string) bool {
 	_, err := uuid.Parse(s)
 	return err == nil
 }
+
+// DerefStr safely dereferences a *string, returning "" if nil.
+func DerefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}

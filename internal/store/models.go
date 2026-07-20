@@ -150,7 +150,7 @@ type Classification struct {
 	ID                   string    `db:"id" json:"id"`
 	TenantID             string    `db:"tenant_id" json:"-"`
 	DatasetID            string    `db:"dataset_id" json:"dataset_id"`
-	SourceID             string    `db:"source_id" json:"source_id"`
+	SourceID             *string   `db:"source_id" json:"source_id,omitempty"`
 	EntityType           string    `db:"entity_type" json:"entity_type"`
 	Value                string    `db:"value" json:"value"`
 	Confidence           float64   `db:"confidence" json:"confidence"`
@@ -654,4 +654,24 @@ type ConsentPreference struct {
 	Preferences JSON      `db:"preferences" json:"preferences"`
 	IP          string    `db:"ip" json:"ip"`
 	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// ComplianceAssessment stores the result of a compliance assessment run
+type ComplianceAssessment struct {
+	ID                    string    `db:"id" json:"id"`
+	TenantID              string    `db:"tenant_id" json:"-"`
+	AssessedBy            string    `db:"assessed_by" json:"assessed_by"`
+	ComplianceScore       float64   `db:"compliance_score" json:"compliance_score"`
+	TotalFindings         int       `db:"total_findings" json:"total_findings"`
+	CriticalFindings      int       `db:"critical_findings" json:"critical_findings"`
+	HighFindings          int       `db:"high_findings" json:"high_findings"`
+	MediumFindings        int       `db:"medium_findings" json:"medium_findings"`
+	LowFindings           int       `db:"low_findings" json:"low_findings"`
+	TotalEvidence         int       `db:"total_evidence" json:"total_evidence"`
+	DataSourcesChecked    int       `db:"data_sources_checked" json:"data_sources_checked"`
+	ClassificationsChecked int      `db:"classifications_checked" json:"classifications_checked"`
+	PoliciesEvaluated     int       `db:"policies_evaluated" json:"policies_evaluated"`
+	RegulationsCovered    JSON      `db:"regulations_covered" json:"regulations_covered"`
+	Summary               JSON      `db:"summary" json:"summary"`
+	CreatedAt             time.Time `db:"created_at" json:"created_at"`
 }

@@ -76,6 +76,29 @@ export interface AssessmentResult {
   }
 }
 
+export interface AssessmentLog {
+  id: string
+  assessed_by: string
+  compliance_score: number
+  total_findings: number
+  critical_findings: number
+  high_findings: number
+  medium_findings: number
+  low_findings: number
+  total_evidence: number
+  data_sources_checked: number
+  classifications_checked: number
+  policies_evaluated: number
+  regulations_covered: string[]
+  summary: {
+    ropa_count: number
+    retention_violations: number
+    unscanned_sources: number
+    unlabeled_datasets: number
+  }
+  created_at: string
+}
+
 export function useRecommendations() {
   return useQuery({
     queryKey: ['recommendations'],
@@ -108,10 +131,21 @@ export function useRunComplianceAssessment() {
       queryClient.invalidateQueries({ queryKey: ['recommendations'] })
       queryClient.invalidateQueries({ queryKey: ['compliance-gaps'] })
       queryClient.invalidateQueries({ queryKey: ['risk-score'] })
+      queryClient.invalidateQueries({ queryKey: ['assessment-logs'] })
       toast.success('Compliance assessment completed')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to run compliance assessment')
+    },
+  })
+}
+
+export function useAssessmentLogs() {
+  return useQuery({
+    queryKey: ['assessment-logs'],
+    queryFn: async () => {
+      const response = await api.get<AssessmentLog[]>('/advisor/assessment/logs')
+      return response.data
     },
   })
 }

@@ -67,6 +67,7 @@ type Server struct {
 	residencyRules           *store.Repository[store.ResidencyRule]
 	endpointScans            *store.Repository[store.EndpointScan]
 	consentPreferences       *store.Repository[store.ConsentPreference]
+	complianceAssessments    *store.Repository[store.ComplianceAssessment]
 }
 
 func NewServer(db *store.DB, kafka *external.Kafka) *Server {
@@ -118,6 +119,7 @@ func NewServer(db *store.DB, kafka *external.Kafka) *Server {
 		residencyRules:           store.NewRepo[store.ResidencyRule](db, "residency_rules"),
 		endpointScans:            store.NewRepo[store.EndpointScan](db, "endpoint_scans"),
 		consentPreferences:       store.NewRepo[store.ConsentPreference](db, "consent_preferences"),
+		complianceAssessments:    store.NewRepo[store.ComplianceAssessment](db, "compliance_assessments"),
 	}
 
 	s.setupRoutes()
@@ -451,6 +453,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/playbook/{issue_type}", s.getPlaybook)
 				r.Get("/risk-score", s.getRiskScore)
 				r.Post("/assess", s.runComplianceAssessment)
+				r.Get("/assessment/logs", s.listAssessmentLogs)
 			})
 
 			// ROT

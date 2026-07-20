@@ -1367,7 +1367,7 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 		}}
 		var assets []domain.AffectedAsset
 		for _, c := range sampleClassifications {
-			assets = append(assets, domain.AffectedAsset{ID: c.SourceID, Name: c.DatasetID, Type: "dataset"})
+			assets = append(assets, domain.AffectedAsset{ID: pkg.DerefStr(c.SourceID), Name: c.DatasetID, Type: "dataset"})
 		}
 		gaps = append(gaps, FrontendComplianceGap{
 			Regulation:        "GDPR",
@@ -1851,6 +1851,32 @@ func (s *Server) runComplianceAssessment(w http.ResponseWriter, r *http.Request)
 		IP:         r.RemoteAddr,
 	})
 
+	regulationsJSON, _ := json.Marshal([]string{"GDPR", "CCPA", "DPDP Act 2023", "UAE PDPL", "EU AI Act", "HIPAA", "PCI-DSS"})
+	summaryJSON, _ := json.Marshal(map[string]any{
+		"ropa_count":           len(ropa),
+		"retention_violations": len(violations),
+		"unscanned_sources":    countUnscanned(dataSources),
+		"unlabeled_datasets":   totalDatasets - labeledDatasets,
+	})
+
+	assessment := &store.ComplianceAssessment{
+		TenantID:               tenantID,
+		AssessedBy:             userID,
+		ComplianceScore:        overallScore,
+		TotalFindings:          len(recommendations),
+		CriticalFindings:       criticalCount,
+		HighFindings:           highCount,
+		MediumFindings:         mediumCount,
+		LowFindings:            lowCount,
+		TotalEvidence:          totalEvidence,
+		DataSourcesChecked:     len(dataSources),
+		ClassificationsChecked: len(classifications),
+		PoliciesEvaluated:      len(policies),
+		RegulationsCovered:     store.JSON(regulationsJSON),
+		Summary:                store.JSON(summaryJSON),
+	}
+	s.complianceAssessments.Create(ctx, assessment)
+
 	pkg.JSON(w, map[string]any{
 		"assessed_at":        now,
 		"assessed_by":       userID,
@@ -1882,4 +1908,18 @@ func countUnscanned(sources []store.DataSource) int {
 		}
 	}
 	return count
+}
+
+func (s *Server) listAssessmentLogs(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var assessments []store.ComplianceAssessment
+	err := s.db.SelectContext(ctx, &assessments,
+		`SELECT * FROM compliance_assessments WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`,
+		tenantID)
+	if err != nil || assessments == nil {
+		assessments = []store.ComplianceAssessment{}
+	}
+	pkg.JSON(w, assessments)
 }

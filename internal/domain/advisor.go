@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
 )
 
@@ -73,6 +74,12 @@ var PIITypes = map[string]bool{
 	"PII": true, "SSN": true, "EMAIL": true, "PHONE": true,
 	"ADDRESS": true, "NAME": true, "DATE_OF_BIRTH": true,
 	"PASSPORT": true, "DRIVER_LICENSE": true,
+	// GLiNER-produced types
+	"PERSON_NAME": true, "PERSON": true, "IP_ADDRESS": true,
+	"CREDIT_CARD": true, "BANK_ACCOUNT": true, "DATE": true,
+	"LOCATION": true, "ORG": true, "ORGANIZATION": true,
+	"IBAN": true, "ROUTING_NUMBER": true, "MEDICAL_RECORD": true,
+	"HEALTH_INSURANCE_ID": true, "VIN": true,
 }
 
 // HighSensitivityTypes require extra protection
@@ -113,14 +120,15 @@ func checkUnprotectedPII(advCtx *AdvisorContext) []Recommendation {
 	piiEvidence := make(map[string][]EvidenceItem)
 	piiAssets := make(map[string]map[string]AffectedAsset)
 
-	for _, c := range advCtx.Classifications {
+		for _, c := range advCtx.Classifications {
 		if PIITypes[c.EntityType] {
 			piiCounts[c.EntityType]++
 			if piiAssets[c.EntityType] == nil {
 				piiAssets[c.EntityType] = make(map[string]AffectedAsset)
 			}
-			piiAssets[c.EntityType][c.SourceID] = AffectedAsset{
-				ID: c.SourceID, Name: c.DatasetID, Type: "dataset",
+			cSrcID := pkg.DerefStr(c.SourceID)
+			piiAssets[c.EntityType][cSrcID] = AffectedAsset{
+				ID: cSrcID, Name: c.DatasetID, Type: "dataset",
 			}
 			if len(piiEvidence[c.EntityType]) < 5 {
 				piiEvidence[c.EntityType] = append(piiEvidence[c.EntityType], EvidenceItem{
@@ -131,7 +139,7 @@ func checkUnprotectedPII(advCtx *AdvisorContext) []Recommendation {
 					ResourceID:  c.DatasetID,
 					ResourceRef: "classifications/" + c.ID,
 					DetectedAt:  c.CreatedAt,
-					Metadata:    map[string]any{"confidence": c.Confidence, "entity_type": c.EntityType, "source_id": c.SourceID},
+					Metadata:    map[string]any{"confidence": c.Confidence, "entity_type": c.EntityType, "source_id": cSrcID},
 				})
 			}
 		}
@@ -465,10 +473,10 @@ func checkHighSensitivityData(advCtx *AdvisorContext) []Recommendation {
 					Metadata:    map[string]any{"entity_type": c.EntityType, "confidence": c.Confidence},
 				})
 			}
-			if !seenAssets[c.SourceID] {
-				seenAssets[c.SourceID] = true
-				assets = append(assets, AffectedAsset{ID: c.SourceID, Name: c.DatasetID, Type: "dataset"})
-			}
+		if !seenAssets[pkg.DerefStr(c.SourceID)] {
+			seenAssets[pkg.DerefStr(c.SourceID)] = true
+			assets = append(assets, AffectedAsset{ID: pkg.DerefStr(c.SourceID), Name: c.DatasetID, Type: "dataset"})
+		}
 		}
 	}
 

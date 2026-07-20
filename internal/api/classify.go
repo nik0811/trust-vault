@@ -760,7 +760,7 @@ func (s *Server) getDatasetClassification(w http.ResponseWriter, r *http.Request
 		// Try to get datasource from the first classification's source_id
 		err = s.db.GetContext(ctx, &datasource,
 			"SELECT * FROM datasources WHERE tenant_id = $1 AND id = $2",
-			tenantID, classifications[0].SourceID)
+			tenantID, pkg.DerefStr(classifications[0].SourceID))
 		if err == nil {
 			datasetName = datasource.Name
 			sourceID = datasource.ID

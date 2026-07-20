@@ -7,11 +7,11 @@ import { Skeleton } from '@/components/base/skeleton'
 import Link from 'next/link'
 import {
   Lightbulb, AlertTriangle, FileText, TrendingUp, Shield,
-  ChevronDown, ChevronRight, RefreshCw, Clock, Database
+  ChevronDown, ChevronRight, RefreshCw, Clock, Database, History, CheckCircle
 } from 'lucide-react'
 import {
   useRecommendations, useComplianceGaps, useRiskScore,
-  useRunComplianceAssessment, type Recommendation
+  useRunComplianceAssessment, useAssessmentLogs, type Recommendation, type AssessmentLog
 } from '@/hooks/use-advisor'
 
 function RecommendationCard({ rec }: { rec: Recommendation }) {
@@ -141,6 +141,8 @@ export default function AdvisorPage() {
   const { data: gaps, isLoading: gapsLoading } = useComplianceGaps()
   const { data: riskScore, isLoading: riskLoading } = useRiskScore()
   const assessment = useRunComplianceAssessment()
+  const { data: assessmentLogs, isLoading: logsLoading } = useAssessmentLogs()
+  const [showLogs, setShowLogs] = useState(false)
 
   const stats = useMemo(() => {
     const recsCount = Array.isArray(recommendations) ? recommendations.length : 0
@@ -311,6 +313,69 @@ export default function AdvisorPage() {
               <p className="text-sm text-muted-foreground mt-1">
                 Click "Run Assessment" to analyze your compliance posture
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* Assessment History Logs */}
+        <div className="rounded-lg border border-border bg-card p-6">
+          <button
+            onClick={() => setShowLogs(!showLogs)}
+            className="w-full flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2">
+              <History className="h-5 w-5 text-muted-foreground" />
+              <h3 className="text-lg font-semibold text-foreground">Assessment History</h3>
+              {Array.isArray(assessmentLogs) && assessmentLogs.length > 0 && (
+                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                  {assessmentLogs.length} runs
+                </span>
+              )}
+            </div>
+            {showLogs ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          </button>
+
+          {showLogs && (
+            <div className="mt-4">
+              {logsLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-14 w-full" />
+                  <Skeleton className="h-14 w-full" />
+                </div>
+              ) : Array.isArray(assessmentLogs) && assessmentLogs.length > 0 ? (
+                <div className="space-y-2">
+                  {assessmentLogs.map((log: AssessmentLog) => (
+                    <div key={log.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className={`h-4 w-4 ${log.compliance_score >= 0.8 ? 'text-green-500' : log.compliance_score >= 0.6 ? 'text-yellow-500' : 'text-red-500'}`} />
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {Math.round(log.compliance_score * 100)}% compliance — {log.total_findings} finding{log.total_findings !== 1 ? 's' : ''}
+                          </p>
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                            <Clock className="h-3 w-3" />
+                            {new Date(log.created_at).toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                        <span>{log.data_sources_checked} sources</span>
+                        <span>{log.classifications_checked} classifications</span>
+                        <span>{log.policies_evaluated} policies</span>
+                        {log.critical_findings > 0 && (
+                          <span className="text-red-500 font-medium">{log.critical_findings} critical</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <History className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+                  <p className="text-sm text-muted-foreground">No assessment runs yet</p>
+                  <p className="text-xs text-muted-foreground mt-1">Run an assessment to start tracking history</p>
+                </div>
+              )}
             </div>
           )}
         </div>
