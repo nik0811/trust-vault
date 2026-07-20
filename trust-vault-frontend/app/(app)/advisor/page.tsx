@@ -142,7 +142,7 @@ export default function AdvisorPage() {
   const { data: riskScore, isLoading: riskLoading } = useRiskScore()
   const assessment = useRunComplianceAssessment()
   const { data: assessmentLogs, isLoading: logsLoading } = useAssessmentLogs()
-  const [showLogs, setShowLogs] = useState(false)
+  const [showLogs, setShowLogs] = useState(true)
 
   const stats = useMemo(() => {
     const recsCount = Array.isArray(recommendations) ? recommendations.length : 0
@@ -180,31 +180,42 @@ export default function AdvisorPage() {
         </div>
 
         {/* Assessment result banner */}
-        {assessment.data && (
+        {assessment.isPending && (
           <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="text-center">
-                  <p className="text-2xl font-bold text-foreground">
-                    {Math.round(assessment.data.compliance_score * 100)}%
-                  </p>
-                  <p className="text-xs text-muted-foreground">Compliance Score</p>
-                </div>
-                <div className="h-8 w-px bg-border" />
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                  <span>{assessment.data.data_sources_checked} sources checked</span>
-                  <span>{assessment.data.classifications_checked} classifications</span>
-                  <span>{assessment.data.policies_evaluated} policies evaluated</span>
-                  <span>{assessment.data.total_evidence} evidence items</span>
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground text-right">
-                <p>Assessed: {new Date(assessment.data.assessed_at).toLocaleString()}</p>
-                <p>Regulations: {assessment.data.regulations_covered?.join(', ')}</p>
-              </div>
+            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin text-primary" />
+              <span>Running compliance assessment — this may take a moment…</span>
             </div>
           </div>
         )}
+        {assessment.isSuccess && assessmentLogs && assessmentLogs.length > 0 && (() => {
+          const log = assessmentLogs[0]
+          const scorePercent = Math.round((log.compliance_score ?? 0) * 100)
+          const assessedAt = log.created_at ? new Date(log.created_at).toLocaleString() : '—'
+          return (
+            <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-foreground">{scorePercent}%</p>
+                    <p className="text-xs text-muted-foreground">Compliance Score</p>
+                  </div>
+                  <div className="h-8 w-px bg-border" />
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <span>{log.data_sources_checked} sources checked</span>
+                    <span>{log.classifications_checked} classifications</span>
+                    <span>{log.policies_evaluated} policies evaluated</span>
+                    <span>{log.total_evidence} evidence items</span>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground text-right">
+                  <p>Assessed: {assessedAt}</p>
+                  <p>Regulations: {log.regulations_covered?.join(', ') ?? '—'}</p>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
       </div>
 
       {/* Content */}
@@ -344,17 +355,21 @@ export default function AdvisorPage() {
                 </div>
               ) : Array.isArray(assessmentLogs) && assessmentLogs.length > 0 ? (
                 <div className="space-y-2">
-                  {assessmentLogs.map((log: AssessmentLog) => (
+                  {assessmentLogs.map((log: AssessmentLog) => {
+                    const score = log.compliance_score ?? 0
+                    const scorePercent = Math.round(score * 100)
+                    const logDate = log.created_at ? new Date(log.created_at).toLocaleString() : '—'
+                    return (
                     <div key={log.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/30">
                       <div className="flex items-center gap-3">
-                        <CheckCircle className={`h-4 w-4 ${log.compliance_score >= 0.8 ? 'text-green-500' : log.compliance_score >= 0.6 ? 'text-yellow-500' : 'text-red-500'}`} />
+                        <CheckCircle className={`h-4 w-4 ${score >= 0.8 ? 'text-green-500' : score >= 0.6 ? 'text-yellow-500' : 'text-red-500'}`} />
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {Math.round(log.compliance_score * 100)}% compliance — {log.total_findings} finding{log.total_findings !== 1 ? 's' : ''}
+                            {scorePercent}% compliance — {log.total_findings} finding{log.total_findings !== 1 ? 's' : ''}
                           </p>
                           <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                             <Clock className="h-3 w-3" />
-                            {new Date(log.created_at).toLocaleString()}
+                            {logDate}
                           </p>
                         </div>
                       </div>
@@ -367,7 +382,7 @@ export default function AdvisorPage() {
                         )}
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="text-center py-6">

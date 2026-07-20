@@ -1,9 +1,13 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
-import { FileText, Upload, Shield, AlertTriangle, ChevronDown, ChevronRight, Loader2, Eye } from 'lucide-react'
+import {
+  FileText, FileSpreadsheet, Upload, Shield, AlertTriangle,
+  Loader2, Eye, CheckCircle2, File
+} from 'lucide-react'
 import { useClassifyDocument, useDocumentClassifications } from '@/hooks/use-classification'
+import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface UploadedDoc {
@@ -11,6 +15,7 @@ interface UploadedDoc {
   name: string
   text: string
   uploadedAt: string
+  fileType?: string
 }
 
 const PII_COLORS: Record<string, string> = {
@@ -28,6 +33,24 @@ const LABEL_COLORS: Record<string, string> = {
   RESTRICTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
   CONFIDENTIAL: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
   INTERNAL: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+}
+
+const SUPPORTED_TYPES = '.txt,.md,.log,.csv,.tsv,.json,.pdf,.xlsx,.xls,.docx'
+const SUPPORTED_MIMES = [
+  'text/plain', 'text/markdown', 'text/csv', 'text/tab-separated-values',
+  'application/json',
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+]
+
+function fileIcon(name: string) {
+  const ext = name.split('.').pop()?.toLowerCase() ?? ''
+  if (['csv', 'tsv', 'xlsx', 'xls'].includes(ext)) return <FileSpreadsheet className="h-4 w-4 text-green-500 shrink-0" />
+  if (ext === 'pdf') return <File className="h-4 w-4 text-red-500 shrink-0" />
+  if (['docx', 'doc'].includes(ext)) return <File className="h-4 w-4 text-blue-500 shrink-0" />
+  return <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
 }
 
 function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => void }) {
@@ -51,7 +74,6 @@ function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => voi
             </div>
           ) : classResult ? (
             <>
-              {/* Governance banner */}
               {classResult.governed && (
                 <div className={cn(
                   'flex items-center gap-3 rounded-lg p-4 border',
@@ -64,7 +86,7 @@ function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => voi
                     <p className="font-medium text-sm">Governed Document</p>
                     {classResult.label_applied && (
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Label applied: <span className={cn('font-semibold', LABEL_COLORS[classResult.label_applied]?.split(' ')[1])}>{classResult.label_applied}</span>
+                        Label applied: <span className="font-semibold">{classResult.label_applied}</span>
                       </p>
                     )}
                   </div>
@@ -76,12 +98,11 @@ function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => voi
                 </div>
               )}
 
-              {/* Entity types */}
               {Array.isArray(classResult.entity_types) && classResult.entity_types.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Detected PII Types</h3>
                   <div className="flex flex-wrap gap-2">
-                    {classResult.entity_types.map(et => (
+                    {classResult.entity_types.map((et: string) => (
                       <span key={et} className={cn('text-xs px-2 py-1 rounded-full font-medium', PII_COLORS[et] ?? PII_COLORS.DEFAULT)}>
                         {et}
                       </span>
@@ -90,7 +111,6 @@ function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => voi
                 </div>
               )}
 
-              {/* Findings table */}
               {Array.isArray(classResult.findings) && classResult.findings.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold mb-2">Findings ({classResult.findings.length})</h3>
@@ -104,7 +124,7 @@ function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => voi
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {classResult.findings.slice(0, 20).map((f: any, i) => (
+                        {classResult.findings.slice(0, 20).map((f: any, i: number) => (
                           <tr key={i} className="hover:bg-muted/30">
                             <td className="px-3 py-2">
                               <span className={cn('px-1.5 py-0.5 rounded text-xs', PII_COLORS[f.entity_type] ?? PII_COLORS.DEFAULT)}>
@@ -124,15 +144,14 @@ function DocumentDetail({ doc, onClose }: { doc: UploadedDoc; onClose: () => voi
           ) : (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <AlertTriangle className="h-5 w-5 mr-2" />
-              No classification results yet. Upload text and classify to see PII findings.
+              No classification results yet.
             </div>
           )}
 
-          {/* Document preview */}
           <div>
-            <h3 className="text-sm font-semibold mb-2">Document Text Preview</h3>
+            <h3 className="text-sm font-semibold mb-2">Document Preview</h3>
             <div className="bg-muted/30 rounded-lg p-3 text-xs font-mono text-muted-foreground max-h-40 overflow-y-auto whitespace-pre-wrap">
-              {doc.text.slice(0, 500)}{doc.text.length > 500 ? '...' : ''}
+              {doc.text.slice(0, 500)}{doc.text.length > 500 ? '…' : ''}
             </div>
           </div>
         </div>
@@ -155,7 +174,7 @@ function DocumentRow({ doc }: { doc: UploadedDoc }) {
       <tr className="hover:bg-muted/30 transition-colors">
         <td className="px-4 py-3">
           <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+            {fileIcon(doc.name)}
             <span className="font-medium text-sm">{doc.name}</span>
           </div>
         </td>
@@ -185,6 +204,11 @@ function DocumentRow({ doc }: { doc: UploadedDoc }) {
                 <span className="text-xs bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 px-2 py-0.5 rounded-full">Governed</span>
               )}
             </div>
+          ) : classResult ? (
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+              <span className="text-xs text-muted-foreground">Clean</span>
+            </div>
           ) : (
             <span className="text-xs text-muted-foreground">—</span>
           )}
@@ -212,15 +236,18 @@ export default function DocumentsPage() {
   const [dragging, setDragging] = useState(false)
   const [textInput, setTextInput] = useState('')
   const [docName, setDocName] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const classifyDoc = useClassifyDocument()
 
+  // Upload text as document classification
   const handleUpload = useCallback(async () => {
     if (!textInput.trim()) return
     const id = `doc-${Date.now()}`
     const name = docName.trim() || `Document ${docs.length + 1}`
     const newDoc: UploadedDoc = { id, name, text: textInput, uploadedAt: new Date().toISOString() }
     setDocs(prev => [newDoc, ...prev])
-
     try {
       await classifyDoc.mutateAsync({ document_id: id, document_name: name, text: textInput })
     } catch {}
@@ -228,19 +255,78 @@ export default function DocumentsPage() {
     setDocName('')
   }, [textInput, docName, docs.length, classifyDoc])
 
+  // Upload a binary/structured file via multipart to /documents/extract
+  const handleFileUpload = useCallback(async (file: File) => {
+    setUploading(true)
+    setUploadStatus(`Uploading ${file.name}…`)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file, file.name)
+
+      const resp = await api.post('/documents/extract', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      const extractionId: string = resp.data.extraction_id ?? `doc-${Date.now()}`
+
+      // Read file as text for preview (best-effort; binary files show partial content)
+      const preview = await new Promise<string>(resolve => {
+        const reader = new FileReader()
+        reader.onload = ev => resolve((ev.target?.result as string) ?? '')
+        reader.onerror = () => resolve('[binary file]')
+        reader.readAsText(file)
+      })
+
+      const newDoc: UploadedDoc = {
+        id: extractionId,
+        name: file.name,
+        text: preview,
+        uploadedAt: new Date().toISOString(),
+        fileType: file.type,
+      }
+      setDocs(prev => [newDoc, ...prev])
+      setUploadStatus(`${file.name} uploaded — classification in progress`)
+
+      // Poll for classifications becoming available (backend classifies async)
+      let attempts = 0
+      const poll = setInterval(async () => {
+        attempts++
+        try {
+          const check = await api.get(`/documents/${extractionId}/classifications`)
+          if (check.data?.length > 0 || attempts >= 12) {
+            clearInterval(poll)
+            setUploadStatus(null)
+          }
+        } catch {
+          if (attempts >= 12) {
+            clearInterval(poll)
+            setUploadStatus(null)
+          }
+        }
+      }, 2500)
+    } catch (err: any) {
+      setUploadStatus(`Upload failed: ${err?.response?.data?.error ?? err?.message ?? 'unknown error'}`)
+    } finally {
+      setUploading(false)
+    }
+  }, [])
+
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragging(false)
     const file = e.dataTransfer.files[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = ev => {
-      const text = ev.target?.result as string
-      setTextInput(text)
-      setDocName(file.name)
-    }
-    reader.readAsText(file)
-  }, [])
+    handleFileUpload(file)
+  }, [handleFileUpload])
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    handleFileUpload(file)
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+  }, [handleFileUpload])
 
   return (
     <div className="min-h-screen bg-background">
@@ -251,7 +337,7 @@ export default function DocumentsPage() {
       </div>
 
       <div className="p-8 space-y-8">
-        {/* Upload Area */}
+        {/* Drop Zone */}
         <div
           className={cn(
             'rounded-lg border-2 border-dashed p-10 text-center cursor-pointer transition-colors',
@@ -260,15 +346,34 @@ export default function DocumentsPage() {
           onDragOver={e => { e.preventDefault(); setDragging(true) }}
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
+          onClick={() => fileInputRef.current?.click()}
         >
-          <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-          <h3 className="text-lg font-semibold mb-1">Drop a text file here</h3>
-          <p className="text-sm text-muted-foreground">or paste text below to classify</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={SUPPORTED_TYPES}
+            className="hidden"
+            onChange={handleFileInput}
+          />
+          {uploading ? (
+            <Loader2 className="h-10 w-10 text-primary mx-auto mb-3 animate-spin" />
+          ) : (
+            <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+          )}
+          <h3 className="text-lg font-semibold mb-1">
+            {uploading ? 'Uploading…' : 'Drop a file here or click to browse'}
+          </h3>
+          <p className="text-sm text-muted-foreground">
+            Supported: TXT, CSV, TSV, JSON, PDF, XLSX, XLS, DOCX, MD
+          </p>
+          {uploadStatus && (
+            <p className="mt-3 text-xs text-primary font-medium">{uploadStatus}</p>
+          )}
         </div>
 
         {/* Paste Text */}
         <div className="rounded-lg border border-border bg-card p-6 space-y-4">
-          <h3 className="font-semibold">Classify Document Text</h3>
+          <h3 className="font-semibold">Classify Pasted Text</h3>
           <input
             className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
             placeholder="Document name (optional)"
@@ -278,7 +383,7 @@ export default function DocumentsPage() {
           <textarea
             className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary"
             rows={6}
-            placeholder="Paste document text here to classify for PII..."
+            placeholder="Paste document text here to classify for PII…"
             value={textInput}
             onChange={e => setTextInput(e.target.value)}
           />
@@ -288,7 +393,7 @@ export default function DocumentsPage() {
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:opacity-90 disabled:opacity-50"
           >
             {classifyDoc.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Shield className="h-4 w-4" />}
-            Classify & Govern
+            Classify &amp; Govern
           </button>
         </div>
 
@@ -300,7 +405,7 @@ export default function DocumentsPage() {
           {docs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <FileText className="h-10 w-10 mb-3 opacity-30" />
-              <p>No documents yet. Upload or paste text above.</p>
+              <p>No documents yet. Upload a file or paste text above.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
