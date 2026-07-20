@@ -1933,9 +1933,13 @@ func countUnscanned(sources []store.DataSource) int {
 func (s *Server) loadClassifications(ctx context.Context, tenantID string) []store.Classification {
 	var result []store.Classification
 	err := s.db.SelectContext(ctx, &result,
-		`SELECT id, tenant_id, dataset_id,
+		`SELECT id, tenant_id,
+		 COALESCE(dataset_id, '') AS dataset_id,
 		 source_id::text AS source_id,
-		 entity_type, value, confidence, context,
+		 COALESCE(entity_type, '') AS entity_type,
+		 COALESCE(value, '') AS value,
+		 COALESCE(confidence, 0) AS confidence,
+		 COALESCE(context, '{}') AS context,
 		 label_id::text AS label_id,
 		 rule_id::text AS rule_id,
 		 classification_source, value_sample, created_at
