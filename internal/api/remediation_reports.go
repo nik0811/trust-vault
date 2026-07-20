@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 	"github.com/securelens/securelens/internal/domain"
+	"github.com/securelens/securelens/internal/events"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
 )
@@ -208,8 +209,15 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 	s.reports.Create(ctx, &report)
 
 	if req.Type == "compliance" {
-		advCtx := s.buildAdvisorContext(ctx, tenantID)
-		recommendations := domain.GenerateRecommendations(advCtx)
+		// Respond immediately with 202; heavy advisor work runs in background.
+		pkg.JSON(w, report, http.StatusAccepted)
+
+		go func(reportID, tid string) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			advCtx := s.buildAdvisorContext(bgCtx, tid)
+			recommendations := domain.GenerateRecommendations(advCtx)
 
 		criticalCount, highCount, mediumCount, lowCount := 0, 0, 0, 0
 		for _, rec := range recommendations {
@@ -351,10 +359,10 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		reportContent := map[string]any{
-			"id":           report.ID,
+			"id":           reportID,
 			"title":        "SecureLens Compliance Assessment Report",
 			"generated_at": time.Now(),
-			"tenant_id":    tenantID,
+			"tenant_id":    tid,
 			"executive_summary": map[string]any{
 				"overall_score":         score,
 				"status":                status,
@@ -376,15 +384,18 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 
 		contentBytes, err := json.Marshal(reportContent)
 		if err != nil {
-			pkg.Error(w, err, http.StatusInternalServerError)
+			log.Error().Err(err).Str("report_id", reportID).Msg("failed to marshal compliance report content")
+			s.db.ExecContext(bgCtx, `UPDATE reports SET status='failed', updated_at=NOW() WHERE id=$1`, reportID)
+			events.Emit("report.completed", map[string]any{"report_id": reportID, "tenant_id": tid, "status": "failed"})
 			return
 		}
 
-		report.Status = "completed"
-		report.Content = store.JSON(contentBytes)
-		s.reports.Update(ctx, &report)
+		s.db.ExecContext(bgCtx,
+			`UPDATE reports SET status='completed', content=$1, updated_at=NOW() WHERE id=$2`,
+			store.JSON(contentBytes), reportID)
 
-		pkg.JSON(w, report, http.StatusCreated)
+		events.Emit("report.completed", map[string]any{"report_id": reportID, "tenant_id": tid, "status": "completed"})
+	}(report.ID, tenantID)
 		return
 	}
 
@@ -1788,134 +1799,138 @@ func (s *Server) runComplianceAssessment(w http.ResponseWriter, r *http.Request)
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 	userID := pkg.UserFromCtx(ctx)
-	now := time.Now()
 
-	classifications := s.loadClassifications(ctx, tenantID)
-	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if policies == nil {
-		policies = []store.Policy{}
-	}
-	labels, _ := s.labels.List(ctx, tenantID, store.ListOpts{Limit: 1000})
-	if labels == nil {
-		labels = []store.Label{}
-	}
-	violations, _ := s.retentionViolations.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if violations == nil {
-		violations = []store.RetentionViolation{}
-	}
-	dataSources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if dataSources == nil {
-		dataSources = []store.DataSource{}
-	}
-	ropa, _ := s.ropa.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if ropa == nil {
-		ropa = []store.RoPA{}
-	}
+	assessmentID := pkg.GenerateID()
 
-	var auditLogs []store.AuditLog
-	s.db.SelectContext(ctx, &auditLogs,
-		"SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 200", tenantID)
+	// Insert a pending record so callers can poll for completion.
+	s.db.ExecContext(ctx,
+		`INSERT INTO compliance_assessments (id, tenant_id, status, assessed_by, created_at, updated_at)
+		 VALUES ($1, $2, 'running', $3, NOW(), NOW())
+		 ON CONFLICT (id) DO NOTHING`,
+		assessmentID, tenantID, userID)
 
-	var totalDatasets, labeledDatasets int
-	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", tenantID)
+	// Respond immediately with 202 so the HTTP handler is not blocked.
+	pkg.JSON(w, map[string]any{"assessment_id": assessmentID, "status": "running"}, http.StatusAccepted)
 
-	advCtx := &domain.AdvisorContext{
-		TenantID:            tenantID,
-		Classifications:     classifications,
-		Policies:            policies,
-		Labels:              labels,
-		RetentionViolations: violations,
-		DataSources:         dataSources,
-		RoPA:                ropa,
-		TotalDatasets:       totalDatasets,
-		LabeledDatasets:     labeledDatasets,
-		AuditLogs:           auditLogs,
-		AssessmentTime:      now,
-	}
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
 
-	recommendations := domain.GenerateRecommendations(advCtx)
+		now := time.Now()
 
-	criticalCount := 0
-	highCount := 0
-	mediumCount := 0
-	lowCount := 0
-	totalEvidence := 0
-	for _, rec := range recommendations {
-		switch rec.Severity {
-		case "CRITICAL":
-			criticalCount++
-		case "HIGH":
-			highCount++
-		case "MEDIUM":
-			mediumCount++
-		case "LOW":
-			lowCount++
+		classifications := s.loadClassifications(bgCtx, tenantID)
+		policies, _ := s.policies.List(bgCtx, tenantID, store.ListOpts{Limit: 100})
+		if policies == nil {
+			policies = []store.Policy{}
 		}
-		totalEvidence += len(rec.Evidence)
-	}
+		labels, _ := s.labels.List(bgCtx, tenantID, store.ListOpts{Limit: 1000})
+		if labels == nil {
+			labels = []store.Label{}
+		}
+		violations, _ := s.retentionViolations.List(bgCtx, tenantID, store.ListOpts{Limit: 100})
+		if violations == nil {
+			violations = []store.RetentionViolation{}
+		}
+		dataSources, _ := s.datasources.List(bgCtx, tenantID, store.ListOpts{Limit: 100})
+		if dataSources == nil {
+			dataSources = []store.DataSource{}
+		}
+		ropa, _ := s.ropa.List(bgCtx, tenantID, store.ListOpts{Limit: 100})
+		if ropa == nil {
+			ropa = []store.RoPA{}
+		}
 
-	overallScore := 1.0
-	if len(recommendations) > 0 {
-		overallScore = max(0.0, 1.0-float64(criticalCount)*0.2-float64(highCount)*0.1-float64(mediumCount)*0.05-float64(lowCount)*0.02)
-	}
+		var auditLogs []store.AuditLog
+		s.db.SelectContext(bgCtx, &auditLogs,
+			"SELECT * FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 200", tenantID)
 
-	s.auditLogs.Create(ctx, &store.AuditLog{
-		TenantID:   tenantID,
-		UserID:     userID,
-		Action:     "compliance.assessment.run",
-		Resource:   "compliance_assessment",
-		ResourceID: "assessment-" + now.Format("20060102-150405"),
-		IP:         r.RemoteAddr,
-	})
+		var totalDatasets, labeledDatasets int
+		s.db.GetContext(bgCtx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
+		s.db.GetContext(bgCtx, &labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", tenantID)
 
-	regulationsJSON, _ := json.Marshal([]string{"GDPR", "CCPA", "DPDP Act 2023", "UAE PDPL", "EU AI Act", "HIPAA", "PCI-DSS"})
-	summaryJSON, _ := json.Marshal(map[string]any{
-		"ropa_count":           len(ropa),
-		"retention_violations": len(violations),
-		"unscanned_sources":    countUnscanned(dataSources),
-		"unlabeled_datasets":   totalDatasets - labeledDatasets,
-	})
+		advCtx := &domain.AdvisorContext{
+			TenantID:            tenantID,
+			Classifications:     classifications,
+			Policies:            policies,
+			Labels:              labels,
+			RetentionViolations: violations,
+			DataSources:         dataSources,
+			RoPA:                ropa,
+			TotalDatasets:       totalDatasets,
+			LabeledDatasets:     labeledDatasets,
+			AuditLogs:           auditLogs,
+			AssessmentTime:      now,
+		}
 
-	assessment := &store.ComplianceAssessment{
-		TenantID:               tenantID,
-		AssessedBy:             userID,
-		ComplianceScore:        overallScore,
-		TotalFindings:          len(recommendations),
-		CriticalFindings:       criticalCount,
-		HighFindings:           highCount,
-		MediumFindings:         mediumCount,
-		LowFindings:            lowCount,
-		TotalEvidence:          totalEvidence,
-		DataSourcesChecked:     len(dataSources),
-		ClassificationsChecked: len(classifications),
-		PoliciesEvaluated:      len(policies),
-		RegulationsCovered:     store.JSON(regulationsJSON),
-		Summary:                store.JSON(summaryJSON),
-	}
-	s.complianceAssessments.Create(ctx, assessment)
+		recommendations := domain.GenerateRecommendations(advCtx)
 
-	pkg.JSON(w, map[string]any{
-		"assessed_at":        now,
-		"assessed_by":       userID,
-		"compliance_score":  overallScore,
-		"total_findings":    len(recommendations),
-		"critical_findings": criticalCount,
-		"high_findings":     highCount,
-		"medium_findings":   mediumCount,
-		"low_findings":      lowCount,
-		"total_evidence":    totalEvidence,
-		"data_sources_checked":   len(dataSources),
-		"classifications_checked": len(classifications),
-		"policies_evaluated":      len(policies),
-		"regulations_covered":     []string{"GDPR", "CCPA", "DPDP Act 2023", "UAE PDPL", "EU AI Act", "HIPAA", "PCI-DSS"},
-		"summary": map[string]any{
-			"ropa_count":          len(ropa),
+		criticalCount, highCount, mediumCount, lowCount, totalEvidence := 0, 0, 0, 0, 0
+		for _, rec := range recommendations {
+			switch rec.Severity {
+			case "CRITICAL":
+				criticalCount++
+			case "HIGH":
+				highCount++
+			case "MEDIUM":
+				mediumCount++
+			case "LOW":
+				lowCount++
+			}
+			totalEvidence += len(rec.Evidence)
+		}
+
+		overallScore := 1.0
+		if len(recommendations) > 0 {
+			overallScore = max(0.0, 1.0-float64(criticalCount)*0.2-float64(highCount)*0.1-float64(mediumCount)*0.05-float64(lowCount)*0.02)
+		}
+
+		regulationsJSON, _ := json.Marshal([]string{"GDPR", "CCPA", "DPDP Act 2023", "UAE PDPL", "EU AI Act", "HIPAA", "PCI-DSS"})
+		summaryJSON, _ := json.Marshal(map[string]any{
+			"ropa_count":           len(ropa),
 			"retention_violations": len(violations),
-			"unscanned_sources":   countUnscanned(dataSources),
-			"unlabeled_datasets":  totalDatasets - labeledDatasets,
-		},
-	})
+			"unscanned_sources":    countUnscanned(dataSources),
+			"unlabeled_datasets":   totalDatasets - labeledDatasets,
+		})
+
+		// Upsert the final result into the previously inserted row.
+		s.db.ExecContext(bgCtx,
+			`UPDATE compliance_assessments
+			 SET status = 'completed',
+			     assessed_by = $1,
+			     compliance_score = $2,
+			     total_findings = $3,
+			     critical_findings = $4,
+			     high_findings = $5,
+			     medium_findings = $6,
+			     low_findings = $7,
+			     total_evidence = $8,
+			     data_sources_checked = $9,
+			     classifications_checked = $10,
+			     policies_evaluated = $11,
+			     regulations_covered = $12,
+			     summary = $13,
+			     updated_at = NOW()
+			 WHERE id = $14`,
+			userID, overallScore, len(recommendations),
+			criticalCount, highCount, mediumCount, lowCount,
+			totalEvidence, len(dataSources), len(classifications),
+			len(policies), regulationsJSON, summaryJSON, assessmentID)
+
+		s.auditLogs.Create(bgCtx, &store.AuditLog{
+			TenantID:   tenantID,
+			UserID:     userID,
+			Action:     "compliance.assessment.run",
+			Resource:   "compliance_assessment",
+			ResourceID: assessmentID,
+		})
+
+		events.Emit("compliance.assessment.completed", map[string]any{
+			"assessment_id":    assessmentID,
+			"tenant_id":        tenantID,
+			"compliance_score": overallScore,
+			"total_findings":   len(recommendations),
+		})
+	}()
 }
 
 func countUnscanned(sources []store.DataSource) int {

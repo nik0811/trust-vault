@@ -314,7 +314,6 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 		json.Unmarshal(ds.Config, &configMap)
 	}
 
-	// Call ingestion sidecar to start DataHub ingestion
 	ingestionReq := map[string]any{
 		"datasource_id": id,
 		"tenant_id":     tenantID,
@@ -323,27 +322,9 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 		"callback_url":  s.ingestionCallbackURL(),
 		"scan_log_id":   scanLog.ID,
 	}
-
 	ingestionURL := s.ingestionSidecarURL() + "/ingest"
-	resp, err := s.callIngestionSidecar(ctx, ingestionURL, ingestionReq)
-	if err != nil {
-		// Ingestion sidecar is required - fail if unavailable
-		ds.Status = "error"
-		s.datasources.Update(ctx, ds)
-		
-		// Update scan log with failure
-		now := time.Now()
-		scanLog.Status = "failed"
-		scanLog.CompletedAt = &now
-		scanLog.Message = fmt.Sprintf("Ingestion service unavailable: %v", err)
-		s.scanLogs.Update(ctx, &scanLog)
-		
-		log.Error().Err(err).Msg("ingestion sidecar unavailable - cannot proceed with scan")
-		pkg.Error(w, fmt.Errorf("ingestion service unavailable: %w", err), http.StatusServiceUnavailable)
-		return
-	}
 
-	// Emit SSE event for scan started
+	// Respond immediately — sidecar call happens in the background.
 	events.Emit("datasource.scan.started", map[string]any{
 		"datasource_id": id,
 		"tenant_id":     tenantID,
@@ -352,17 +333,36 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 		"status":        "scanning",
 		"scan_log_id":   scanLog.ID,
 	})
-
-	result := map[string]any{
-		"status":        "scanning",
+	pkg.JSON(w, map[string]any{
+		"status":        "queued",
 		"datasource_id": id,
-		"message":       "Scan job started successfully",
-		"scan_log_id":   scanLog.ID,
-	}
-	if resp != nil {
-		result["job_id"] = resp["job_id"]
-	}
-	pkg.JSON(w, result)
+		"message":       "Scan job queued successfully",
+		"scan_id":       scanLog.ID,
+	}, http.StatusAccepted)
+
+	dsCopy := *ds
+	go func(scanLogID, tid string, snapshot store.DataSource) {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err := s.callIngestionSidecar(bgCtx, ingestionURL, ingestionReq)
+		if err != nil {
+			log.Error().Err(err).Str("scan_id", scanLogID).Msg("sidecar call failed")
+
+			snapshot.Status = "error"
+			s.datasources.Update(bgCtx, &snapshot)
+
+			now := time.Now()
+			sl := store.ScanLog{TenantID: tid}
+			sl.ID = scanLogID
+			sl.Status = "failed"
+			sl.CompletedAt = &now
+			sl.Message = fmt.Sprintf("Ingestion service unavailable: %v", err)
+			s.scanLogs.Update(bgCtx, &sl)
+
+			events.Emit("scan.failed", map[string]any{"scan_id": scanLogID, "error": err.Error(), "tenant_id": tid})
+		}
+	}(scanLog.ID, tenantID, dsCopy)
 }
 
 func (s *Server) getScanStatus(w http.ResponseWriter, r *http.Request) {

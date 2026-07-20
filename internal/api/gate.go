@@ -7,6 +7,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -174,7 +175,10 @@ func (s *Server) validateOutput(ctx context.Context, response string, tenantID s
 }
 
 func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	// Enforce a hard deadline on the entire gate query to prevent indefinite blocking.
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
 	tenantID := pkg.TenantFromCtx(ctx)
 	userID := pkg.UserFromCtx(ctx)
 	start := time.Now()
@@ -213,17 +217,32 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 	queryClassification, _ := domain.ClassifyText(ctx, req.Query, nil)
 	redactedQuery, queryRedactions := redactSensitiveData(req.Query, queryClassification.Entities, policies)
 
-	// 4. Classify and redact context chunks
+	// 4. Classify and redact context chunks concurrently.
+	type chunkClassifyResult struct {
+		idx        int
+		content    string
+		redactions []Redaction
+	}
+	chunkResults := make([]chunkClassifyResult, len(contextChunks))
+	var wg sync.WaitGroup
+	for i, c := range contextChunks {
+		wg.Add(1)
+		go func(idx int, content string) {
+			defer wg.Done()
+			classification, _ := domain.ClassifyText(ctx, content, nil)
+			redacted, reds := redactSensitiveData(content, classification.Entities, policies)
+			chunkResults[idx] = chunkClassifyResult{idx: idx, content: redacted, redactions: reds}
+		}(i, c.Content)
+	}
+	wg.Wait()
+
 	var allRedactions []Redaction
 	allRedactions = append(allRedactions, queryRedactions...)
-
 	var redactedContextText string
-	for i, c := range contextChunks {
-		chunkClassification, _ := domain.ClassifyText(ctx, c.Content, nil)
-		redactedContent, chunkRedactions := redactSensitiveData(c.Content, chunkClassification.Entities, policies)
-		contextChunks[i].Content = redactedContent
-		redactedContextText += redactedContent + "\n\n"
-		allRedactions = append(allRedactions, chunkRedactions...)
+	for _, cr := range chunkResults {
+		contextChunks[cr.idx].Content = cr.content
+		redactedContextText += cr.content + "\n\n"
+		allRedactions = append(allRedactions, cr.redactions...)
 	}
 
 	// 5. Evaluate governance policies for decision

@@ -1005,63 +1005,80 @@ func (s *Server) extractDocument(w http.ResponseWriter, r *http.Request) {
 			docserviceURL = "http://securelens-docservice:8088"
 		}
 
-		var body bytes.Buffer
-		mw := multipart.NewWriter(&body)
-		fw, err := mw.CreateFormFile("file", header.Filename)
-		if err != nil {
-			pkg.Error(w, err)
-			return
-		}
-		if _, err = fw.Write(fileBytes); err != nil {
-			pkg.Error(w, err)
-			return
-		}
-		mw.Close()
+		extractionID := pkg.GenerateID()
 
-		docReq, err := http.NewRequestWithContext(ctx, http.MethodPost, docserviceURL+"/extract", &body)
-		if err != nil {
-			pkg.Error(w, err)
-			return
-		}
-		docReq.Header.Set("Content-Type", mw.FormDataContentType())
+		// Respond immediately so the client is not blocked waiting up to 120 seconds.
+		pkg.JSON(w, map[string]any{
+			"extraction_id": extractionID,
+			"status":        "processing",
+			"filename":      header.Filename,
+			"tenant_id":     tenantID,
+		}, http.StatusAccepted)
 
-		httpClient := &http.Client{Timeout: 120 * time.Second}
-		resp, err := httpClient.Do(docReq)
-		if err != nil {
-			// Docservice unavailable — classify the text content directly.
-			log.Warn().Err(err).Str("filename", header.Filename).Msg("Docservice unavailable, using sync classification")
-			text := string(fileBytes)
-			entities := s.runBasicClassification(text, nil)
-			// Normalize entity key from "entity" to "entity_type" for consistent response shape.
-			normalized := make([]map[string]any, 0, len(entities))
-			for _, e := range entities {
-				et, _ := e["entity"].(string)
-				if et == "" {
-					et, _ = e["entity_type"].(string)
-				}
-				normalized = append(normalized, map[string]any{
-					"entity_type": et,
-					"value":       e["value"],
-					"confidence":  e["confidence"],
-					"start":       e["start"],
-					"end":         e["end"],
-				})
+		go func(extractionID, tid string, fileBytes []byte, filename, svcURL string) {
+			bgCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+			defer cancel()
+
+			var body bytes.Buffer
+			mw := multipart.NewWriter(&body)
+			fw, err := mw.CreateFormFile("file", filename)
+			if err != nil {
+				events.Emit("document.extraction.failed", map[string]any{"extraction_id": extractionID, "tenant_id": tid, "error": err.Error()})
+				return
 			}
-			pkg.JSON(w, map[string]any{
-				"status":       "classified",
-				"filename":     header.Filename,
-				"entities":     normalized,
-				"entity_count": len(normalized),
-				"tenant_id":    tenantID,
-			})
-			return
-		}
-		defer resp.Body.Close()
+			if _, err = fw.Write(fileBytes); err != nil {
+				events.Emit("document.extraction.failed", map[string]any{"extraction_id": extractionID, "tenant_id": tid, "error": err.Error()})
+				return
+			}
+			mw.Close()
 
-		respBody, _ := io.ReadAll(resp.Body)
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(resp.StatusCode)
-		w.Write(respBody)
+			docReq, err := http.NewRequestWithContext(bgCtx, http.MethodPost, svcURL+"/extract", &body)
+			if err != nil {
+				events.Emit("document.extraction.failed", map[string]any{"extraction_id": extractionID, "tenant_id": tid, "error": err.Error()})
+				return
+			}
+			docReq.Header.Set("Content-Type", mw.FormDataContentType())
+
+			httpClient := &http.Client{Timeout: 120 * time.Second}
+			resp, err := httpClient.Do(docReq)
+			if err != nil {
+				// Docservice unavailable — fall back to basic pattern classification.
+				log.Warn().Err(err).Str("filename", filename).Msg("Docservice unavailable, using sync classification")
+				text := string(fileBytes)
+				entities := s.runBasicClassification(text, nil)
+				normalized := make([]map[string]any, 0, len(entities))
+				for _, e := range entities {
+					et, _ := e["entity"].(string)
+					if et == "" {
+						et, _ = e["entity_type"].(string)
+					}
+					normalized = append(normalized, map[string]any{
+						"entity_type": et,
+						"value":       e["value"],
+						"confidence":  e["confidence"],
+						"start":       e["start"],
+						"end":         e["end"],
+					})
+				}
+				events.Emit("document.extracted", map[string]any{
+					"extraction_id": extractionID,
+					"tenant_id":     tid,
+					"filename":      filename,
+					"entities":      normalized,
+					"entity_count":  len(normalized),
+					"source":        "fallback_classification",
+				})
+				return
+			}
+			defer resp.Body.Close()
+
+			events.Emit("document.extracted", map[string]any{
+				"extraction_id": extractionID,
+				"tenant_id":     tid,
+				"filename":      filename,
+				"status":        resp.StatusCode,
+			})
+		}(extractionID, tenantID, fileBytes, header.Filename, docserviceURL)
 		return
 	}
 
