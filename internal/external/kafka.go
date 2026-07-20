@@ -368,11 +368,18 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					}
 				}
 
-				// STEP 3: Fall back to pattern matching if ML didn't produce results
-				if entityType == "" {
-					entityType, confidence = classifyColumnName(col.Name)
-					classificationSource = "pattern_matching"
+			// STEP 3: Fall back to pattern matching if ML didn't produce results
+			if entityType == "" {
+				entityType, confidence = classifyColumnName(col.Name)
+				classificationSource = "pattern_matching"
+				// Generate a synthetic masked example so the UI can show "Sample Values"
+				if entityType != "" && valueSample == nil {
+					synth := syntheticValueSample(entityType)
+					if synth != "" {
+						valueSample = &synth
+					}
 				}
+			}
 
 				// STEP 4: Apply threshold rules - mark low confidence for review
 				if entityType != "" {
@@ -1413,6 +1420,42 @@ func buildValueSample(samples []string, entityType string, n int) string {
 		}
 	}
 	return strings.Join(masked, ", ")
+}
+
+// syntheticValueSample returns a representative masked example for a given entity type.
+// Used when no real data samples were collected (e.g. pattern-matching-only classification).
+func syntheticValueSample(entityType string) string {
+	examples := map[string]string{
+		"EMAIL":                  "j*****e@e****.com",
+		"PHONE":                  "***-***-4567",
+		"SSN":                    "***-**-6789",
+		"CREDIT_CARD":            "****-****-****-4242",
+		"CREDIT_CARD_FORMATTED":  "****-****-****-4242",
+		"PERSON_NAME":            "J*** D**",
+		"PERSON":                 "J*** D**",
+		"DATE_OF_BIRTH":          "19**-**-**",
+		"PASSPORT":               "A*****23",
+		"DRIVER_LICENSE":         "D****-****",
+		"IBAN":                   "GB**BARC*************",
+		"BANK_ACCOUNT":           "****5678",
+		"ROUTING_NUMBER":         "****9876",
+		"IP_ADDRESS":             "192.168.***.***",
+		"IPV6_ADDRESS":           "2001:db8::****",
+		"MAC_ADDRESS":            "00:1A:2B:**:**:**",
+		"AWS_ACCESS_KEY":         "AKIA***************",
+		"AWS_SECRET_KEY":         "****/****+****",
+		"API_KEY":                "sk-*********************",
+		"JWT_TOKEN":              "eyJ***.***.*****",
+		"MEDICAL_RECORD":         "MR-*****",
+		"HEALTH_INSURANCE_ID":    "HI-*****",
+		"VIN":                    "1HG****5****",
+		"US_ZIP":                 "*****",
+		"UK_POSTCODE":            "SW** ***",
+	}
+	if ex, ok := examples[entityType]; ok {
+		return ex
+	}
+	return ""
 }
 
 // autoEradicateByPolicy checks active redaction/access policies for the tenant.
