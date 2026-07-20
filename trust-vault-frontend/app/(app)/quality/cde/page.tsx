@@ -16,7 +16,14 @@ const CRITICALITY_STYLES: Record<string, string> = {
 function AddCDEModal({ onClose }: { onClose: () => void }) {
   const createCDE = useCreateCDE()
   const { data: datasources = [] } = useDataSources()
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    datasource_id: string
+    column_name: string
+    table_name: string
+    business_definition: string
+    data_owner: string
+    criticality: 'high' | 'medium' | 'low'
+  }>({
     datasource_id: '',
     column_name: '',
     table_name: '',
@@ -99,7 +106,7 @@ function AddCDEModal({ onClose }: { onClose: () => void }) {
               <select
                 className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
                 value={form.criticality}
-                onChange={e => setForm(f => ({ ...f, criticality: e.target.value }))}
+                onChange={e => setForm(f => ({ ...f, criticality: e.target.value as 'high' | 'medium' | 'low' }))}
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>

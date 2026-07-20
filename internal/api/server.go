@@ -235,9 +235,9 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}", s.getPolicy)
 				r.Put("/{id}", s.updatePolicy)
 				r.Delete("/{id}", s.deletePolicy)
-				r.Delete("/{id}", s.deletePolicy)
 			})
 			r.Post("/governance/evaluate", s.evaluatePolicy)
+			r.Get("/governance/stats", s.getGovernanceStats)
 
 			// Classification
 			r.Route("/classify", func(r chi.Router) {
@@ -311,6 +311,7 @@ func (s *Server) setupRoutes() {
 				r.Get("/dpia", s.listDPIAs)
 				r.Get("/dpia/{id}", s.getDPIA)
 				r.Put("/dpia/{id}/step/{step}", s.updateDPIAStep)
+				r.Put("/dpia/{id}/status", s.updateDPIAStatus)
 				// Enhanced consent
 				r.Post("/consent/record", s.recordConsentV2)
 				r.Get("/consent/records", s.listConsentRecords)
@@ -375,8 +376,10 @@ func (s *Server) setupRoutes() {
 				r.Get("/", s.listJobs)
 				r.Post("/", s.createJob)
 				r.Get("/{id}", s.getJob)
+				r.Put("/{id}", s.updateJob)
 				r.Delete("/{id}", s.deleteJob)
 				r.Post("/{id}/run-now", s.runJobNow)
+				r.Get("/{id}/history", s.getJobHistory)
 			})
 
 			// Remediation

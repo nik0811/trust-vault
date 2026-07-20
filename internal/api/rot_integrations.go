@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
+	"github.com/securelens/securelens/internal/domain"
 	"github.com/securelens/securelens/internal/events"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
@@ -1194,4 +1195,63 @@ func (s *Server) getReviewQueue(w http.ResponseWriter, r *http.Request) {
 
 	items, _ := s.reviewQueue.List(ctx, tenantID, store.ListOpts{Limit: limit, Offset: offset})
 	pkg.JSON(w, items)
+}
+
+// TriggerIntegrationNotifications sends a notification through all active integrations for a tenant
+func (s *Server) TriggerIntegrationNotifications(ctx context.Context, tenantID string, eventType, severity, title, message, resource string, details map[string]any) {
+	integrations, err := s.integrations.List(ctx, tenantID, store.ListOpts{Limit: 100})
+	if err != nil || len(integrations) == 0 {
+		return
+	}
+
+	configs := make([]domain.IntegrationConfig, 0, len(integrations))
+	for _, integ := range integrations {
+		if integ.Status != "connected" {
+			continue
+		}
+		var cfg map[string]any
+		json.Unmarshal(integ.Config, &cfg)
+		configs = append(configs, domain.IntegrationConfig{
+			ID:       integ.ID,
+			Type:     integ.Type,
+			Name:     integ.Name,
+			Config:   cfg,
+			TenantID: tenantID,
+		})
+	}
+
+	if len(configs) == 0 {
+		return
+	}
+
+	event := domain.NotificationEvent{
+		Type:      eventType,
+		Severity:  severity,
+		Title:     title,
+		Message:   message,
+		Resource:  resource,
+		Details:   details,
+		TenantID:  tenantID,
+		Timestamp: time.Now(),
+	}
+
+	go func() {
+		bgCtx := context.Background()
+		results := domain.SendNotification(bgCtx, configs, event)
+		for _, result := range results {
+			level := "info"
+			msg := "Notification sent successfully"
+			if !result.Success {
+				level = "error"
+				msg = "Notification failed: " + result.Error
+			}
+			logEntry := store.IntegrationLog{
+				TenantID:      tenantID,
+				IntegrationID: result.IntegrationID,
+				Level:         level,
+				Message:       msg,
+			}
+			s.integrationLogs.Create(bgCtx, &logEntry)
+		}
+	}()
 }

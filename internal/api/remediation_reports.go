@@ -974,47 +974,60 @@ func (s *Server) getFeedbackStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var corrections, confirmations int
-	s.db.GetContext(ctx, &corrections,
+	var totalCorrections, correctionsThisMonth, correctionsPrevMonth int
+	s.db.GetContext(ctx, &totalCorrections,
 		"SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 AND type = 'correction'", tenantID)
-	s.db.GetContext(ctx, &confirmations,
-		"SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 AND type = 'confirmation'", tenantID)
+	s.db.GetContext(ctx, &correctionsThisMonth,
+		`SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 AND type = 'correction'
+		 AND created_at >= date_trunc('month', NOW())`, tenantID)
+	s.db.GetContext(ctx, &correctionsPrevMonth,
+		`SELECT COUNT(*) FROM feedback WHERE tenant_id = $1 AND type = 'correction'
+		 AND created_at >= date_trunc('month', NOW()) - INTERVAL '1 month'
+		 AND created_at < date_trunc('month', NOW())`, tenantID)
 
-	total := corrections + confirmations
+	// Accuracy improvement: percentage of corrections resolved (month-over-month decline = improvement)
 	var accuracyImprovement string
-	if total > 0 {
-		accuracy := float64(confirmations) / float64(total) * 100
-		accuracyImprovement = fmt.Sprintf("+%.1f%%", accuracy)
+	if totalCorrections > 0 && correctionsPrevMonth > 0 {
+		// Declining corrections means the model needs fewer corrections → improving
+		delta := float64(correctionsPrevMonth-correctionsThisMonth) / float64(correctionsPrevMonth) * 100
+		if delta >= 0 {
+			accuracyImprovement = fmt.Sprintf("+%.1f%%", delta)
+		} else {
+			accuracyImprovement = fmt.Sprintf("%.1f%%", delta)
+		}
+	} else if totalCorrections > 0 {
+		accuracyImprovement = "+0.0%"
 	} else {
 		accuracyImprovement = "—"
 	}
 
-	// Get knowledge cache size (custom entities count)
+	// Knowledge cache size from dedicated table
 	var cacheSize int
 	s.db.GetContext(ctx, &cacheSize, "SELECT COUNT(*) FROM custom_entities WHERE tenant_id = $1", tenantID)
-	cacheSizeStr := fmt.Sprintf("%d entries", cacheSize)
-	if cacheSize == 0 {
-		cacheSizeStr = "0 entries"
+	var cacheSizeStr string
+	if cacheSize == 1 {
+		cacheSizeStr = "1 entry"
+	} else {
+		cacheSizeStr = fmt.Sprintf("%d entries", cacheSize)
 	}
 
-	// Calculate cache hit rate based on classifications that matched custom entities
+	// Cache hit rate: sum of hit_counts across knowledge_cache entries / total corrections
+	var totalHits int
+	s.db.GetContext(ctx, &totalHits,
+		"SELECT COALESCE(SUM(hit_count), 0) FROM knowledge_cache WHERE tenant_id = $1", tenantID)
 	var cacheHitRate string
-	var totalClassifications int
-	s.db.GetContext(ctx, &totalClassifications, "SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
-	if totalClassifications > 0 && cacheSize > 0 {
-		// Estimate hit rate based on corrections vs total
-		hitRate := float64(confirmations) / float64(totalClassifications) * 100
-		if hitRate > 100 {
-			hitRate = 100
+	if totalCorrections > 0 && totalHits > 0 {
+		rate := float64(totalHits) / float64(totalCorrections) * 100
+		if rate > 100 {
+			rate = 100
 		}
-		cacheHitRate = fmt.Sprintf("%.0f%%", hitRate)
+		cacheHitRate = fmt.Sprintf("%.0f%%", rate)
 	} else {
 		cacheHitRate = "—"
 	}
 
 	pkg.JSON(w, map[string]any{
-		"total_corrections":    corrections,
-		"total_confirmations":  confirmations,
+		"total_corrections":    totalCorrections,
 		"accuracy_improvement": accuracyImprovement,
 		"cache_size":           cacheSizeStr,
 		"cache_hit_rate":       cacheHitRate,
@@ -1026,36 +1039,61 @@ func (s *Server) createCustomEntity(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 
 	var req struct {
-		Name    string `json:"name" validate:"required"`
-		Pattern string `json:"pattern" validate:"required"`
+		Name        string `json:"name" validate:"required"`
+		Pattern     string `json:"pattern" validate:"required"`
+		Description string `json:"description"`
 	}
 	if err := pkg.Bind(r, &req); err != nil {
 		pkg.Error(w, err, http.StatusBadRequest)
 		return
 	}
 
-	policy := store.Policy{
-		TenantID: tenantID,
-		Name:     req.Name,
-		Type:     "custom_entity",
-		Active:   true,
+	entity := store.CustomEntity{
+		TenantID:    tenantID,
+		Name:        req.Name,
+		Pattern:     req.Pattern,
+		Description: req.Description,
 	}
-	s.policies.Create(ctx, &policy)
+	if _, err := s.db.NamedExecContext(ctx,
+		`INSERT INTO custom_entities (tenant_id, name, pattern, description)
+		 VALUES (:tenant_id, :name, :pattern, :description)
+		 ON CONFLICT (tenant_id, name) DO UPDATE SET pattern = :pattern, description = :description, updated_at = NOW()
+		 RETURNING id, created_at, updated_at`,
+		&entity); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
 
-	pkg.JSON(w, policy, http.StatusCreated)
+	// Fetch the inserted row so we return the generated ID
+	if err := s.db.GetContext(ctx, &entity,
+		`SELECT * FROM custom_entities WHERE tenant_id = $1 AND name = $2`,
+		tenantID, req.Name); err != nil {
+		pkg.Error(w, err, http.StatusInternalServerError)
+		return
+	}
+
+	pkg.JSON(w, map[string]any{
+		"id":         entity.ID,
+		"name":       entity.Name,
+		"examples":   entity.Pattern,
+		"detections": entity.Detections,
+		"accuracy":   95,
+	}, http.StatusCreated)
 }
 
 func (s *Server) listCustomEntities(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	policies, err := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	if err != nil {
+	var entities []store.CustomEntity
+	if err := s.db.SelectContext(ctx, &entities,
+		`SELECT * FROM custom_entities WHERE tenant_id = $1 ORDER BY created_at DESC`,
+		tenantID); err != nil {
 		pkg.JSON(w, []any{})
 		return
 	}
 
-	type CustomEntity struct {
+	type CustomEntityResponse struct {
 		ID         string `json:"id"`
 		Name       string `json:"name"`
 		Examples   string `json:"examples"`
@@ -1063,28 +1101,24 @@ func (s *Server) listCustomEntities(w http.ResponseWriter, r *http.Request) {
 		Accuracy   int    `json:"accuracy"`
 	}
 
-	var entities []CustomEntity
-	for _, p := range policies {
-		if p.Type == "custom_entity" {
-			var detections int
-			s.db.GetContext(ctx, &detections,
-				"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND entity_type = $2",
-				tenantID, p.Name)
+	result := make([]CustomEntityResponse, 0, len(entities))
+	for _, e := range entities {
+		// Count how many classifications matched this entity type
+		var detections int
+		s.db.GetContext(ctx, &detections,
+			"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND entity_type = $2",
+			tenantID, e.Name)
 
-			entities = append(entities, CustomEntity{
-				ID:         p.ID,
-				Name:       p.Name,
-				Examples:   "",
-				Detections: detections,
-				Accuracy:   95,
-			})
-		}
+		result = append(result, CustomEntityResponse{
+			ID:         e.ID,
+			Name:       e.Name,
+			Examples:   e.Pattern,
+			Detections: detections,
+			Accuracy:   95,
+		})
 	}
 
-	if entities == nil {
-		entities = []CustomEntity{}
-	}
-	pkg.JSON(w, entities)
+	pkg.JSON(w, result)
 }
 
 func (s *Server) getKnowledgeCache(w http.ResponseWriter, r *http.Request) {
@@ -1181,21 +1215,26 @@ func (s *Server) getCorrectionTrend(w http.ResponseWriter, r *http.Request) {
 		Week  string `json:"week"`
 		Count int    `json:"count"`
 	}
+	// Return 7 weeks of data, oldest first
 	trend := make([]TrendPoint, 7)
 	for i := 6; i >= 0; i-- {
 		var count int
-		weekLabel := fmt.Sprintf("W%d", 7-i)
+		// Week i: from (i+1)*7 days ago to i*7 days ago
+		weeksAgo := 6 - i
+		weekLabel := fmt.Sprintf("W%d", weeksAgo+1)
 		if tenantID == "" {
 			s.db.GetContext(ctx, &count,
 				`SELECT COUNT(*) FROM feedback
-				 WHERE created_at >= NOW() - INTERVAL '1 day' * $1
-				 AND created_at < NOW() - INTERVAL '1 day' * $2`,
+				 WHERE type = 'correction'
+				 AND created_at >= NOW() - INTERVAL '1 week' * $1
+				 AND created_at < NOW() - INTERVAL '1 week' * $2`,
 				i+1, i)
 		} else {
 			s.db.GetContext(ctx, &count,
-				`SELECT COUNT(*) FROM feedback WHERE tenant_id = $1
-				 AND created_at >= NOW() - INTERVAL '1 day' * $2
-				 AND created_at < NOW() - INTERVAL '1 day' * $3`,
+				`SELECT COUNT(*) FROM feedback
+				 WHERE tenant_id = $1 AND type = 'correction'
+				 AND created_at >= NOW() - INTERVAL '1 week' * $2
+				 AND created_at < NOW() - INTERVAL '1 week' * $3`,
 				tenantID, i+1, i)
 		}
 		trend[6-i] = TrendPoint{Week: weekLabel, Count: count}
@@ -1704,22 +1743,251 @@ func (s *Server) generateDefenseDocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Parse date range
+	dateFrom, _ := time.Parse(time.RFC3339, req.DateFrom)
+	dateTo, _ := time.Parse(time.RFC3339, req.DateTo)
+	if dateFrom.IsZero() {
+		dateFrom = time.Now().AddDate(0, -3, 0) // Default to 90 days ago
+	}
+	if dateTo.IsZero() {
+		dateTo = time.Now()
+	}
+
+	// Build the defense docket with real data
+	docket := map[string]any{
+		"generated_at": time.Now(),
+		"date_range": map[string]any{
+			"from": dateFrom,
+			"to":   dateTo,
+		},
+		"regulations": req.Regulations,
+		"sections":    []map[string]any{},
+	}
+
+	sections := []map[string]any{}
+
+	// 1. Data Classification Summary
+	var classificationStats struct {
+		TotalClassifications int `db:"total"`
+		PIICount             int `db:"pii_count"`
+		UniqueDatasets       int `db:"unique_datasets"`
+	}
+	s.db.GetContext(ctx, &classificationStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE entity_type IN ('PII', 'SSN', 'CREDIT_CARD', 'EMAIL', 'PHONE', 'ADDRESS', 'NAME', 'DOB', 'PHI')) as pii_count,
+			COUNT(DISTINCT dataset_id) as unique_datasets
+		FROM classifications 
+		WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "Data Classification Summary",
+		"type":  "classification",
+		"data": map[string]any{
+			"total_classifications": classificationStats.TotalClassifications,
+			"pii_detections":        classificationStats.PIICount,
+			"datasets_scanned":      classificationStats.UniqueDatasets,
+			"coverage_percentage":   calculateCoverage(classificationStats.UniqueDatasets, classificationStats.TotalClassifications),
+		},
+	})
+
+	// 2. Policy Enforcement Evidence
+	var policyStats struct {
+		ActivePolicies   int `db:"active"`
+		TotalEvaluations int `db:"evaluations"`
+	}
+	s.db.GetContext(ctx, &policyStats, `
+		SELECT 
+			COUNT(*) FILTER (WHERE active = true) as active,
+			(SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'policy%' AND created_at BETWEEN $2 AND $3) as evaluations
+		FROM policies WHERE tenant_id = $1
+	`, tenantID, dateFrom, dateTo)
+
+	var policies []store.Policy
+	s.db.SelectContext(ctx, &policies, `
+		SELECT id, name, type, active, created_at FROM policies 
+		WHERE tenant_id = $1 AND active = true ORDER BY created_at DESC LIMIT 10
+	`, tenantID)
+
+	policyList := make([]map[string]any, 0, len(policies))
+	for _, p := range policies {
+		policyList = append(policyList, map[string]any{
+			"name":       p.Name,
+			"type":       p.Type,
+			"status":     "active",
+			"created_at": p.CreatedAt,
+		})
+	}
+
+	sections = append(sections, map[string]any{
+		"title": "Policy Enforcement",
+		"type":  "policies",
+		"data": map[string]any{
+			"active_policies":    policyStats.ActivePolicies,
+			"policy_evaluations": policyStats.TotalEvaluations,
+			"policies":           policyList,
+		},
+	})
+
+	// 3. Access Control Audit Trail
+	var accessLogs []store.AuditLog
+	s.db.SelectContext(ctx, &accessLogs, `
+		SELECT id, user_id, action, resource_type, resource_id, created_at 
+		FROM audit_logs 
+		WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+		ORDER BY created_at DESC LIMIT 50
+	`, tenantID, dateFrom, dateTo)
+
+	auditEntries := make([]map[string]any, 0, len(accessLogs))
+	for _, log := range accessLogs {
+		auditEntries = append(auditEntries, map[string]any{
+			"timestamp":     log.CreatedAt,
+			"user_id":       log.UserID,
+			"action":        log.Action,
+			"resource_type": log.Resource,
+			"resource_id":   log.ResourceID,
+		})
+	}
+
+	sections = append(sections, map[string]any{
+		"title": "Access Control Audit Trail",
+		"type":  "audit",
+		"data": map[string]any{
+			"total_events":  len(accessLogs),
+			"audit_entries": auditEntries,
+		},
+	})
+
+	// 4. DSAR Processing Records
+	var dsarStats struct {
+		TotalDSARs    int `db:"total"`
+		CompletedDSARs int `db:"completed"`
+		PendingDSARs   int `db:"pending"`
+	}
+	s.db.GetContext(ctx, &dsarStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed,
+			COUNT(*) FILTER (WHERE status IN ('pending', 'in_progress')) as pending
+		FROM dsars 
+		WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "Data Subject Request Processing",
+		"type":  "dsar",
+		"data": map[string]any{
+			"total_requests":     dsarStats.TotalDSARs,
+			"completed_requests": dsarStats.CompletedDSARs,
+			"pending_requests":   dsarStats.PendingDSARs,
+			"compliance_rate":    calculateRate(dsarStats.CompletedDSARs, dsarStats.TotalDSARs),
+		},
+	})
+
+	// 5. Data Quality Scores
+	var qualityStats struct {
+		AvgCompleteness float64 `db:"avg_completeness"`
+		AvgAccuracy     float64 `db:"avg_accuracy"`
+		AvgConsistency  float64 `db:"avg_consistency"`
+	}
+	s.db.GetContext(ctx, &qualityStats, `
+		SELECT 
+			COALESCE(AVG(completeness), 0) as avg_completeness,
+			COALESCE(AVG(accuracy), 0) as avg_accuracy,
+			COALESCE(AVG(consistency), 0) as avg_consistency
+		FROM quality_scores 
+		WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "Data Quality Assessment",
+		"type":  "quality",
+		"data": map[string]any{
+			"average_completeness": qualityStats.AvgCompleteness,
+			"average_accuracy":     qualityStats.AvgAccuracy,
+			"average_consistency":  qualityStats.AvgConsistency,
+			"overall_score":        (qualityStats.AvgCompleteness + qualityStats.AvgAccuracy + qualityStats.AvgConsistency) / 3,
+		},
+	})
+
+	// 6. Retention Policy Compliance
+	var retentionStats struct {
+		TotalViolations int `db:"violations"`
+		ResolvedCount   int `db:"resolved"`
+	}
+	s.db.GetContext(ctx, &retentionStats, `
+		SELECT 
+			COUNT(*) as violations,
+			COUNT(*) FILTER (WHERE status = 'resolved') as resolved
+		FROM retention_violations 
+		WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "Retention Policy Compliance",
+		"type":  "retention",
+		"data": map[string]any{
+			"total_violations":    retentionStats.TotalViolations,
+			"resolved_violations": retentionStats.ResolvedCount,
+			"compliance_rate":     calculateRate(retentionStats.ResolvedCount, retentionStats.TotalViolations),
+		},
+	})
+
+	// 7. RoPA Summary
+	var ropaCount int
+	s.db.GetContext(ctx, &ropaCount, `SELECT COUNT(*) FROM ropa WHERE tenant_id = $1`, tenantID)
+
+	var ropaEntries []store.RoPA
+	s.db.SelectContext(ctx, &ropaEntries, `
+		SELECT id, name, purpose, legal_basis, created_at FROM ropa 
+		WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 10
+	`, tenantID)
+
+	ropaList := make([]map[string]any, 0, len(ropaEntries))
+	for _, r := range ropaEntries {
+		ropaList = append(ropaList, map[string]any{
+			"name":        r.Name,
+			"purpose":     r.Purpose,
+			"legal_basis": r.LegalBasis,
+			"created_at":  r.CreatedAt,
+		})
+	}
+
+	sections = append(sections, map[string]any{
+		"title": "Records of Processing Activities",
+		"type":  "ropa",
+		"data": map[string]any{
+			"total_records": ropaCount,
+			"entries":       ropaList,
+		},
+	})
+
+	docket["sections"] = sections
+
+	// Also create a report record for history
 	report := store.Report{
 		TenantID: tenantID,
 		Type:     "defense_docket",
-		Status:   "generating",
+		Status:   "completed",
 	}
 	s.reports.Create(ctx, &report)
 
-	s.kafka.Produce(ctx, "report-jobs", tenantID, map[string]any{
-		"report_id":   report.ID,
-		"type":        "defense_docket",
-		"regulations": req.Regulations,
-		"date_from":   req.DateFrom,
-		"date_to":     req.DateTo,
-	})
+	pkg.JSON(w, docket)
+}
 
-	pkg.JSON(w, report)
+func calculateCoverage(scanned, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(scanned) / float64(total) * 100
+}
+
+func calculateRate(completed, total int) float64 {
+	if total == 0 {
+		return 100 // No violations = 100% compliance
+	}
+	return float64(completed) / float64(total) * 100
 }
 
 func (s *Server) getPlaybook(w http.ResponseWriter, r *http.Request) {
@@ -1738,15 +2006,112 @@ func (s *Server) getPlaybook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if playbook.ID == "" {
-		pkg.JSON(w, map[string]any{
-			"issue_type": issueType,
-			"name":       "Generic Remediation",
-			"steps":      []string{"Identify affected data", "Assess impact", "Create remediation plan", "Execute remediation", "Verify compliance"},
-		})
+		// Return predefined playbooks based on issue type
+		pkg.JSON(w, getDefaultPlaybook(issueType))
 		return
 	}
 
 	pkg.JSON(w, playbook)
+}
+
+type PlaybookStep struct {
+	Title       string `json:"title"`
+	Description string `json:"description"`
+}
+
+func getDefaultPlaybook(issueType string) map[string]any {
+	playbooks := map[string]map[string]any{
+		"data_breach": {
+			"issue_type": "data_breach",
+			"name":       "Data Breach Response Playbook",
+			"steps": []PlaybookStep{
+				{Title: "Contain the Breach", Description: "Immediately isolate affected systems to prevent further data exposure. Disable compromised accounts and revoke access tokens."},
+				{Title: "Assess the Scope", Description: "Identify what data was accessed, how many records were affected, and which data subjects are impacted."},
+				{Title: "Notify Stakeholders", Description: "Alert internal security team, legal counsel, and executive leadership within 24 hours of discovery."},
+				{Title: "Regulatory Notification", Description: "Notify relevant supervisory authorities within 72 hours (GDPR) or as required by applicable regulations."},
+				{Title: "Affected Party Notification", Description: "Prepare and send breach notifications to affected data subjects with clear information about the incident and protective measures."},
+				{Title: "Document and Review", Description: "Create detailed incident report, conduct root cause analysis, and implement preventive measures."},
+			},
+		},
+		"dsar_overdue": {
+			"issue_type": "dsar_overdue",
+			"name":       "Overdue DSAR Response Playbook",
+			"steps": []PlaybookStep{
+				{Title: "Prioritize Request", Description: "Immediately escalate the overdue request to the data protection team and assign a dedicated handler."},
+				{Title: "Communicate with Requestor", Description: "Send acknowledgment to the data subject explaining the delay and providing a revised timeline."},
+				{Title: "Expedite Data Collection", Description: "Fast-track data gathering from all relevant systems and departments."},
+				{Title: "Verify Identity", Description: "Confirm the requestor's identity if not already verified to prevent unauthorized disclosure."},
+				{Title: "Compile Response Package", Description: "Prepare the data package with all personal data held, processing purposes, and third-party disclosures."},
+				{Title: "Review and Deliver", Description: "Have legal/compliance review the response before delivery. Document completion in the DSAR log."},
+			},
+		},
+		"retention_violation": {
+			"issue_type": "retention_violation",
+			"name":       "Data Retention Violation Playbook",
+			"steps": []PlaybookStep{
+				{Title: "Identify Affected Data", Description: "Locate all data that has exceeded its retention period using data discovery tools."},
+				{Title: "Assess Legal Holds", Description: "Check if any data is subject to litigation holds or regulatory preservation requirements."},
+				{Title: "Create Deletion Plan", Description: "Document which data will be deleted, from which systems, and the timeline for completion."},
+				{Title: "Execute Secure Deletion", Description: "Perform secure deletion using approved methods. Ensure backups are also purged."},
+				{Title: "Update Retention Policies", Description: "Review and update retention schedules to prevent future violations."},
+				{Title: "Generate Compliance Report", Description: "Document the remediation actions taken and update the data inventory."},
+			},
+		},
+		"consent_withdrawal": {
+			"issue_type": "consent_withdrawal",
+			"name":       "Consent Withdrawal Processing Playbook",
+			"steps": []PlaybookStep{
+				{Title: "Verify Withdrawal Request", Description: "Confirm the identity of the data subject and validate the withdrawal request."},
+				{Title: "Identify Processing Activities", Description: "Map all processing activities that rely on the withdrawn consent as their legal basis."},
+				{Title: "Cease Processing", Description: "Immediately stop all processing activities that were based solely on the withdrawn consent."},
+				{Title: "Assess Data Retention", Description: "Determine if data can be retained under alternative legal bases or must be deleted."},
+				{Title: "Update Systems", Description: "Update consent management systems and marketing preferences across all platforms."},
+				{Title: "Confirm to Data Subject", Description: "Send confirmation to the data subject that their withdrawal has been processed."},
+			},
+		},
+		"quality_degradation": {
+			"issue_type": "quality_degradation",
+			"name":       "Data Quality Remediation Playbook",
+			"steps": []PlaybookStep{
+				{Title: "Identify Quality Issues", Description: "Review data quality reports to identify specific issues: duplicates, missing values, format errors, or stale data."},
+				{Title: "Assess Business Impact", Description: "Determine which business processes and decisions are affected by the quality issues."},
+				{Title: "Root Cause Analysis", Description: "Investigate the source of quality degradation: data entry errors, integration issues, or system bugs."},
+				{Title: "Implement Corrections", Description: "Apply data cleansing rules, merge duplicates, and fill missing values where possible."},
+				{Title: "Add Quality Controls", Description: "Implement validation rules at data entry points to prevent future quality issues."},
+				{Title: "Monitor and Report", Description: "Set up ongoing quality monitoring and establish quality score thresholds."},
+			},
+		},
+		"unauthorized_access": {
+			"issue_type": "unauthorized_access",
+			"name":       "Unauthorized Access Response Playbook",
+			"steps": []PlaybookStep{
+				{Title: "Revoke Access Immediately", Description: "Disable the unauthorized user's access and revoke all active sessions and tokens."},
+				{Title: "Preserve Evidence", Description: "Capture audit logs, access records, and system snapshots before any changes."},
+				{Title: "Assess Data Exposure", Description: "Determine what data was accessed, viewed, or potentially exfiltrated."},
+				{Title: "Investigate Root Cause", Description: "Identify how unauthorized access was obtained: credential theft, privilege escalation, or misconfiguration."},
+				{Title: "Remediate Vulnerabilities", Description: "Fix the security gap that allowed unauthorized access and strengthen access controls."},
+				{Title: "Report and Document", Description: "File incident report, notify affected parties if required, and update security policies."},
+			},
+		},
+	}
+
+	if playbook, exists := playbooks[issueType]; exists {
+		return playbook
+	}
+
+	// Generic fallback
+	return map[string]any{
+		"issue_type": issueType,
+		"name":       "Generic Compliance Remediation Playbook",
+		"steps": []PlaybookStep{
+			{Title: "Identify Affected Data", Description: "Locate and catalog all data assets affected by the compliance issue."},
+			{Title: "Assess Impact", Description: "Evaluate the regulatory, business, and reputational impact of the issue."},
+			{Title: "Create Remediation Plan", Description: "Develop a detailed action plan with timelines and responsible parties."},
+			{Title: "Execute Remediation", Description: "Implement the corrective actions according to the plan."},
+			{Title: "Verify Compliance", Description: "Validate that the issue has been resolved and compliance is restored."},
+			{Title: "Document and Report", Description: "Create audit trail documentation and update compliance records."},
+		},
+	}
 }
 
 func (s *Server) getRiskScore(w http.ResponseWriter, r *http.Request) {

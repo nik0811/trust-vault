@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -786,7 +787,7 @@ func (s *Server) getQualitySummary(w http.ResponseWriter, r *http.Request) {
 		Timeliness   float64 `db:"avg_timeliness"`
 		Uniqueness   float64 `db:"avg_uniqueness"`
 	}
-	err := s.db.GetContext(ctx, &avgs,
+	s.db.GetContext(ctx, &avgs,
 		`SELECT COALESCE(AVG(overall),0) as avg_overall,
 		        COALESCE(AVG(completeness),0) as avg_completeness,
 		        COALESCE(AVG(accuracy),0) as avg_accuracy,
@@ -794,14 +795,36 @@ func (s *Server) getQualitySummary(w http.ResponseWriter, r *http.Request) {
 		        COALESCE(AVG(timeliness),0) as avg_timeliness,
 		        COALESCE(AVG(uniqueness),0) as avg_uniqueness
 		 FROM quality_scores WHERE tenant_id = $1`, tenantID)
-	if err != nil {
-		avgs.Overall = 0
-		avgs.Completeness = 0
-		avgs.Accuracy = 0
-		avgs.Consistency = 0
-		avgs.Timeliness = 0
-		avgs.Uniqueness = 0
+
+	// Derive per-dimension scores from real data when no quality_scores rows exist
+	if totalDatasets == 0 {
+		// Calculate dimensions from classifications and datasources directly
+		avgs.Completeness = s.calcCompletenessScore(ctx, tenantID)
+		avgs.Accuracy = s.calcAccuracyScore(ctx, tenantID)
+		avgs.Consistency = s.calcConsistencyScore(ctx, tenantID)
+		avgs.Timeliness = s.calcTimelinessScore(ctx, tenantID)
+		avgs.Uniqueness = s.calcUniquenessScore(ctx, tenantID)
+		avgs.Overall = (avgs.Completeness + avgs.Accuracy + avgs.Consistency + avgs.Timeliness + avgs.Uniqueness) / 5.0
 	}
+
+	// Issues = datasets with overall score below 70 + datasources with no quality score
+	var issuesFound int
+	s.db.GetContext(ctx, &issuesFound,
+		`SELECT COUNT(*) FROM (
+		   SELECT DISTINCT dataset_id FROM quality_scores
+		   WHERE tenant_id = $1 AND overall < 0.7
+		 ) sub`, tenantID)
+
+	// Also count datasources that have never been assessed (each is a quality gap)
+	var unassessedCount int
+	s.db.GetContext(ctx, &unassessedCount,
+		`SELECT COUNT(*) FROM datasources d
+		 WHERE d.tenant_id = $1
+		   AND NOT EXISTS (
+		     SELECT 1 FROM quality_scores q
+		     WHERE q.tenant_id = $1 AND q.dataset_id = d.id::text
+		   )`, tenantID)
+	issuesFound += unassessedCount
 
 	pkg.JSON(w, map[string]any{
 		"overall_score":  avgs.Overall,
@@ -811,7 +834,85 @@ func (s *Server) getQualitySummary(w http.ResponseWriter, r *http.Request) {
 		"timeliness":     avgs.Timeliness,
 		"uniqueness":     avgs.Uniqueness,
 		"total_datasets": totalDatasets,
+		"issues_found":   issuesFound,
 	})
+}
+
+// calcCompletenessScore estimates completeness from classification null rates.
+// A column with no null values scores 1.0; average null rate of >20% pulls score down.
+func (s *Server) calcCompletenessScore(ctx context.Context, tenantID string) float64 {
+	var totalCols, nullyCols int
+	s.db.GetContext(ctx, &totalCols,
+		"SELECT COUNT(DISTINCT column_name) FROM classifications WHERE tenant_id = $1", tenantID)
+	if totalCols == 0 {
+		return 0
+	}
+	// Estimate null columns as those with entity_type = 'UNKNOWN' or very low confidence
+	s.db.GetContext(ctx, &nullyCols,
+		"SELECT COUNT(DISTINCT column_name) FROM classifications WHERE tenant_id = $1 AND (confidence < 0.2 OR entity_type = 'UNKNOWN')", tenantID)
+	score := 1.0 - (float64(nullyCols) / float64(totalCols))
+	return roundScore(score)
+}
+
+// calcAccuracyScore uses average classification confidence as a proxy for accuracy.
+func (s *Server) calcAccuracyScore(ctx context.Context, tenantID string) float64 {
+	var avgConf float64
+	s.db.GetContext(ctx, &avgConf,
+		"SELECT COALESCE(AVG(confidence),0) FROM classifications WHERE tenant_id = $1", tenantID)
+	return roundScore(avgConf)
+}
+
+// calcConsistencyScore measures how many datasources have been scanned vs total.
+func (s *Server) calcConsistencyScore(ctx context.Context, tenantID string) float64 {
+	var total, scanned int
+	s.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM datasources WHERE tenant_id = $1", tenantID)
+	if total == 0 {
+		return 0
+	}
+	s.db.GetContext(ctx, &scanned,
+		"SELECT COUNT(*) FROM datasources WHERE tenant_id = $1 AND status IN ('active','completed')", tenantID)
+	score := float64(scanned) / float64(total)
+	return roundScore(score)
+}
+
+// calcTimelinessScore rewards datasources updated in the last 30 days.
+func (s *Server) calcTimelinessScore(ctx context.Context, tenantID string) float64 {
+	var total, recent int
+	s.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM datasources WHERE tenant_id = $1", tenantID)
+	if total == 0 {
+		return 0
+	}
+	s.db.GetContext(ctx, &recent,
+		"SELECT COUNT(*) FROM datasources WHERE tenant_id = $1 AND updated_at >= NOW() - INTERVAL '30 days'", tenantID)
+	score := float64(recent) / float64(total)
+	return roundScore(score)
+}
+
+// calcUniquenessScore estimates uniqueness from ROT redundant findings.
+func (s *Server) calcUniquenessScore(ctx context.Context, tenantID string) float64 {
+	var total, redundant int
+	s.db.GetContext(ctx, &total, "SELECT COUNT(*) FROM datasources WHERE tenant_id = $1", tenantID)
+	if total == 0 {
+		return 0
+	}
+	s.db.GetContext(ctx, &redundant,
+		"SELECT COUNT(DISTINCT dataset_id) FROM rot_data WHERE tenant_id = $1 AND type = 'redundant'", tenantID)
+	if redundant >= total {
+		return 0.1
+	}
+	score := 1.0 - (float64(redundant) / float64(total))
+	return roundScore(score)
+}
+
+func roundScore(score float64) float64 {
+	if score < 0 {
+		return 0
+	}
+	if score > 1 {
+		return 1
+	}
+	// Round to 2 decimal places
+	return float64(int(score*100+0.5)) / 100
 }
 
 func (s *Server) listPIAs(w http.ResponseWriter, r *http.Request) {

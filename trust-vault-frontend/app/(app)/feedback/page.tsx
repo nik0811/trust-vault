@@ -78,9 +78,31 @@ export default function FeedbackPage() {
               <h3 className="mb-2 text-lg font-semibold text-foreground">Correction Trend</h3>
               {trend.length > 0 && trend.some(t => t.count > 0) ? (
                 <>
-                  <p className="mb-6 text-sm text-green-600 dark:text-green-400">
-                    {trend[0].count > trend[trend.length - 1].count ? 'Decreasing — model is improving' : 'Stable'}
-                  </p>
+                  {(() => {
+                    const firstWeek = trend[0]?.count || 0
+                    const lastWeek = trend[trend.length - 1]?.count || 0
+                    const isDecreasing = firstWeek > lastWeek
+                    const isIncreasing = lastWeek > firstWeek
+                    if (isDecreasing) {
+                      return (
+                        <p className="mb-6 text-sm text-green-600 dark:text-green-400">
+                          Decreasing — model is improving
+                        </p>
+                      )
+                    } else if (isIncreasing) {
+                      return (
+                        <p className="mb-6 text-sm text-yellow-600 dark:text-yellow-400">
+                          Increasing — review corrections
+                        </p>
+                      )
+                    } else {
+                      return (
+                        <p className="mb-6 text-sm text-muted-foreground">
+                          Stable
+                        </p>
+                      )
+                    }
+                  })()}
                   <div className="flex h-36 items-end gap-2" role="img" aria-label="Weekly corrections trend">
                     {trend.map((t, i) => (
                       <div key={i} className="flex flex-1 flex-col items-center gap-1">

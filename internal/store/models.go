@@ -235,6 +235,21 @@ type Job struct {
 	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
 }
 
+// JobExecution tracks individual job runs
+type JobExecution struct {
+	ID          string     `db:"id" json:"id"`
+	TenantID    string     `db:"tenant_id" json:"-"`
+	JobID       string     `db:"job_id" json:"job_id"`
+	Status      string     `db:"status" json:"status"`
+	StartedAt   *time.Time `db:"started_at" json:"started_at,omitempty"`
+	CompletedAt *time.Time `db:"completed_at" json:"completed_at,omitempty"`
+	Duration    *int       `db:"duration_ms" json:"duration_ms,omitempty"`
+	Result      JSON       `db:"result" json:"result,omitempty"`
+	Error       *string    `db:"error" json:"error,omitempty"`
+	CreatedAt   time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time  `db:"updated_at" json:"updated_at"`
+}
+
 // Notification stores alerts and events
 type Notification struct {
 	ID        string    `db:"id" json:"id"`
@@ -282,6 +297,30 @@ type Feedback struct {
 	CorrectedLabel   string    `db:"corrected_label" json:"corrected_label"`
 	UserID           string    `db:"user_id" json:"user_id"`
 	CreatedAt        time.Time `db:"created_at" json:"created_at"`
+}
+
+// CustomEntity stores tenant-defined entity types for the classifier
+type CustomEntity struct {
+	ID          string    `db:"id" json:"id"`
+	TenantID    string    `db:"tenant_id" json:"-"`
+	Name        string    `db:"name" json:"name" validate:"required"`
+	Pattern     string    `db:"pattern" json:"pattern" validate:"required"`
+	Description string    `db:"description" json:"description"`
+	Detections  int       `db:"detections" json:"detections"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt   time.Time `db:"updated_at" json:"updated_at"`
+}
+
+// KnowledgeCacheEntry records a correction that teaches the classifier
+type KnowledgeCacheEntry struct {
+	ID         string    `db:"id" json:"id"`
+	TenantID   string    `db:"tenant_id" json:"-"`
+	EntityType string    `db:"entity_type" json:"entity_type"`
+	Pattern    string    `db:"pattern" json:"pattern"`
+	Correction string    `db:"correction" json:"correction"`
+	HitCount   int       `db:"hit_count" json:"hit_count"`
+	CreatedAt  time.Time `db:"created_at" json:"created_at"`
+	UpdatedAt  time.Time `db:"updated_at" json:"updated_at"`
 }
 
 // Integration stores outbound integration configs.

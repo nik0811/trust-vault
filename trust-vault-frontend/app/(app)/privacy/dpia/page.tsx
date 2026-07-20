@@ -4,10 +4,10 @@ import { useState } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import {
   CheckCircle2, Clock, AlertTriangle, ChevronDown, ChevronRight,
-  Plus, Shield, FileText, X, Loader2
+  Plus, Shield, FileText, X, Loader2, Send, ThumbsUp, ThumbsDown
 } from 'lucide-react'
 import {
-  useDPIAs, useCreateDPIA, useDPIA, useUpdateDPIAStep,
+  useDPIAs, useCreateDPIA, useDPIA, useUpdateDPIAStep, useUpdateDPIAStatus,
   type DPIA, type DPIAStep
 } from '@/hooks/use-privacy'
 import { cn } from '@/lib/utils'
@@ -65,13 +65,16 @@ function StepProgress({ steps }: { steps: DPIAStep[] }) {
 function DPIADetail({ id, onClose }: { id: string; onClose: () => void }) {
   const { data: dpia, isLoading } = useDPIA(id)
   const updateStep = useUpdateDPIAStep()
+  const updateStatus = useUpdateDPIAStatus()
   const [expandedStep, setExpandedStep] = useState<string | null>(null)
   const [notes, setNotes] = useState<Record<string, string>>({})
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+        <div className="bg-card rounded-xl border border-border p-8">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       </div>
     )
   }
@@ -88,6 +91,26 @@ function DPIADetail({ id, onClose }: { id: string; onClose: () => void }) {
       data: { status: 'completed', notes: notes[stepId] ?? '' },
     })
   }
+
+  const handleSubmitForReview = () => {
+    updateStatus.mutate({ id, status: 'pending_dpo' })
+  }
+
+  const handleApprove = () => {
+    updateStatus.mutate({ id, status: 'approved' })
+  }
+
+  const handleReject = () => {
+    updateStatus.mutate({ id, status: 'rejected' })
+  }
+
+  // Check if all steps before DPO are complete
+  const stepsBeforeDPOComplete = steps
+    .filter(s => s.id !== 'dpo_consultation' && s.id !== 'sign_off')
+    .every(s => s.status === 'completed' || s.status === 'skipped')
+
+  const canSubmitForReview = stepsBeforeDPOComplete && dpia.status === 'in_progress'
+  const canApproveReject = dpia.status === 'pending_dpo'
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -136,6 +159,43 @@ function DPIADetail({ id, onClose }: { id: string; onClose: () => void }) {
             <h3 className="text-sm font-semibold text-foreground mb-3">Workflow Progress</h3>
             <StepProgress steps={steps} />
           </div>
+
+          {/* DPO Actions */}
+          {(canSubmitForReview || canApproveReject) && (
+            <div className="border border-border rounded-lg p-4 bg-muted/20">
+              <h3 className="text-sm font-semibold text-foreground mb-3">DPO Approval</h3>
+              {canSubmitForReview && (
+                <button
+                  onClick={handleSubmitForReview}
+                  disabled={updateStatus.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-orange-500 text-white text-sm rounded-md hover:bg-orange-600 transition-colors disabled:opacity-50"
+                >
+                  {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Submit for DPO Review
+                </button>
+              )}
+              {canApproveReject && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleApprove}
+                    disabled={updateStatus.isPending}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
+                  >
+                    {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsUp className="h-4 w-4" />}
+                    Approve
+                  </button>
+                  <button
+                    onClick={handleReject}
+                    disabled={updateStatus.isPending}
+                    className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors disabled:opacity-50"
+                  >
+                    {updateStatus.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ThumbsDown className="h-4 w-4" />}
+                    Reject
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Steps */}
           <div className="space-y-2">
@@ -205,7 +265,7 @@ function CreateDPIAModal({ onClose }: { onClose: () => void }) {
     name: '',
     description: '',
     processing_purpose: '',
-    risk_level: 'medium',
+    risk_level: 'medium' as 'high' | 'medium' | 'low',
     data_types: [] as string[],
   })
   const [dtInput, setDtInput] = useState('')
@@ -267,7 +327,7 @@ function CreateDPIAModal({ onClose }: { onClose: () => void }) {
             <select
               className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background focus:outline-none focus:ring-1 focus:ring-primary"
               value={form.risk_level}
-              onChange={e => setForm(f => ({ ...f, risk_level: e.target.value }))}
+              onChange={e => setForm(f => ({ ...f, risk_level: e.target.value as 'high' | 'medium' | 'low' }))}
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -334,7 +394,7 @@ export default function DPIAPage() {
   const stats = {
     total: dpias.length,
     completed: dpias.filter(d => d.status === 'completed').length,
-    in_progress: dpias.filter(d => d.status === 'in_progress').length,
+    in_progress: dpias.filter(d => d.status === 'in_progress' || d.status === 'pending_dpo').length,
     high_risk: dpias.filter(d => d.risk_level === 'high').length,
   }
 

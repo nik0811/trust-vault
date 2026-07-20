@@ -296,6 +296,30 @@ export function useUpdateDPIAStep() {
   })
 }
 
+export function useUpdateDPIAStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const response = await api.put(`/privacy/dpia/${id}/status`, { status, notes })
+      return response.data
+    },
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['dpias', vars.id] })
+      queryClient.invalidateQueries({ queryKey: ['dpias'] })
+      const statusMessages: Record<string, string> = {
+        approved: 'DPIA approved by DPO',
+        rejected: 'DPIA rejected',
+        pending_dpo: 'Submitted for DPO review',
+        completed: 'DPIA completed',
+      }
+      toast.success(statusMessages[vars.status] || 'Status updated')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to update status')
+    },
+  })
+}
+
 // ── Enhanced Consent hooks ────────────────────────────────────────────────────
 
 export interface ConsentRecord {

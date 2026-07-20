@@ -38,6 +38,47 @@ func defaultDPIASteps() []map[string]any {
 	return steps
 }
 
+// computeDPIAStatus determines the overall DPIA status based on step completion.
+// Status transitions: in_progress → pending_dpo (when ready for DPO) → completed
+func computeDPIAStatus(steps []map[string]any) string {
+	allDone := true
+	dpoStepPending := false
+	stepsBeforeDPOComplete := true
+
+	for _, step := range steps {
+		status := step["status"]
+		stepID := step["id"]
+
+		if status != "completed" && status != "skipped" {
+			allDone = false
+		}
+
+		if stepID == "dpo_consultation" {
+			if status == "pending" {
+				dpoStepPending = true
+			}
+		}
+
+		// Check if all steps before DPO consultation are complete
+		if stepID != "dpo_consultation" && stepID != "sign_off" {
+			if status != "completed" && status != "skipped" {
+				stepsBeforeDPOComplete = false
+			}
+		}
+	}
+
+	if allDone {
+		return "completed"
+	}
+
+	// Only show pending_dpo when all prerequisite steps are done and DPO step is pending
+	if stepsBeforeDPOComplete && dpoStepPending {
+		return "pending_dpo"
+	}
+
+	return "in_progress"
+}
+
 func (s *Server) createDPIA(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
@@ -156,25 +197,8 @@ func (s *Server) updateDPIAStep(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Determine overall DPIA status
-	allDone := true
-	for _, step := range steps {
-		if step["status"] != "completed" && step["status"] != "skipped" {
-			allDone = false
-			break
-		}
-	}
-	dpiaStatus := "in_progress"
-	if allDone {
-		dpiaStatus = "completed"
-	}
-	// Check if pending DPO
-	for _, step := range steps {
-		if step["id"] == "dpo_consultation" && step["status"] == "pending" {
-			dpiaStatus = "pending_dpo"
-			break
-		}
-	}
+	// Determine overall DPIA status based on step completion
+	dpiaStatus := computeDPIAStatus(steps)
 
 	stepsJSON, _ := json.Marshal(steps)
 	s.db.ExecContext(ctx,
@@ -185,6 +209,63 @@ func (s *Server) updateDPIAStep(w http.ResponseWriter, r *http.Request) {
 		TenantID: tenantID,
 		Action:   "dpia_step_updated",
 		Resource: "dpia",
+		ResourceID: id,
+	})
+
+	var updated store.DPIA
+	s.db.GetContext(ctx, &updated, "SELECT * FROM dpias WHERE id = $1", id)
+	pkg.JSON(w, updated)
+}
+
+// updateDPIAStatus allows explicit status changes for DPO approval workflow
+func (s *Server) updateDPIAStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	var req struct {
+		Status string `json:"status" validate:"required,oneof=in_progress pending_dpo approved rejected completed"`
+		Notes  string `json:"notes"`
+	}
+	if err := pkg.Bind(r, &req); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	var dpia store.DPIA
+	if err := s.db.GetContext(ctx, &dpia, "SELECT * FROM dpias WHERE id = $1 AND tenant_id = $2", id, tenantID); err != nil {
+		pkg.Error(w, fmt.Errorf("DPIA not found"), http.StatusNotFound)
+		return
+	}
+
+	// Handle status transitions
+	newStatus := req.Status
+	if newStatus == "approved" {
+		newStatus = "completed"
+		// Mark DPO consultation and sign_off steps as completed
+		var steps []map[string]any
+		if err := json.Unmarshal([]byte(dpia.Steps), &steps); err == nil {
+			now := time.Now().UTC().Format(time.RFC3339)
+			for i, step := range steps {
+				if step["id"] == "dpo_consultation" || step["id"] == "sign_off" {
+					steps[i]["status"] = "completed"
+					steps[i]["completed_at"] = now
+					if req.Notes != "" {
+						steps[i]["notes"] = req.Notes
+					}
+				}
+			}
+			stepsJSON, _ := json.Marshal(steps)
+			s.db.ExecContext(ctx, "UPDATE dpias SET steps = $1, dpo_consulted = true WHERE id = $2", string(stepsJSON), id)
+		}
+	}
+
+	s.db.ExecContext(ctx, "UPDATE dpias SET status = $1, updated_at = NOW() WHERE id = $2", newStatus, id)
+
+	s.auditLogs.Create(ctx, &store.AuditLog{
+		TenantID:   tenantID,
+		Action:     "dpia_status_updated",
+		Resource:   "dpia",
 		ResourceID: id,
 	})
 

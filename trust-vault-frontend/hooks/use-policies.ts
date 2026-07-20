@@ -124,3 +124,20 @@ export function useEvaluatePolicy() {
     },
   })
 }
+
+export interface GovernanceStats {
+  total_policies: number
+  active_policies: number
+  evaluations_24h: number
+  evaluation_status: string
+}
+
+export function useGovernanceStats() {
+  return useQuery({
+    queryKey: ['governance-stats'],
+    queryFn: async () => {
+      const response = await api.get<GovernanceStats>('/governance/stats')
+      return response.data
+    },
+  })
+}

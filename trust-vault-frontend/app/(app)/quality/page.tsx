@@ -6,7 +6,7 @@ import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import Link from 'next/link'
 import { BarChart3, CheckCircle, AlertTriangle, TrendingUp, Database, Zap, Eye, Shield, X, Loader2 } from 'lucide-react'
-import { useQualityTrends, useAutoProfile, useDataProfile, type ColumnProfile } from '@/hooks/use-quality'
+import { useQualityTrends, useQualityDimensions, useAutoProfile, useDataProfile, type ColumnProfile } from '@/hooks/use-quality'
 import { useDataSources } from '@/hooks/use-datasources'
 import { cn } from '@/lib/utils'
 
@@ -116,6 +116,7 @@ function ProfileModal({ datasourceId, datasourceName, onClose }: { datasourceId:
 
 export default function QualityPage() {
   const { data: trends, isLoading: trendsLoading } = useQualityTrends()
+  const { data: dimensions, isLoading: dimensionsLoading } = useQualityDimensions()
   const { data: dataSources, isLoading: dsLoading } = useDataSources()
   const autoProfile = useAutoProfile()
   const [profileDsId, setProfileDsId] = useState<string | null>(null)
@@ -124,15 +125,34 @@ export default function QualityPage() {
   const hasQualityData = trends && Array.isArray(trends) && trends.length > 0
 
   const stats = useMemo(() => {
+    const datasetsAssessed = Array.isArray(dataSources) ? dataSources.length : 0
+    if (dimensions) {
+      const avgScore = Math.round((dimensions.overall_score ?? 0) * 100)
+      const issuesFound = dimensions.issues_found ?? 0
+      return { avgScore, datasetsAssessed, issuesFound, improvement: 0 }
+    }
     if (!hasQualityData) {
-      return { avgScore: 0, datasetsAssessed: 0, issuesFound: 0, improvement: 0 }
+      return { avgScore: 0, datasetsAssessed, issuesFound: 0, improvement: 0 }
     }
     const avgScore = Math.round(trends.reduce((sum: number, t: any) => sum + (t.overall || 0), 0) / trends.length * 100)
-    const datasetsAssessed = Array.isArray(dataSources) ? dataSources.length : 0
     return { avgScore, datasetsAssessed, issuesFound: 0, improvement: 0 }
-  }, [trends, dataSources, hasQualityData])
+  }, [trends, dimensions, dataSources, hasQualityData])
 
-  const isLoading = trendsLoading || dsLoading
+  // Per-dimension scores (0-100), each derived independently from real data
+  const dimScores = useMemo(() => {
+    if (!dimensions) return null
+    return {
+      Completeness: Math.round((dimensions.completeness ?? 0) * 100),
+      Accuracy: Math.round((dimensions.accuracy ?? 0) * 100),
+      Consistency: Math.round((dimensions.consistency ?? 0) * 100),
+      Timeliness: Math.round((dimensions.timeliness ?? 0) * 100),
+      Uniqueness: Math.round((dimensions.uniqueness ?? 0) * 100),
+    }
+  }, [dimensions])
+
+  const hasDimensions = dimScores !== null && Object.values(dimScores).some(v => v > 0)
+
+  const isLoading = trendsLoading || dsLoading || dimensionsLoading
 
   return (
     <div className="min-h-screen bg-background">
@@ -158,9 +178,9 @@ export default function QualityPage() {
             <>
               <StatCard
                 label="Overall Score"
-                value={hasQualityData ? `${stats.avgScore}%` : '-'}
-                change={hasQualityData && stats.avgScore >= 80 ? 1 : hasQualityData ? -1 : undefined}
-                changeLabel={hasQualityData ? (stats.avgScore >= 80 ? 'healthy' : 'needs attention') : undefined}
+                value={(hasDimensions || hasQualityData) ? `${stats.avgScore}%` : '-'}
+                change={(hasDimensions || hasQualityData) && stats.avgScore >= 80 ? 1 : (hasDimensions || hasQualityData) ? -1 : undefined}
+                changeLabel={(hasDimensions || hasQualityData) ? (stats.avgScore >= 80 ? 'healthy' : 'needs attention') : undefined}
                 icon={<BarChart3 className="h-6 w-6" />}
               />
               <StatCard
@@ -171,11 +191,13 @@ export default function QualityPage() {
               <StatCard
                 label="Issues Found"
                 value={stats.issuesFound.toString()}
+                change={stats.issuesFound > 0 ? -1 : undefined}
+                changeLabel={stats.issuesFound > 0 ? 'need attention' : undefined}
                 icon={<AlertTriangle className="h-6 w-6" />}
               />
               <StatCard
                 label="Improvement"
-                value={hasQualityData ? `+${stats.improvement}%` : '-'}
+                value={(hasDimensions || hasQualityData) ? `+${stats.improvement}%` : '-'}
                 change={hasQualityData ? 1 : undefined}
                 changeLabel={hasQualityData ? 'this month' : undefined}
                 icon={<TrendingUp className="h-6 w-6" />}
@@ -184,7 +206,7 @@ export default function QualityPage() {
           )}
         </div>
 
-        {!isLoading && !hasQualityData ? (
+        {!isLoading && !hasQualityData && !hasDimensions ? (
           <div className="rounded-lg border border-border bg-card p-12 text-center">
             <Database className="mx-auto h-12 w-12 text-muted-foreground/50" />
             <h3 className="mt-4 text-lg font-semibold text-foreground">No Quality Assessments Yet</h3>
@@ -202,7 +224,7 @@ export default function QualityPage() {
         ) : (
           <>
             {/* Quality Dimensions - only show if we have data */}
-            {hasQualityData && (
+            {hasDimensions && dimScores && (
               <div className="rounded-lg border border-border bg-card p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-lg font-semibold text-foreground">Quality Dimensions</h3>
@@ -211,31 +233,28 @@ export default function QualityPage() {
                   </Link>
                 </div>
                 <div className="space-y-4">
-                  {['Completeness', 'Accuracy', 'Consistency', 'Timeliness', 'Uniqueness'].map((dim) => {
-                    const score = stats.avgScore
-                    return (
-                      <div key={dim} className="flex items-center gap-4">
-                        <div className="w-32 text-sm font-medium text-foreground">{dim}</div>
-                        <div className="flex-1">
-                          <div className="h-3 bg-muted rounded-full overflow-hidden">
-                            <div
-                              className={`h-full transition-all ${
-                                score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500'
-                              }`}
-                              style={{ width: `${score}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="w-16 text-right">
-                          <span className={`text-sm font-medium ${
-                            score >= 90 ? 'text-green-600' : score >= 70 ? 'text-yellow-600' : 'text-red-600'
-                          }`}>
-                            {score}%
-                          </span>
+                  {(Object.entries(dimScores) as [string, number][]).map(([dim, score]) => (
+                    <div key={dim} className="flex items-center gap-4">
+                      <div className="w-32 text-sm font-medium text-foreground">{dim}</div>
+                      <div className="flex-1">
+                        <div className="h-3 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={`h-full transition-all ${
+                              score >= 90 ? 'bg-green-500' : score >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${score}%` }}
+                          />
                         </div>
                       </div>
-                    )
-                  })}
+                      <div className="w-16 text-right">
+                        <span className={`text-sm font-medium ${
+                          score >= 90 ? 'text-green-600' : score >= 70 ? 'text-yellow-600' : 'text-red-600'
+                        }`}>
+                          {score}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

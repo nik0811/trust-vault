@@ -16,11 +16,32 @@ export interface Job {
   updated_at: string
 }
 
+export interface JobExecution {
+  id: string
+  job_id: string
+  status: string
+  started_at: string | null
+  completed_at: string | null
+  duration_ms: number | null
+  result: any
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
 interface CreateJobRequest {
   name: string
   type: string
   schedule: string
   config?: Record<string, any>
+}
+
+interface UpdateJobRequest {
+  name?: string
+  type?: string
+  schedule?: string
+  config?: Record<string, any>
+  status?: string
 }
 
 export function useJobs() {
@@ -62,6 +83,25 @@ export function useCreateJob() {
   })
 }
 
+export function useUpdateJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: UpdateJobRequest }) => {
+      const response = await api.put<Job>(`/jobs/${id}`, data)
+      return response.data
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['jobs', variables.id] })
+      toast.success('Job updated successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || 'Failed to update job')
+    },
+  })
+}
+
 export function useDeleteJob() {
   const queryClient = useQueryClient()
 
@@ -88,12 +128,25 @@ export function useRunJobNow() {
       return response.data
     },
     onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
       queryClient.invalidateQueries({ queryKey: ['jobs', id] })
+      queryClient.invalidateQueries({ queryKey: ['jobs', id, 'history'] })
       toast.success('Job started')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Failed to run job')
     },
+  })
+}
+
+export function useJobHistory(id: string) {
+  return useQuery({
+    queryKey: ['jobs', id, 'history'],
+    queryFn: async () => {
+      const response = await api.get<JobExecution[]>(`/jobs/${id}/history`)
+      return response.data
+    },
+    enabled: !!id,
   })
 }
 
@@ -199,9 +252,6 @@ export function useTestIntegration() {
     mutationFn: async (id: string) => {
       const response = await api.post(`/integrations/${id}/test`)
       return response.data
-    },
-    onSuccess: () => {
-      toast.success('Integration test successful')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.error || 'Integration test failed')

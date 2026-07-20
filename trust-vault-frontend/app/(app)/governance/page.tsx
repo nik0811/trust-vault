@@ -6,13 +6,14 @@ import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import Link from 'next/link'
 import { Shield, FileCheck, AlertTriangle, Zap } from 'lucide-react'
-import { usePolicies } from '@/hooks/use-policies'
+import { usePolicies, useGovernanceStats } from '@/hooks/use-policies'
 import { useRiskScore, useComplianceGaps } from '@/hooks/use-advisor'
 
 export default function GovernancePage() {
   const { data: policies, isLoading: policiesLoading } = usePolicies()
   const { data: riskScore, isLoading: riskLoading } = useRiskScore()
   const { data: gaps, isLoading: gapsLoading } = useComplianceGaps()
+  const { data: govStats, isLoading: govStatsLoading } = useGovernanceStats()
 
   const stats = useMemo(() => {
     const policiesArray = Array.isArray(policies) ? policies : []
@@ -20,11 +21,12 @@ export default function GovernancePage() {
     const totalPolicies = policiesArray.length
     const complianceScore = riskScore?.overall_score ? Math.round(riskScore.overall_score * 100) : 0
     const openGaps = Array.isArray(gaps) ? gaps.filter((g: any) => g.status !== 'resolved').length : 0
+    const evaluations24h = govStats?.evaluations_24h ?? 0
 
-    return { activePolicies, totalPolicies, complianceScore, openGaps }
-  }, [policies, riskScore, gaps])
+    return { activePolicies, totalPolicies, complianceScore, openGaps, evaluations24h }
+  }, [policies, riskScore, gaps, govStats])
 
-  const isLoading = policiesLoading || riskLoading || gapsLoading
+  const isLoading = policiesLoading || riskLoading || gapsLoading || govStatsLoading
 
   return (
     <div className="min-h-screen bg-background">
@@ -67,7 +69,8 @@ export default function GovernancePage() {
               />
               <StatCard
                 label="Policy Evaluations"
-                value="24/7"
+                value={stats.evaluations24h > 0 ? stats.evaluations24h.toString() : 'Active'}
+                changeLabel="last 24h"
                 icon={<Zap className="h-6 w-6" />}
               />
             </>

@@ -16,6 +16,7 @@ import {
   XCircle,
   ChevronDown,
   ChevronUp,
+  TriangleAlert,
 } from 'lucide-react'
 import {
   useRemediationActions,
@@ -28,27 +29,98 @@ import { cn } from '@/lib/utils'
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
-const ACTION_TYPE_LABELS: Record<string, string> = {
-  quarantine: 'Quarantine',
-  flag: 'Flag',
-  delete: 'Delete',
-  encrypt: 'Encrypt',
-  redact: 'Redact',
-  archive: 'Archive',
-  deduplicate: 'Deduplicate',
-  label: 'Label',
+interface ActionTypeConfig {
+  label: string
+  icon: string
+  color: string
+  /** Human-readable consequence used in the Execute warning. */
+  consequence: string
 }
 
-const ACTION_TYPE_COLORS: Record<string, string> = {
-  quarantine: 'bg-orange-500/10 text-orange-600',
-  flag: 'bg-yellow-500/10 text-yellow-600',
-  delete: 'bg-red-500/10 text-red-600',
-  encrypt: 'bg-blue-500/10 text-blue-600',
-  redact: 'bg-purple-500/10 text-purple-600',
-  archive: 'bg-gray-500/10 text-gray-600',
-  deduplicate: 'bg-teal-500/10 text-teal-600',
-  label: 'bg-indigo-500/10 text-indigo-600',
+const ACTION_TYPE_CONFIG: Record<string, ActionTypeConfig> = {
+  quarantine: {
+    label: 'Quarantine Data',
+    icon: '🔒',
+    color: 'bg-orange-500/10 text-orange-600',
+    consequence: 'quarantine',
+  },
+  delete: {
+    label: 'Delete ROT Data',
+    icon: '🗑️',
+    color: 'bg-red-500/10 text-red-600',
+    consequence: 'permanently delete',
+  },
+  archive: {
+    label: 'Archive Dataset',
+    icon: '📦',
+    color: 'bg-gray-500/10 text-gray-600',
+    consequence: 'archive',
+  },
+  redact: {
+    label: 'Redact PII Fields',
+    icon: '🎭',
+    color: 'bg-purple-500/10 text-purple-600',
+    consequence: 'redact PII fields in',
+  },
+  encrypt: {
+    label: 'Encrypt Dataset',
+    icon: '🔐',
+    color: 'bg-blue-500/10 text-blue-600',
+    consequence: 'encrypt',
+  },
+  mask: {
+    label: 'Mask PII Fields',
+    icon: '🎭',
+    color: 'bg-purple-500/10 text-purple-600',
+    consequence: 'mask PII fields in',
+  },
+  review: {
+    label: 'Manual Review Required',
+    icon: '👁️',
+    color: 'bg-amber-500/10 text-amber-600',
+    consequence: 'flag for manual review',
+  },
+  pending_review: {
+    label: 'Manual Review Required',
+    icon: '👁️',
+    color: 'bg-amber-500/10 text-amber-600',
+    consequence: 'flag for manual review',
+  },
+  notify: {
+    label: 'Notify Owner',
+    icon: '📧',
+    color: 'bg-sky-500/10 text-sky-600',
+    consequence: 'notify the owner of',
+  },
+  flag: {
+    label: 'Flag for Review',
+    icon: '🚩',
+    color: 'bg-yellow-500/10 text-yellow-600',
+    consequence: 'flag',
+  },
+  deduplicate: {
+    label: 'Deduplicate Dataset',
+    icon: '🔁',
+    color: 'bg-teal-500/10 text-teal-600',
+    consequence: 'deduplicate',
+  },
+  label: {
+    label: 'Apply Label',
+    icon: '🏷️',
+    color: 'bg-indigo-500/10 text-indigo-600',
+    consequence: 'apply a label to',
+  },
 }
+
+function resolveActionTypeConfig(action: RemediationAction): ActionTypeConfig {
+  // Prefer action_type, fall back to type, then unknown.
+  const key = ((action.action_type || action.type || '') as string).toLowerCase().replace(/-/g, '_')
+  if (ACTION_TYPE_CONFIG[key]) return ACTION_TYPE_CONFIG[key]
+  const label = key ? key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' ') : 'Unknown'
+  return { label, icon: '⚙️', color: 'bg-muted text-muted-foreground', consequence: 'process' }
+}
+
+// ─── status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   pending: {
@@ -106,12 +178,11 @@ function StatusBadge({ status }: { status: string }) {
 // ─── action-type badge ────────────────────────────────────────────────────────
 
 function ActionTypeBadge({ action }: { action: RemediationAction }) {
-  const key = (action.action_type || '').toLowerCase()
-  const label = ACTION_TYPE_LABELS[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : 'Pending Review')
-  const color = ACTION_TYPE_COLORS[key] ?? 'bg-muted text-muted-foreground'
+  const cfg = resolveActionTypeConfig(action)
   return (
-    <span className={cn('inline-flex px-2 py-0.5 rounded text-sm font-medium', color)}>
-      {label}
+    <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-sm font-medium', cfg.color)}>
+      <span>{cfg.icon}</span>
+      {cfg.label}
     </span>
   )
 }
@@ -152,10 +223,16 @@ function LogViewer({ actionId }: LogViewerProps) {
       {open && (
         <div className="border-t border-border bg-background p-4 max-h-72 overflow-y-auto font-mono text-xs">
           {isLoading && (
-            <div className="text-muted-foreground">Loading logs…</div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <span>Loading logs…</span>
+            </div>
           )}
           {!isLoading && (!logs || logs.length === 0) && (
-            <div className="text-muted-foreground">No execution logs yet.</div>
+            <div className="space-y-1">
+              <p className="text-muted-foreground">No execution logs yet.</p>
+              <p className="text-muted-foreground/60">Logs will appear here after Execute is triggered.</p>
+            </div>
           )}
           {!isLoading && logs && logs.length > 0 && (
             <div className="space-y-1">
@@ -258,25 +335,42 @@ function DetailPanel({ action, onClose, onExecuted }: DetailPanelProps) {
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-border flex gap-3">
-          <button
-            onClick={handleExecute}
-            disabled={!canExecute || execute.isPending}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
-            {execute.isPending ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Play className="h-3.5 w-3.5" />
-            )}
-            Execute
-          </button>
-          <button
-            onClick={onClose}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
-          >
-            Close
-          </button>
+        <div className="px-6 py-4 border-t border-border space-y-3">
+          {/* Execute consequence warning — only shown when action can be executed */}
+          {canExecute && (() => {
+            const cfg = resolveActionTypeConfig(action)
+            const dataset = resolvedDatasetName(action)
+            return (
+              <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/40 dark:bg-amber-950/20 px-3 py-2.5">
+                <TriangleAlert className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-foreground leading-relaxed">
+                  This will <span className="font-medium">{cfg.consequence}</span> dataset{' '}
+                  <span className="font-mono font-medium">"{dataset}"</span>.{' '}
+                  This action may be difficult to reverse.
+                </p>
+              </div>
+            )
+          })()}
+          <div className="flex gap-3">
+            <button
+              onClick={handleExecute}
+              disabled={!canExecute || execute.isPending}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+            >
+              {execute.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Play className="h-3.5 w-3.5" />
+              )}
+              Execute
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border text-sm font-medium text-foreground hover:bg-muted transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

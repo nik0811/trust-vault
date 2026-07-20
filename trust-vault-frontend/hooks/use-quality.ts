@@ -36,6 +36,27 @@ export function useQualityTrends() {
   })
 }
 
+export interface QualityDimensions {
+  overall_score: number
+  completeness: number
+  accuracy: number
+  consistency: number
+  timeliness: number
+  uniqueness: number
+  total_datasets: number
+  issues_found: number
+}
+
+export function useQualityDimensions() {
+  return useQuery({
+    queryKey: ['quality-dimensions'],
+    queryFn: async () => {
+      const response = await api.get<QualityDimensions>('/quality/summary')
+      return response.data
+    },
+  })
+}
+
 export function useAssessQuality() {
   const queryClient = useQueryClient()
 

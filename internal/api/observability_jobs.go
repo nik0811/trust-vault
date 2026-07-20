@@ -565,6 +565,58 @@ func (s *Server) deleteJob(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, map[string]string{"status": "deleted"})
 }
 
+func (s *Server) updateJob(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+
+	job, _ := s.jobs.FindByID(ctx, tenantID, id)
+	if job == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	var req struct {
+		Name     *string    `json:"name"`
+		Type     *string    `json:"type"`
+		Schedule *string    `json:"schedule"`
+		Config   store.JSON `json:"config"`
+		Status   *string    `json:"status"`
+	}
+	if err := pkg.Bind(r, &req); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	if req.Name != nil {
+		job.Name = *req.Name
+	}
+	if req.Type != nil {
+		job.Type = *req.Type
+	}
+	if req.Schedule != nil {
+		job.Schedule = *req.Schedule
+		nextRun := calculateNextRunTime(*req.Schedule)
+		job.NextRun = &nextRun
+	}
+	if req.Config != nil {
+		job.Config = req.Config
+	}
+	if req.Status != nil {
+		job.Status = *req.Status
+	}
+
+	s.jobs.Update(ctx, job)
+
+	events.Emit("job.updated", map[string]any{
+		"job_id":    job.ID,
+		"tenant_id": tenantID,
+		"name":      job.Name,
+	})
+
+	pkg.JSON(w, job)
+}
+
 func (s *Server) runJobNow(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
@@ -585,36 +637,82 @@ func (s *Server) runJobNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update status to pending
-	job.Status = "pending"
+	// Create execution record
+	executionID := pkg.GenerateID()
+	now := time.Now()
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO job_executions (id, tenant_id, job_id, status, started_at, created_at, updated_at)
+		 VALUES ($1, $2, $3, 'running', $4, $4, $4)`,
+		executionID, tenantID, id, now)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	// Update status to running
+	job.Status = "running"
 	s.jobs.Update(ctx, job)
 
 	// Queue job for immediate execution
-	err := s.kafka.Produce(ctx, "job-executions", tenantID, map[string]any{
-		"job_id":    id,
-		"tenant_id": tenantID,
-		"type":      job.Type,
-		"config":    job.Config,
+	err = s.kafka.Produce(ctx, "job-executions", tenantID, map[string]any{
+		"job_id":       id,
+		"execution_id": executionID,
+		"tenant_id":    tenantID,
+		"type":         job.Type,
+		"config":       job.Config,
 	})
 	if err != nil {
 		job.Status = "scheduled"
 		s.jobs.Update(ctx, job)
+		// Mark execution as failed
+		s.db.ExecContext(ctx,
+			`UPDATE job_executions SET status = 'failed', error = $1, completed_at = NOW(), updated_at = NOW() WHERE id = $2`,
+			err.Error(), executionID)
 		pkg.Error(w, err)
 		return
 	}
 
 	events.Emit("job.queued", map[string]any{
-		"job_id":    id,
-		"tenant_id": tenantID,
-		"name":      job.Name,
-		"type":      job.Type,
+		"job_id":       id,
+		"execution_id": executionID,
+		"tenant_id":    tenantID,
+		"name":         job.Name,
+		"type":         job.Type,
 	})
 
 	pkg.JSON(w, map[string]any{
-		"status":  "queued",
-		"job_id":  id,
-		"message": "Job queued for immediate execution",
+		"status":       "running",
+		"job_id":       id,
+		"execution_id": executionID,
+		"message":      "Job started",
 	})
+}
+
+func (s *Server) getJobHistory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	id := chi.URLParam(r, "id")
+	limit, offset := pkg.ParseListOpts(r)
+
+	job, _ := s.jobs.FindByID(ctx, tenantID, id)
+	if job == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	var executions []store.JobExecution
+	err := s.db.SelectContext(ctx, &executions,
+		`SELECT * FROM job_executions 
+		 WHERE tenant_id = $1 AND job_id = $2 
+		 ORDER BY created_at DESC 
+		 LIMIT $3 OFFSET $4`,
+		tenantID, id, limit, offset)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	pkg.JSON(w, executions)
 }
 
 func (s *Server) getObservabilitySummary(w http.ResponseWriter, r *http.Request) {
