@@ -160,7 +160,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			Msg("Text classification completed")
 
 		// Emit event
-		events.Emit("classification.completed", map[string]any{
+		events.Emit("datasource.scan.completed", map[string]any{
 			"tenant_id":     job.TenantID,
 			"mode":          "text",
 			"entities":      len(result.Entities),
@@ -174,7 +174,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			Msg("Starting dataset classification")
 
 		// Emit start event for SSE
-		events.Emit("classification.started", map[string]any{
+		events.Emit("datasource.scan.started", map[string]any{
 			"tenant_id":  job.TenantID,
 			"dataset_id": job.DatasetID,
 			"status":     "running",
@@ -194,7 +194,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					`UPDATE scan_logs SET status = 'failed', message = $1, completed_at = $2 WHERE id = $3`,
 					"Datasource not found", now, job.ScanID)
 			}
-			events.Emit("classification.failed", map[string]any{
+			events.Emit("datasource.scan.failed", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
 				"error":      "Datasource not found",
@@ -233,7 +233,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		}
 		
 		// Search for datasets from this datasource in DataHub
-		events.Emit("classification.progress", map[string]any{
+		events.Emit("datasource.scan.progress", map[string]any{
 			"tenant_id":  job.TenantID,
 			"dataset_id": job.DatasetID,
 			"message":    "Fetching schema from DataHub...",
@@ -247,7 +247,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 
 		if err != nil || len(datasetURNs) == 0 {
 			log.Warn().Err(err).Str("datasource", ds.Name).Msg("Could not fetch datasets from DataHub, trying direct schema query")
-			events.Emit("classification.progress", map[string]any{
+			events.Emit("datasource.scan.progress", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
 				"message":    "DataHub schema not available, querying source database directly",
@@ -288,7 +288,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				log.Warn().Err(err).Msg("Failed to clear existing classifications")
 			}
 
-			events.Emit("classification.progress", map[string]any{
+			events.Emit("datasource.scan.progress", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
 				"message":    fmt.Sprintf("Found %d columns to classify", len(allColumns)),
@@ -511,7 +511,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			`UPDATE datasources SET status = 'active', last_scan = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
 			job.DatasetID, job.TenantID)
 
-		events.Emit("scan.completed", map[string]any{
+		events.Emit("datasource.scan.completed", map[string]any{
 			"scan_id":      job.ScanID,
 			"dataset_id":   job.DatasetID,
 			"tenant_id":    job.TenantID,
