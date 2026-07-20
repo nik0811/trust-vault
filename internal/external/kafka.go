@@ -389,7 +389,9 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			// actual masked data rather than fabricated examples.
 			if entityType != "" && valueSample == nil {
 				realSamples, sampleErr := sampleColumnValues(ctx, &ds, col.TableName, col.Name, 5)
-				if sampleErr == nil && len(realSamples) > 0 {
+				if sampleErr != nil {
+					log.Debug().Err(sampleErr).Str("column", col.Name).Str("table", col.TableName).Msg("Real value sampling failed, using synthetic fallback")
+				} else if len(realSamples) > 0 {
 					masked := buildValueSample(realSamples, entityType, 3)
 					if masked != "" {
 						valueSample = &masked
