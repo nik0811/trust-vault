@@ -14,42 +14,62 @@ function authHeaders() {
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
-// Used for the rule creation UI — canonical region options
+// Granular cloud region options for rule creation — legally meaningful for DPDPA, GDPR, etc.
 const CANONICAL_REGIONS = [
-  { id: 'EU', label: 'European Union', flag: '🇪🇺' },
-  { id: 'UK', label: 'United Kingdom', flag: '🇬🇧' },
-  { id: 'US-EAST', label: 'US East', flag: '🇺🇸' },
-  { id: 'US-WEST', label: 'US West', flag: '🇺🇸' },
-  { id: 'APAC', label: 'Asia Pacific', flag: '🌏' },
-  { id: 'CA', label: 'Canada', flag: '🇨🇦' },
-  { id: 'LATAM', label: 'Latin America', flag: '🌎' },
-  { id: 'MEA', label: 'Middle East & Africa', flag: '🌍' },
+  // India
+  { id: 'ap-south-1',     label: 'Asia Pacific (Mumbai) — India',      flag: '🇮🇳' },
+  { id: 'ap-south-2',     label: 'Asia Pacific (Hyderabad) — India',    flag: '🇮🇳' },
+  // Asia Pacific
+  { id: 'ap-southeast-1', label: 'Asia Pacific (Singapore)',            flag: '🇸🇬' },
+  { id: 'ap-southeast-2', label: 'Asia Pacific (Sydney) — Australia',   flag: '🇦🇺' },
+  { id: 'ap-northeast-1', label: 'Asia Pacific (Tokyo) — Japan',        flag: '🇯🇵' },
+  { id: 'ap-northeast-2', label: 'Asia Pacific (Seoul) — South Korea',  flag: '🇰🇷' },
+  { id: 'ap-east-1',      label: 'Asia Pacific (Hong Kong)',            flag: '🇭🇰' },
+  // Middle East & Africa
+  { id: 'me-south-1',     label: 'Middle East (UAE/Bahrain)',           flag: '🇦🇪' },
+  { id: 'me-central-1',   label: 'Middle East (UAE)',                   flag: '🇦🇪' },
+  { id: 'af-south-1',     label: 'Africa (Cape Town) — South Africa',   flag: '🇿🇦' },
+  // Europe
+  { id: 'eu-west-1',      label: 'Europe (Ireland)',                    flag: '🇮🇪' },
+  { id: 'eu-west-2',      label: 'Europe (London) — UK',                flag: '🇬🇧' },
+  { id: 'eu-west-3',      label: 'Europe (Paris) — France',             flag: '🇫🇷' },
+  { id: 'eu-central-1',   label: 'Europe (Frankfurt) — Germany',        flag: '🇩🇪' },
+  { id: 'eu-north-1',     label: 'Europe (Stockholm) — Sweden',         flag: '🇸🇪' },
+  { id: 'eu-south-1',     label: 'Europe (Milan) — Italy',              flag: '🇮🇹' },
+  // Americas
+  { id: 'us-east-1',      label: 'US East (N. Virginia)',               flag: '🇺🇸' },
+  { id: 'us-east-2',      label: 'US East (Ohio)',                      flag: '🇺🇸' },
+  { id: 'us-west-1',      label: 'US West (N. California)',             flag: '🇺🇸' },
+  { id: 'us-west-2',      label: 'US West (Oregon)',                    flag: '🇺🇸' },
+  { id: 'ca-central-1',   label: 'Canada (Central)',                    flag: '🇨🇦' },
+  { id: 'sa-east-1',      label: 'South America (São Paulo) — Brazil',  flag: '🇧🇷' },
 ]
 
 // Lookup table: known region strings → display metadata
 const REGION_META: Record<string, { label: string; flag: string }> = {
-  'EU': { label: 'European Union', flag: '🇪🇺' },
-  'UK': { label: 'United Kingdom', flag: '🇬🇧' },
-  'US-EAST': { label: 'US East', flag: '🇺🇸' },
-  'US-WEST': { label: 'US West', flag: '🇺🇸' },
-  'APAC': { label: 'Asia Pacific', flag: '🌏' },
-  'CA': { label: 'Canada', flag: '🇨🇦' },
-  'LATAM': { label: 'Latin America', flag: '🌎' },
-  'MEA': { label: 'Middle East & Africa', flag: '🌍' },
-  // AWS regions
-  'us-east-1': { label: 'US East (N. Virginia)', flag: '🇺🇸' },
-  'us-east-2': { label: 'US East (Ohio)', flag: '🇺🇸' },
-  'us-west-1': { label: 'US West (N. California)', flag: '🇺🇸' },
-  'us-west-2': { label: 'US West (Oregon)', flag: '🇺🇸' },
-  'ap-south-1': { label: 'Asia Pacific (Mumbai)', flag: '🇮🇳' },
-  'ap-southeast-1': { label: 'Asia Pacific (Singapore)', flag: '🇸🇬' },
-  'ap-southeast-2': { label: 'Asia Pacific (Sydney)', flag: '🇦🇺' },
-  'ap-northeast-1': { label: 'Asia Pacific (Tokyo)', flag: '🇯🇵' },
-  'eu-west-1': { label: 'Europe (Ireland)', flag: '🇮🇪' },
-  'eu-west-2': { label: 'Europe (London)', flag: '🇬🇧' },
-  'eu-central-1': { label: 'Europe (Frankfurt)', flag: '🇩🇪' },
-  'ca-central-1': { label: 'Canada (Central)', flag: '🇨🇦' },
-  'sa-east-1': { label: 'South America (São Paulo)', flag: '🇧🇷' },
+  // AWS granular regions
+  'ap-south-1':     { label: 'Asia Pacific (Mumbai) — India',      flag: '🇮🇳' },
+  'ap-south-2':     { label: 'Asia Pacific (Hyderabad) — India',    flag: '🇮🇳' },
+  'ap-southeast-1': { label: 'Asia Pacific (Singapore)',            flag: '🇸🇬' },
+  'ap-southeast-2': { label: 'Asia Pacific (Sydney) — Australia',   flag: '🇦🇺' },
+  'ap-northeast-1': { label: 'Asia Pacific (Tokyo) — Japan',        flag: '🇯🇵' },
+  'ap-northeast-2': { label: 'Asia Pacific (Seoul) — South Korea',  flag: '🇰🇷' },
+  'ap-east-1':      { label: 'Asia Pacific (Hong Kong)',            flag: '🇭🇰' },
+  'me-south-1':     { label: 'Middle East (UAE/Bahrain)',           flag: '🇦🇪' },
+  'me-central-1':   { label: 'Middle East (UAE)',                   flag: '🇦🇪' },
+  'af-south-1':     { label: 'Africa (Cape Town) — South Africa',   flag: '🇿🇦' },
+  'eu-west-1':      { label: 'Europe (Ireland)',                    flag: '🇮🇪' },
+  'eu-west-2':      { label: 'Europe (London) — UK',                flag: '🇬🇧' },
+  'eu-west-3':      { label: 'Europe (Paris) — France',             flag: '🇫🇷' },
+  'eu-central-1':   { label: 'Europe (Frankfurt) — Germany',        flag: '🇩🇪' },
+  'eu-north-1':     { label: 'Europe (Stockholm) — Sweden',         flag: '🇸🇪' },
+  'eu-south-1':     { label: 'Europe (Milan) — Italy',              flag: '🇮🇹' },
+  'us-east-1':      { label: 'US East (N. Virginia)',               flag: '🇺🇸' },
+  'us-east-2':      { label: 'US East (Ohio)',                      flag: '🇺🇸' },
+  'us-west-1':      { label: 'US West (N. California)',             flag: '🇺🇸' },
+  'us-west-2':      { label: 'US West (Oregon)',                    flag: '🇺🇸' },
+  'ca-central-1':   { label: 'Canada (Central)',                    flag: '🇨🇦' },
+  'sa-east-1':      { label: 'South America (São Paulo) — Brazil',  flag: '🇧🇷' },
 }
 
 function regionMeta(regionId: string, country?: string): { label: string; flag: string } {
