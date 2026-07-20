@@ -208,7 +208,9 @@ export default function DataResidencyPage() {
   const activeRegions = Array.from(regionMap.values()).map(r => ({
     ...r,
     count: r.dsList.length,
-    violationCount: violations.filter((v: any) => v.region === r.regionId).length,
+    violationCount: violations.filter((v: any) =>
+      v.datasource_region === r.regionId || v.region === r.regionId
+    ).length,
   }))
 
   const untaggedSources = datasources.filter((ds: any) => !ds.region)

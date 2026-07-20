@@ -1,17 +1,33 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/securelens/securelens/internal/domain"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
 )
+
+// residencyViolation is what we persist and return from the violations table.
+type residencyViolation struct {
+	ID               string   `db:"id"               json:"id"`
+	TenantID         string   `db:"tenant_id"        json:"-"`
+	RuleID           string   `db:"rule_id"          json:"rule_id"`
+	DatasourceID     string   `db:"datasource_id"    json:"datasource_id"`
+	DatasourceName   string   `db:"datasource_name"  json:"datasource_name"`
+	DatasourceRegion string   `db:"datasource_region" json:"datasource_region"`
+	RuleName         string   `db:"rule_name"        json:"rule_name"`
+	Regulation       string   `db:"regulation"       json:"regulation"`
+	AllowedRegions   []string `db:"-"                json:"allowed_regions"`
+	Reason           string   `db:"-"                json:"reason"`
+}
 
 func (s *Server) createResidencyRule(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -40,7 +56,54 @@ func (s *Server) createResidencyRule(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+
+	// Evaluate all existing datasources against the new rule and persist violations.
+	datasources, err := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 10000})
+	if err != nil {
+		log.Warn().Err(err).Str("rule_id", rule.ID).Msg("residency: failed to list datasources for violation check")
+	} else {
+		s.persistViolationsForRule(ctx, tenantID, rule, req.AllowedRegions, datasources)
+	}
+
 	pkg.JSON(w, rule, http.StatusCreated)
+}
+
+// persistViolationsForRule inserts a violation row for every datasource whose region
+// is not covered by the rule's allowed regions. Existing rows are left untouched (ON CONFLICT DO NOTHING).
+func (s *Server) persistViolationsForRule(
+	ctx context.Context,
+	tenantID string,
+	rule *store.ResidencyRule,
+	allowedRegions []string,
+	datasources []store.DataSource,
+) {
+	allowed := make(map[string]bool, len(allowedRegions))
+	for _, r := range allowedRegions {
+		allowed[r] = true
+	}
+	regionsJSON, _ := json.Marshal(allowedRegions)
+
+	for _, ds := range datasources {
+		region := ""
+		if ds.Region != nil {
+			region = *ds.Region
+		}
+		if allowed[region] {
+			continue
+		}
+		id := uuid.New().String()
+		_, err := s.db.ExecContext(ctx,
+			`INSERT INTO residency_violations
+				(id, tenant_id, rule_id, datasource_id, datasource_name, datasource_region, rule_name, regulation, allowed_regions, created_at)
+			 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+			 ON CONFLICT (rule_id, datasource_id) DO NOTHING`,
+			id, tenantID, rule.ID, ds.ID, ds.Name, region, rule.Name, rule.Regulation,
+			store.JSON(regionsJSON),
+		)
+		if err != nil {
+			log.Warn().Err(err).Str("datasource_id", ds.ID).Str("rule_id", rule.ID).Msg("residency: failed to insert violation")
+		}
+	}
 }
 
 func (s *Server) listResidencyRules(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +130,13 @@ func (s *Server) deleteResidencyRule(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err)
 		return
 	}
+	// Cascade: remove all violations belonging to this rule.
+	if _, err := s.db.ExecContext(ctx,
+		`DELETE FROM residency_violations WHERE tenant_id = $1 AND rule_id = $2`,
+		tenantID, id,
+	); err != nil {
+		log.Warn().Err(err).Str("rule_id", id).Msg("residency: failed to delete violations for rule")
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -74,28 +144,104 @@ func (s *Server) getResidencyViolations(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
+	type row struct {
+		ID               string `db:"id"`
+		RuleID           string `db:"rule_id"`
+		DatasourceID     string `db:"datasource_id"`
+		DatasourceName   string `db:"datasource_name"`
+		DatasourceRegion string `db:"datasource_region"`
+		RuleName         string `db:"rule_name"`
+		Regulation       string `db:"regulation"`
+		AllowedRegions   []byte `db:"allowed_regions"`
+	}
+	var rows []row
+	err := s.db.SelectContext(ctx, &rows,
+		`SELECT id, rule_id, datasource_id, datasource_name, datasource_region,
+		        rule_name, regulation, allowed_regions
+		 FROM residency_violations
+		 WHERE ($1::text = '' OR tenant_id = $1)
+		 ORDER BY created_at DESC`,
+		tenantID,
+	)
+	if err != nil {
+		// Table may not exist yet in this deployment; fall back to inline evaluation.
+		s.getResidencyViolationsInline(w, r)
+		return
+	}
+
+	type Violation struct {
+		ID               string   `json:"id"`
+		DatasourceID     string   `json:"datasource_id"`
+		DatasourceName   string   `json:"datasource_name"`
+		DatasourceRegion string   `json:"datasource_region"`
+		Region           string   `json:"region"` // alias kept for frontend compatibility
+		RuleID           string   `json:"rule_id"`
+		RuleName         string   `json:"rule_name"`
+		Regulation       string   `json:"regulation"`
+		AllowedRegions   []string `json:"allowed_regions"`
+		Reason           string   `json:"reason"`
+	}
+
+	violations := make([]Violation, 0, len(rows))
+	for _, rw := range rows {
+		var ar []string
+		_ = json.Unmarshal(rw.AllowedRegions, &ar)
+		region := rw.DatasourceRegion
+		if region == "" {
+			region = "untagged"
+		}
+		reason := fmt.Sprintf("region %q is not in allowed regions for rule %q (%s)", region, rw.RuleName, rw.Regulation)
+		violations = append(violations, Violation{
+			ID:               rw.ID,
+			DatasourceID:     rw.DatasourceID,
+			DatasourceName:   rw.DatasourceName,
+			DatasourceRegion: region,
+			Region:           region,
+			RuleID:           rw.RuleID,
+			RuleName:         rw.RuleName,
+			Regulation:       rw.Regulation,
+			AllowedRegions:   ar,
+			Reason:           reason,
+		})
+	}
+	pkg.JSON(w, map[string]any{"violations": violations, "total": len(violations)})
+}
+
+// getResidencyViolationsInline is the legacy inline-evaluation fallback used when
+// the residency_violations table is not yet available.
+func (s *Server) getResidencyViolationsInline(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
 	rules, _ := s.residencyRules.List(ctx, tenantID, store.ListOpts{Limit: 500})
 	datasources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 1000})
 
 	type Violation struct {
-		DatasourceID   string `json:"datasource_id"`
-		DatasourceName string `json:"datasource_name"`
-		Region         string `json:"region"`
-		RuleID         string `json:"rule_id"`
-		RuleName       string `json:"rule_name"`
-		Regulation     string `json:"regulation"`
-		Reason         string `json:"reason"`
+		DatasourceID     string   `json:"datasource_id"`
+		DatasourceName   string   `json:"datasource_name"`
+		DatasourceRegion string   `json:"datasource_region"`
+		Region           string   `json:"region"`
+		RuleID           string   `json:"rule_id"`
+		RuleName         string   `json:"rule_name"`
+		Regulation       string   `json:"regulation"`
+		AllowedRegions   []string `json:"allowed_regions"`
+		Reason           string   `json:"reason"`
 	}
 
 	violations := []Violation{}
 	for _, ds := range datasources {
-		if ds.Region == nil || *ds.Region == "" {
+		region := ""
+		if ds.Region != nil {
+			region = *ds.Region
+		}
+		if region == "" {
 			if len(rules) > 0 {
 				violations = append(violations, Violation{
-					DatasourceID:   ds.ID,
-					DatasourceName: ds.Name,
-					Region:         "untagged",
-					Reason:         "datasource has no region tag",
+					DatasourceID:     ds.ID,
+					DatasourceName:   ds.Name,
+					DatasourceRegion: "untagged",
+					Region:           "untagged",
+					Reason:           "datasource has no region tag",
 				})
 			}
 			continue
@@ -108,22 +254,24 @@ func (s *Server) getResidencyViolations(w http.ResponseWriter, r *http.Request) 
 			if err := json.Unmarshal(rule.AllowedRegions, &allowedRegions); err != nil {
 				continue
 			}
-			allowed := false
+			inAllowed := false
 			for _, ar := range allowedRegions {
-				if ar == *ds.Region {
-					allowed = true
+				if ar == region {
+					inAllowed = true
 					break
 				}
 			}
-			if !allowed {
+			if !inAllowed {
 				violations = append(violations, Violation{
-					DatasourceID:   ds.ID,
-					DatasourceName: ds.Name,
-					Region:         *ds.Region,
-					RuleID:         rule.ID,
-					RuleName:       rule.Name,
-					Regulation:     rule.Regulation,
-					Reason:         fmt.Sprintf("region %q not allowed by rule %q (%s)", *ds.Region, rule.Name, rule.Regulation),
+					DatasourceID:     ds.ID,
+					DatasourceName:   ds.Name,
+					DatasourceRegion: region,
+					Region:           region,
+					RuleID:           rule.ID,
+					RuleName:         rule.Name,
+					Regulation:       rule.Regulation,
+					AllowedRegions:   allowedRegions,
+					Reason:           fmt.Sprintf("region %q not allowed by rule %q (%s)", region, rule.Name, rule.Regulation),
 				})
 			}
 		}
@@ -217,13 +365,43 @@ func (s *Server) getResidencyStats(w http.ResponseWriter, r *http.Request) {
 	datasources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 10000})
 	rules, _ := s.residencyRules.List(ctx, tenantID, store.ListOpts{Limit: 10000})
 
+	// Read violation count from DB table for consistency with /violations endpoint.
+	var violationCount int
+	err := s.db.GetContext(ctx, &violationCount,
+		`SELECT COUNT(*) FROM residency_violations WHERE ($1::text = '' OR tenant_id = $1)`,
+		tenantID,
+	)
+	if err != nil {
+		// Table not yet created: fall back to inline count.
+		violationCount = s.countViolationsInline(rules, datasources)
+	}
+
 	untagged := 0
-	violationCount := 0
 	for _, ds := range datasources {
 		if ds.Region == nil || *ds.Region == "" {
 			untagged++
+		}
+	}
+
+	pkg.JSON(w, map[string]any{
+		"total_datasources": len(datasources),
+		"violations":        violationCount,
+		"residency_rules":   len(rules),
+		"untagged_sources":  untagged,
+	})
+}
+
+// countViolationsInline is the fallback used when residency_violations table is absent.
+func (s *Server) countViolationsInline(rules []store.ResidencyRule, datasources []store.DataSource) int {
+	count := 0
+	for _, ds := range datasources {
+		region := ""
+		if ds.Region != nil {
+			region = *ds.Region
+		}
+		if region == "" {
 			if len(rules) > 0 {
-				violationCount++
+				count++
 			}
 			continue
 		}
@@ -235,25 +413,19 @@ func (s *Server) getResidencyStats(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(rule.AllowedRegions, &allowedRegions); err != nil {
 				continue
 			}
-			allowed := false
+			inAllowed := false
 			for _, ar := range allowedRegions {
-				if ar == *ds.Region {
-					allowed = true
+				if ar == region {
+					inAllowed = true
 					break
 				}
 			}
-			if !allowed {
-				violationCount++
+			if !inAllowed {
+				count++
 			}
 		}
 	}
-
-	pkg.JSON(w, map[string]any{
-		"total_datasources": len(datasources),
-		"violations":        violationCount,
-		"residency_rules":   len(rules),
-		"untagged_sources":  untagged,
-	})
+	return count
 }
 
 // getResidencyRegions returns the geographic distribution of datasources grouped by region.
@@ -299,9 +471,9 @@ func (s *Server) getResidencyRegions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSON(w, map[string]any{
-		"regions":         regions,
-		"untagged_names":  untaggedNames,
-		"untagged_count":  len(untaggedNames),
+		"regions":        regions,
+		"untagged_names": untaggedNames,
+		"untagged_count": len(untaggedNames),
 	})
 }
 
