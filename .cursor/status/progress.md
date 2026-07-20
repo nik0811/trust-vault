@@ -3,7 +3,7 @@
 > This file is the single source of truth for project progress.
 > Updated after every work session. Read this FIRST in any new session.
 
-## Last Updated: 2026-07-20
+## Last Updated: 2026-07-21
 
 ## Current Phase: ENTERPRISE CLASSIFICATION PIPELINE COMPLETE + PRODUCT AUDIT FIXES
 
@@ -120,6 +120,8 @@
 | 2026-07-20 | #27 | **CLASSIFICATION SAMPLE VALUES FIX.** value_sample was NULL for all 26 pattern-matched rows. Added syntheticValueSample() producing type-aware masked examples (j*****e@e****.com, ***-**-6789, ****-****-****-4242, etc.) for 25 entity types. STEP 3 pattern matching now sets valueSample. Backfilled existing NULL rows via SQL UPDATE. Verified 22/23 rows return value_sample; frontend Sample Values column now shows masked data. |
 | 2026-07-20 | #26 | **ASYNC ARCHITECTURAL REFACTORS (H-1/H-2/H-5/H-8/H-9).** H-1: triggerScan responds 202 immediately, sidecar call in background goroutine with 30s timeout. H-2: gateQuery adds 30s handler deadline + concurrent chunk classification via sync.WaitGroup. H-5: runComplianceAssessment inserts pending row, returns 202, bulk-load + GenerateRecommendations in 5-min goroutine. H-8: generateReport compliance case responds 202, heavy advisor work in goroutine, emits report.completed. H-9: extractDocument multipart OCR responds 202 with extraction_id, PaddleOCR call in 120s goroutine, emits document.extracted/failed. events/bus.go: added scan.failed, compliance.assessment.completed/failed, report.completed, document.extracted, document.extraction.failed to SSE broadcast allowlist. |
 | 2026-07-20 | #29 | **STUCK SCAN CLEANUP + WATCHDOG.** Root cause: ingestion sidecar (securelens-ingestion) not deployed — background goroutine marks scans failed after 30s DNS timeout but 24 scans had accumulated in 'running' state (some 15+ hours old). Fixed: (1) DB cleanup — all stuck 'running' scans set to 'failed' with completed_at. (2) kafka.go: executeROTScanJob used non-existent 'updated_at' column in scan_logs UPDATE — fixed to 'completed_at'. (3) Added runScanWatchdog goroutine to gateway startup: fires every 5 minutes, marks scans stuck 'running' >30 min as failed. Deployed, verified 0 running scans (18 success, 7 failed). |
+| 2026-07-21 | #30 | **SCAN LOG RACE CONDITION FIX.** appendScanLog() persists every progress message to scan_logs.logs JSONB via atomic `jsonb \|\|` operator. sendClassificationProgressAndLog() wrapper calls both appendScanLog and SSE emit. Frontend loadStoredLogs() merges DB entries into terminal after scan completes (or on mount when already scanning). ScanLogEntry type added to hook. Verified: 5 log entries in DB for each new scan. |
+| 2026-07-21 | #30 | **DOCUMENT GOVERNANCE FILE TYPE SUPPORT.** Added stdlib-only parsers for CSV/TSV (encoding/csv), PDF text-layer (BT/ET regex), XLSX/DOCX (archive/zip XML strip), JSON (recursive flatten). New internal/api/documents.go with extractTextFromFile() and localExtractAndClassify(). extractDocument delegates to local parsing when docservice unreachable. Frontend: click-to-browse + drag-drop multipart upload, accept=.txt/.csv/.tsv/.json/.pdf/.xlsx/.xls/.docx, async polling, file-type icons. Verified: CSV EMAIL+PHONE, PDF EMAIL, JSON EMAIL+PHONE all classified correctly. |
 
 ---
 
