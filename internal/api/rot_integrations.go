@@ -990,6 +990,13 @@ func (s *Server) extractDocument(w http.ResponseWriter, r *http.Request) {
 		}
 		defer file.Close()
 
+		// Read file content upfront so we can use it for both docservice forwarding and fallback.
+		fileBytes, err := io.ReadAll(file)
+		if err != nil {
+			pkg.Error(w, fmt.Errorf("failed to read file: %w", err))
+			return
+		}
+
 		docserviceURL := os.Getenv("DOCSERVICE_URL")
 		if docserviceURL == "" {
 			docserviceURL = "http://securelens-docservice:8088"
@@ -1002,7 +1009,7 @@ func (s *Server) extractDocument(w http.ResponseWriter, r *http.Request) {
 			pkg.Error(w, err)
 			return
 		}
-		if _, err = io.Copy(fw, file); err != nil {
+		if _, err = fw.Write(fileBytes); err != nil {
 			pkg.Error(w, err)
 			return
 		}
@@ -1018,17 +1025,31 @@ func (s *Server) extractDocument(w http.ResponseWriter, r *http.Request) {
 		httpClient := &http.Client{Timeout: 120 * time.Second}
 		resp, err := httpClient.Do(docReq)
 		if err != nil {
-			// Docservice unavailable — return a graceful response
+			// Docservice unavailable — classify the text content directly.
 			log.Warn().Err(err).Str("filename", header.Filename).Msg("Docservice unavailable, using sync classification")
-			data, _ := io.ReadAll(file)
-			text := string(data)
+			text := string(fileBytes)
 			entities := s.runBasicClassification(text, nil)
+			// Normalize entity key from "entity" to "entity_type" for consistent response shape.
+			normalized := make([]map[string]any, 0, len(entities))
+			for _, e := range entities {
+				et, _ := e["entity"].(string)
+				if et == "" {
+					et, _ = e["entity_type"].(string)
+				}
+				normalized = append(normalized, map[string]any{
+					"entity_type": et,
+					"value":       e["value"],
+					"confidence":  e["confidence"],
+					"start":       e["start"],
+					"end":         e["end"],
+				})
+			}
 			pkg.JSON(w, map[string]any{
-				"status":     "classified",
-				"filename":   header.Filename,
-				"entities":   entities,
-				"entity_count": len(entities),
-				"tenant_id":  tenantID,
+				"status":       "classified",
+				"filename":     header.Filename,
+				"entities":     normalized,
+				"entity_count": len(normalized),
+				"tenant_id":    tenantID,
 			})
 			return
 		}
