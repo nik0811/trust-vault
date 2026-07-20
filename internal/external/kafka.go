@@ -239,12 +239,25 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		var allColumns []DatasetColumn
 
 		if err != nil || len(datasetURNs) == 0 {
-			log.Warn().Err(err).Str("datasource", ds.Name).Msg("Could not fetch datasets from DataHub, using pattern-based classification")
+			log.Warn().Err(err).Str("datasource", ds.Name).Msg("Could not fetch datasets from DataHub, trying direct schema query")
 			events.Emit("classification.progress", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
-				"message":    "DataHub schema not available, using pattern-based classification",
+				"message":    "DataHub schema not available, querying source database directly",
 			})
+			// Fallback: query schema directly from the source database
+			if !isEmptyConfig(ds.Config) {
+				var cfgMap map[string]any
+				if jsonErr := json.Unmarshal(ds.Config, &cfgMap); jsonErr == nil {
+					directCols, directErr := querySchemaDirectly(ctx, ds.Type, cfgMap)
+					if directErr != nil {
+						log.Warn().Err(directErr).Str("datasource", ds.Name).Msg("Direct schema query failed")
+					} else if len(directCols) > 0 {
+						allColumns = directCols
+						log.Info().Int("columns", len(allColumns)).Str("datasource", ds.Name).Msg("Direct schema query succeeded")
+					}
+				}
+			}
 		} else {
 			// Fetch schema for each dataset found
 			for _, urn := range datasetURNs {
@@ -453,7 +466,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					assignedLabel, job.DatasetID, job.TenantID)
 			}
 		} else {
-			// Fallback: No DataHub data, skip classification
+			// Fallback: No DataHub data and direct schema query failed, skip classification
 			log.Warn().Str("dataset_id", job.DatasetID).Msg("No schema available for classification")
 			sendClassificationProgress(job.TenantID, job.DatasetID,
 				"No schema data available. Please run a scan first to discover the schema.", 0, 0)
@@ -767,6 +780,55 @@ var defaultEntityTypes = []string{
 	"email", "phone number", "social security number", "credit card number",
 	"person", "address", "date of birth", "ip address",
 	"bank account", "passport number", "driver license",
+}
+
+// querySchemaDirectly queries the schema of a SQL datasource using information_schema,
+// returning column metadata without requiring DataHub. Used as a fallback when DataHub
+// is unavailable.
+func querySchemaDirectly(ctx context.Context, dsType string, config map[string]any) ([]DatasetColumn, error) {
+	switch dsType {
+	case "postgresql", "postgres":
+	default:
+		return nil, fmt.Errorf("direct schema query not supported for datasource type %q", dsType)
+	}
+
+	connStr, err := buildConnectionString(dsType, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build connection string: %w", err)
+	}
+
+	db, err := sql.Open(getDriverName(dsType), connStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+	defer db.Close()
+	db.SetConnMaxLifetime(20 * time.Second)
+	db.SetMaxOpenConns(1)
+
+	// Exclude system schemas; focus on user-defined tables
+	rows, err := db.QueryContext(ctx, `
+		SELECT table_name, column_name, data_type
+		FROM information_schema.columns
+		WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+		ORDER BY table_name, ordinal_position`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query information_schema: %w", err)
+	}
+	defer rows.Close()
+
+	var cols []DatasetColumn
+	for rows.Next() {
+		var tableName, colName, dataType string
+		if err := rows.Scan(&tableName, &colName, &dataType); err != nil {
+			continue
+		}
+		cols = append(cols, DatasetColumn{
+			Name:      colName,
+			Type:      dataType,
+			TableName: tableName,
+		})
+	}
+	return cols, nil
 }
 
 // sampleColumnValues dispatches to the correct sampler based on datasource type.
