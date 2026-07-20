@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -338,7 +339,14 @@ func classifyEndpointValues(values map[string]string) []endpointFinding {
 	}
 
 	payload, _ := json.Marshal(glinerRequest{Texts: texts, Labels: labels})
-	resp, err := http.Post("http://securelens-classifier:8085/classify", "application/json", bytes.NewReader(payload))
+	classifyCtx, classifyCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer classifyCancel()
+	classifyReq, err := http.NewRequestWithContext(classifyCtx, "POST", "http://securelens-classifier:8085/classify", bytes.NewReader(payload))
+	if err != nil {
+		return localClassifyValues(values)
+	}
+	classifyReq.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(classifyReq)
 	if err != nil || resp == nil {
 		// Classifier unavailable — fall back to local pattern matching
 		return localClassifyValues(values)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -1326,18 +1327,40 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 	now := time.Now()
 
-	var totalDatasets, labeledDatasets, policyCount int
-	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &policyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true", tenantID)
+	var (
+		totalDatasets           int
+		labeledDatasets         int
+		policyCount             int
+		ropaCount               int
+		consentPolicyCount      int
+		localizationPolicyCount int
+		crossBorderPolicyCount  int
+	)
 
-	var ropaCount int
-	s.db.GetContext(ctx, &ropaCount, "SELECT COUNT(*) FROM ropa WHERE tenant_id = $1", tenantID)
+	type countTask struct {
+		dest  *int
+		query string
+		args  []any
+	}
+	tasks := []countTask{
+		{&totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", []any{tenantID}},
+		{&labeledDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM labels WHERE tenant_id = $1", []any{tenantID}},
+		{&policyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true", []any{tenantID}},
+		{&ropaCount, "SELECT COUNT(*) FROM ropa WHERE tenant_id = $1", []any{tenantID}},
+		{&consentPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('consent', 'lawful_basis')", []any{tenantID}},
+		{&localizationPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('localization', 'data_localization')", []any{tenantID}},
+		{&crossBorderPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('cross_border', 'transfer')", []any{tenantID}},
+	}
 
-	var consentPolicyCount, localizationPolicyCount, crossBorderPolicyCount int
-	s.db.GetContext(ctx, &consentPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('consent', 'lawful_basis')", tenantID)
-	s.db.GetContext(ctx, &localizationPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('localization', 'data_localization')", tenantID)
-	s.db.GetContext(ctx, &crossBorderPolicyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true AND type IN ('cross_border', 'transfer')", tenantID)
+	var wg sync.WaitGroup
+	for i := range tasks {
+		wg.Add(1)
+		go func(t *countTask) {
+			defer wg.Done()
+			s.db.GetContext(ctx, t.dest, t.query, t.args...)
+		}(&tasks[i])
+	}
+	wg.Wait()
 
 	// Get unscanned data sources for evidence
 	var unscannedSources []store.DataSource

@@ -89,21 +89,32 @@ func (s *Server) classifyText(w http.ResponseWriter, r *http.Request) {
 	// For sync response, run basic pattern matching
 	results := s.runBasicClassification(req.Text, req.EntityTypes)
 
-	// Store classification results
+	// Store classification results via single bulk insert
 	saved := make([]store.Classification, 0, len(results))
-	for _, res := range results {
-		c := store.Classification{
-			TenantID:   tenantID,
-			EntityType: res["entity"].(string),
-			Value:      res["value"].(string),
-			Confidence: res["confidence"].(float64),
+	if len(results) > 0 {
+		placeholders := make([]string, 0, len(results))
+		vals := make([]any, 0, len(results)*5)
+		for i, res := range results {
+			base := i * 5
+			placeholders = append(placeholders, fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)", base+1, base+2, base+3, base+4, base+5))
+			id := pkg.GenerateID()
+			vals = append(vals, id, tenantID, res["entity"].(string), res["value"].(string), res["confidence"].(float64))
+			saved = append(saved, store.Classification{
+				ID:         id,
+				TenantID:   tenantID,
+				EntityType: res["entity"].(string),
+				Value:      res["value"].(string),
+				Confidence: res["confidence"].(float64),
+			})
 		}
-		s.classifications.Create(ctx, &c)
-		saved = append(saved, c)
+		query := "INSERT INTO classifications (id, tenant_id, entity_type, value, confidence) VALUES " +
+			strings.Join(placeholders, ",") + " ON CONFLICT DO NOTHING"
+		s.db.ExecContext(ctx, query, vals...)
 	}
 
-	// Auto-governance: non-blocking, fire-and-forget
-	go s.autoApplyGovernance(ctx, tenantID, "", saved)
+	// Auto-governance: detached context so cancellation of the HTTP request
+	// cannot terminate this background work.
+	go s.autoApplyGovernance(context.Background(), tenantID, "", saved)
 
 	pkg.JSON(w, map[string]any{"entities": results})
 }

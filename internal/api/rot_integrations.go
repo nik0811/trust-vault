@@ -24,41 +24,44 @@ func (s *Server) getROTSummary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var stats struct {
+	var summary struct {
 		TotalROT   int64 `db:"total"`
 		Redundant  int64 `db:"redundant"`
 		Obsolete   int64 `db:"obsolete"`
 		Trivial    int64 `db:"trivial"`
 		TotalBytes int64 `db:"bytes"`
 	}
-
-	s.db.GetContext(ctx, &stats.TotalROT, "SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &stats.Redundant, "SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1 AND category = 'redundant'", tenantID)
-	s.db.GetContext(ctx, &stats.Obsolete, "SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1 AND category = 'obsolete'", tenantID)
-	s.db.GetContext(ctx, &stats.Trivial, "SELECT COUNT(*) FROM rot_data WHERE tenant_id = $1 AND category = 'trivial'", tenantID)
-	s.db.GetContext(ctx, &stats.TotalBytes, "SELECT COALESCE(SUM(size_bytes), 0) FROM rot_data WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &summary, `
+		SELECT
+			COUNT(*)                                           AS total,
+			COUNT(*) FILTER (WHERE category = 'redundant')    AS redundant,
+			COUNT(*) FILTER (WHERE category = 'obsolete')     AS obsolete,
+			COUNT(*) FILTER (WHERE category = 'trivial')      AS trivial,
+			COALESCE(SUM(size_bytes), 0)                      AS bytes
+		FROM rot_data
+		WHERE tenant_id = $1`, tenantID)
 
 	var totalDatasets int64
 	s.db.GetContext(ctx, &totalDatasets, "SELECT COUNT(DISTINCT dataset_id) FROM classifications WHERE tenant_id = $1", tenantID)
 
 	percentage := 0.0
 	if totalDatasets > 0 {
-		percentage = float64(stats.TotalROT) / float64(totalDatasets)
+		percentage = float64(summary.TotalROT) / float64(totalDatasets)
 	}
 
 	pkg.JSON(w, map[string]any{
-		"total_rot":           stats.TotalROT,
-		"total_rot_data":      stats.TotalROT,
-		"redundant":           stats.Redundant,
-		"redundant_count":     stats.Redundant,
-		"obsolete":            stats.Obsolete,
-		"obsolete_count":      stats.Obsolete,
-		"trivial":             stats.Trivial,
-		"trivial_count":       stats.Trivial,
-		"total_size_gb":       float64(stats.TotalBytes) / 1e9,
-		"potential_savings_gb": float64(stats.TotalBytes) / 1e9,
-		"percentage":          percentage,
-		"estimated_cost":      float64(stats.TotalBytes) / 1e9 * 100,
+		"total_rot":            summary.TotalROT,
+		"total_rot_data":       summary.TotalROT,
+		"redundant":            summary.Redundant,
+		"redundant_count":      summary.Redundant,
+		"obsolete":             summary.Obsolete,
+		"obsolete_count":       summary.Obsolete,
+		"trivial":              summary.Trivial,
+		"trivial_count":        summary.Trivial,
+		"total_size_gb":        float64(summary.TotalBytes) / 1e9,
+		"potential_savings_gb": float64(summary.TotalBytes) / 1e9,
+		"percentage":           percentage,
+		"estimated_cost":       float64(summary.TotalBytes) / 1e9 * 100,
 	})
 }
 
