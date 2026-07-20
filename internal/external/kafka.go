@@ -72,7 +72,8 @@ type ClassificationJobMessage struct {
 	DatasetID   string   `json:"dataset_id,omitempty"`
 	TenantID    string   `json:"tenant_id"`
 	EntityTypes []string `json:"entity_types,omitempty"`
-	Mode        string   `json:"mode"` // "text" or "dataset"
+	Mode        string   `json:"mode"`   // "text" or "dataset"
+	ScanID      string   `json:"scan_id,omitempty"` // scan_log ID to update on completion
 }
 
 func (k *Kafka) ConsumeClassificationJobs(ctx context.Context, db *store.DB) {
@@ -187,6 +188,12 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			job.DatasetID, job.TenantID)
 		if err != nil {
 			log.Error().Err(err).Str("dataset_id", job.DatasetID).Msg("Failed to get datasource")
+			if job.ScanID != "" {
+				now := time.Now()
+				db.ExecContext(ctx,
+					`UPDATE scan_logs SET status = 'failed', message = $1, completed_at = $2 WHERE id = $3`,
+					"Datasource not found", now, job.ScanID)
+			}
 			events.Emit("classification.failed", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
@@ -491,6 +498,25 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		// Send completion callback to gateway for SSE broadcast
 		sendClassificationCallback(job.TenantID, job.DatasetID, "completed", columnsClassified,
 			fmt.Sprintf("Classification completed - %d columns classified", columnsClassified), "")
+
+		// Update scan_log and datasource status so the UI reflects completion
+		if job.ScanID != "" {
+			now := time.Now()
+			db.ExecContext(ctx,
+				`UPDATE scan_logs SET status = 'completed', message = $1, completed_at = $2 WHERE id = $3`,
+				fmt.Sprintf("Scan completed: %d columns classified", columnsClassified), now, job.ScanID)
+			log.Info().Str("scan_id", job.ScanID).Int("columns_classified", columnsClassified).Msg("scan_log updated to completed")
+		}
+		db.ExecContext(ctx,
+			`UPDATE datasources SET status = 'active', last_scan = NOW(), updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+			job.DatasetID, job.TenantID)
+
+		events.Emit("scan.completed", map[string]any{
+			"scan_id":      job.ScanID,
+			"dataset_id":   job.DatasetID,
+			"tenant_id":    job.TenantID,
+			"columns":      columnsClassified,
+		})
 	}
 }
 
@@ -2019,6 +2045,8 @@ func (k *Kafka) executeClassificationJob(ctx context.Context, db *store.DB, job 
 		return "failed", "Missing dataset_id in config", nil
 	}
 
+	scanID := getConfigString(config, "scan_id", "")
+
 	// Get sample data from dataset (simplified - in production would query actual data)
 	var sampleCount int
 	db.GetContext(ctx, &sampleCount,
@@ -2026,11 +2054,15 @@ func (k *Kafka) executeClassificationJob(ctx context.Context, db *store.DB, job 
 		job.TenantID, datasetID)
 
 	// Queue classification for the dataset
-	k.Produce(ctx, "classification-jobs", job.TenantID, map[string]any{
+	classificationMsg := map[string]any{
 		"dataset_id": datasetID,
 		"tenant_id":  job.TenantID,
 		"mode":       "full",
-	})
+	}
+	if scanID != "" {
+		classificationMsg["scan_id"] = scanID
+	}
+	k.Produce(ctx, "classification-jobs", job.TenantID, classificationMsg)
 
 	// Emit OpenLineage event for classification
 	lineageEvent := map[string]any{

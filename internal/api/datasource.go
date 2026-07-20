@@ -308,23 +308,7 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse config to map for ingestion request
-	var configMap map[string]any
-	if len(ds.Config) > 0 {
-		json.Unmarshal(ds.Config, &configMap)
-	}
-
-	ingestionReq := map[string]any{
-		"datasource_id": id,
-		"tenant_id":     tenantID,
-		"type":          ds.Type,
-		"config":        configMap,
-		"callback_url":  s.ingestionCallbackURL(),
-		"scan_log_id":   scanLog.ID,
-	}
-	ingestionURL := s.ingestionSidecarURL() + "/ingest"
-
-	// Respond immediately — sidecar call happens in the background.
+	// Respond immediately — Kafka job is queued in the background.
 	events.Emit("datasource.scan.started", map[string]any{
 		"datasource_id": id,
 		"tenant_id":     tenantID,
@@ -342,12 +326,22 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 
 	dsCopy := *ds
 	go func(scanLogID, tid string, snapshot store.DataSource) {
-		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
+		bgCtx := context.Background()
 
-		_, err := s.callIngestionSidecar(bgCtx, ingestionURL, ingestionReq)
+		// Publish directly to the job-executions topic so the worker
+		// handles the scan without the ingestion sidecar.
+		jobConfig, _ := json.Marshal(map[string]any{
+			"dataset_id": snapshot.ID,
+			"scan_id":    scanLogID,
+		})
+		err := s.kafka.Produce(bgCtx, "job-executions", tid, map[string]any{
+			"job_id":    scanLogID,
+			"tenant_id": tid,
+			"type":      "classification",
+			"config":    json.RawMessage(jobConfig),
+		})
 		if err != nil {
-			log.Error().Err(err).Str("scan_id", scanLogID).Msg("sidecar call failed")
+			log.Error().Err(err).Str("scan_id", scanLogID).Msg("failed to queue classification job")
 
 			snapshot.Status = "error"
 			s.datasources.Update(bgCtx, &snapshot)
@@ -357,7 +351,7 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 			sl.ID = scanLogID
 			sl.Status = "failed"
 			sl.CompletedAt = &now
-			sl.Message = fmt.Sprintf("Ingestion service unavailable: %v", err)
+			sl.Message = fmt.Sprintf("Failed to queue scan job: %v", err)
 			s.scanLogs.Update(bgCtx, &sl)
 
 			events.Emit("scan.failed", map[string]any{"scan_id": scanLogID, "error": err.Error(), "tenant_id": tid})
