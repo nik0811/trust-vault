@@ -1214,10 +1214,7 @@ func (s *Server) getRecommendations(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 
 	// Gather context for advisor - ensure non-nil slices
-	classifications, _ := s.classifications.List(ctx, tenantID, store.ListOpts{Limit: 1000})
-	if classifications == nil {
-		classifications = []store.Classification{}
-	}
+	classifications := s.loadClassifications(ctx, tenantID)
 	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
 	if policies == nil {
 		policies = []store.Policy{}
@@ -1769,10 +1766,7 @@ func (s *Server) runComplianceAssessment(w http.ResponseWriter, r *http.Request)
 	userID := pkg.UserFromCtx(ctx)
 	now := time.Now()
 
-	classifications, _ := s.classifications.List(ctx, tenantID, store.ListOpts{Limit: 1000})
-	if classifications == nil {
-		classifications = []store.Classification{}
-	}
+	classifications := s.loadClassifications(ctx, tenantID)
 	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
 	if policies == nil {
 		policies = []store.Policy{}
@@ -1908,6 +1902,24 @@ func countUnscanned(sources []store.DataSource) int {
 		}
 	}
 	return count
+}
+
+// loadClassifications queries the classifications table using an explicit column list
+// to avoid sqlx scan errors when nullable UUID columns contain NULL values.
+func (s *Server) loadClassifications(ctx context.Context, tenantID string) []store.Classification {
+	var result []store.Classification
+	s.db.SelectContext(ctx, &result, //nolint:errcheck
+		`SELECT id, tenant_id, dataset_id,
+		 source_id::text AS source_id,
+		 entity_type, value, confidence, context,
+		 label_id::text AS label_id,
+		 rule_id::text AS rule_id,
+		 classification_source, value_sample, created_at
+		 FROM classifications WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 1000`, tenantID)
+	if result == nil {
+		result = []store.Classification{}
+	}
+	return result
 }
 
 func (s *Server) listAssessmentLogs(w http.ResponseWriter, r *http.Request) {
