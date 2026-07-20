@@ -6,7 +6,7 @@ import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import { StatusIndicator } from '@/components/base/status-badge'
 import { ArrowLeft, RefreshCw, Trash2, Play, Settings, Loader2, History, ChevronDown, ChevronRight, Clock, CheckCircle2, XCircle, Database } from 'lucide-react'
-import { useDataSource, useDeleteDataSource, useTriggerScan, useScanLogs, ScanLog } from '@/hooks/use-datasources'
+import { useDataSource, useDeleteDataSource, useTriggerScan, useScanLogs, ScanLog, ScanLogEntry } from '@/hooks/use-datasources'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import {
@@ -331,8 +331,27 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
+  const storedLogsLoadedRef = useRef(false)
   
   const { data: scanHistory, refetch: refetchHistory } = useScanLogs(dataSourceId)
+
+  // Load stored log entries from the latest scan log's logs array.
+  // Called after scan completes or on mount when scan is already in progress.
+  const loadStoredLogs = (history: ScanLog[] | undefined) => {
+    if (!history || history.length === 0) return
+    const latest = history[0]
+    if (!latest.logs || latest.logs.length === 0) return
+    const storedLines = latest.logs
+      .filter((e: ScanLogEntry) => e && e.message)
+      .map((e: ScanLogEntry) => `[${e.time || new Date().toLocaleTimeString()}] ${e.message}`)
+    if (storedLines.length === 0) return
+    setLogs(prev => {
+      // Merge: use stored lines as authoritative baseline; append any live SSE lines not already in stored
+      const storedSet = new Set(storedLines)
+      const extraLive = prev.filter(l => !storedSet.has(l))
+      return [...storedLines, ...extraLive]
+    })
+  }
 
   // Auto-expand when scanning starts
   useEffect(() => {
@@ -342,12 +361,26 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
     }
   }, [isScanning])
 
-  // Refetch history when scan completes
+  // On mount: if a scan is already running, load whatever progress has been stored so far
+  useEffect(() => {
+    if ((status === 'scanning' || isScanning) && !storedLogsLoadedRef.current && scanHistory) {
+      storedLogsLoadedRef.current = true
+      loadStoredLogs(scanHistory)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, isScanning, scanHistory])
+
+  // When scan completes: refetch history, then load stored log entries into the terminal
   useEffect(() => {
     if (!isScanning && status !== 'scanning') {
-      refetchHistory()
+      refetchHistory().then(result => {
+        if (result.data) {
+          loadStoredLogs(result.data)
+        }
+      })
     }
-  }, [isScanning, status, refetchHistory])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isScanning, status])
 
   // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
@@ -385,7 +418,7 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
           try {
             const data = JSON.parse(event.data)
             // Only process events for this datasource
-            if (data.datasource_id === dataSourceId) {
+            if (data.datasource_id === dataSourceId || data.dataset_id === dataSourceId) {
               // Handle log lines from ingestion
               if (data.log_lines && Array.isArray(data.log_lines)) {
                 data.log_lines.forEach((line: string) => {
@@ -400,7 +433,9 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
               }
               // Handle status updates
               if (data.status === 'completed') {
-                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Scan completed - ${data.datasets_discovered || 0} datasets discovered`])
+                setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✓ Scan completed - ${data.columns || data.datasets_discovered || 0} columns classified`])
+                // Fetch stored logs from DB to ensure terminal is complete
+                refetchHistory().then(result => { if (result.data) loadStoredLogs(result.data) })
               } else if (data.status === 'failed') {
                 setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ✗ Scan failed: ${data.message || 'Unknown error'}`])
               }
@@ -447,9 +482,8 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
         eventSourceRef.current = null
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isScanning, dataSourceId, status])
-
-  // No longer need simulated progress - real logs come from SSE
 
   // Helper to format duration
   const formatDuration = (startedAt: string, completedAt?: string) => {
@@ -572,7 +606,7 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
                   </span>
                 )}
                 <button
-                  onClick={(e) => { e.stopPropagation(); setLogs([]); }}
+                  onClick={(e) => { e.stopPropagation(); setLogs([]); storedLogsLoadedRef.current = false; }}
                   className="text-xs text-muted-foreground hover:text-foreground"
                 >
                   Clear

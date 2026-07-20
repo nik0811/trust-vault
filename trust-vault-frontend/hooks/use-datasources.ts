@@ -128,14 +128,19 @@ export function useScanStatus(id: string) {
   })
 }
 
+export interface ScanLogEntry {
+  time: string
+  message: string
+}
+
 export interface ScanLog {
   id: string
   datasource_id: string
-  status: 'running' | 'success' | 'failed'
+  status: 'running' | 'success' | 'failed' | 'completed'
   started_at: string
   completed_at?: string
   message: string
-  logs: any[]
+  logs: ScanLogEntry[]
   datasets_discovered: number
   created_at: string
 }

@@ -1041,33 +1041,13 @@ func (s *Server) extractDocument(w http.ResponseWriter, r *http.Request) {
 
 			httpClient := &http.Client{Timeout: 120 * time.Second}
 			resp, err := httpClient.Do(docReq)
-			if err != nil {
-				// Docservice unavailable — fall back to basic pattern classification.
-				log.Warn().Err(err).Str("filename", filename).Msg("Docservice unavailable, using sync classification")
-				text := string(fileBytes)
-				entities := s.runBasicClassification(text, nil)
-				normalized := make([]map[string]any, 0, len(entities))
-				for _, e := range entities {
-					et, _ := e["entity"].(string)
-					if et == "" {
-						et, _ = e["entity_type"].(string)
-					}
-					normalized = append(normalized, map[string]any{
-						"entity_type": et,
-						"value":       e["value"],
-						"confidence":  e["confidence"],
-						"start":       e["start"],
-						"end":         e["end"],
-					})
+			if err != nil || resp.StatusCode >= 400 {
+				if resp != nil {
+					resp.Body.Close()
 				}
-				events.Emit("document.extracted", map[string]any{
-					"extraction_id": extractionID,
-					"tenant_id":     tid,
-					"filename":      filename,
-					"entities":      normalized,
-					"entity_count":  len(normalized),
-					"source":        "fallback_classification",
-				})
+				// Docservice unavailable or returned error — parse locally.
+				log.Warn().Err(err).Str("filename", filename).Msg("Docservice unavailable, using local extraction")
+				s.localExtractAndClassify(extractionID, tid, filename, fileBytes)
 				return
 			}
 			defer resp.Body.Close()

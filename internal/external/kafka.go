@@ -173,13 +173,14 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			Str("tenant_id", job.TenantID).
 			Msg("Starting dataset classification")
 
-		// Emit start event for SSE
+		// Emit start event for SSE and persist to DB
 		events.Emit("datasource.scan.started", map[string]any{
 			"tenant_id":  job.TenantID,
 			"dataset_id": job.DatasetID,
 			"status":     "running",
 			"message":    "Classification started",
 		})
+		appendScanLog(ctx, db, job.ScanID, "Classification started")
 
 		// Get datasource info
 		var ds store.DataSource
@@ -190,6 +191,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			log.Error().Err(err).Str("dataset_id", job.DatasetID).Msg("Failed to get datasource")
 			if job.ScanID != "" {
 				now := time.Now()
+				appendScanLog(ctx, db, job.ScanID, "Error: Datasource not found")
 				db.ExecContext(ctx,
 					`UPDATE scan_logs SET status = 'failed', message = $1, completed_at = $2 WHERE id = $3`,
 					"Datasource not found", now, job.ScanID)
@@ -238,6 +240,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			"dataset_id": job.DatasetID,
 			"message":    "Fetching schema from DataHub...",
 		})
+		appendScanLog(ctx, db, job.ScanID, "Fetching schema from DataHub...")
 
 		log.Info().Str("platform", platform).Str("database", databaseName).Msg("Searching DataHub for datasets")
 		datasetURNs, err := datahub.SearchDatasets(ctx, platform, databaseName)
@@ -252,6 +255,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				"dataset_id": job.DatasetID,
 				"message":    "DataHub schema not available, querying source database directly",
 			})
+			appendScanLog(ctx, db, job.ScanID, "DataHub schema not available, querying source database directly")
 			// Fallback: query schema directly from the source database
 			if !isEmptyConfig(ds.Config) {
 				var cfgMap map[string]any
@@ -293,6 +297,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				"dataset_id": job.DatasetID,
 				"message":    fmt.Sprintf("Found %d columns to classify", len(allColumns)),
 			})
+			appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Found %d columns to classify", len(allColumns)))
 
 			// Fetch classification rules for this tenant (ordered by priority DESC)
 			classificationRules := fetchClassificationRules(ctx, db, job.TenantID)
@@ -325,9 +330,9 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				if ruleResult.Skip {
 					// Whitelist rule matched - skip this column
 					log.Debug().Str("column", col.Name).Str("rule", ruleResult.RuleName).Msg("Column whitelisted, skipping")
-					sendClassificationProgress(job.TenantID, job.DatasetID,
-						fmt.Sprintf("Skipped: %s (whitelisted by rule: %s)", col.Name, ruleResult.RuleName),
-						i+1, len(allColumns))
+				sendClassificationProgressAndLog(ctx, db, job.ScanID, job.TenantID, job.DatasetID,
+					fmt.Sprintf("Skipped: %s (whitelisted by rule: %s)", col.Name, ruleResult.RuleName),
+					i+1, len(allColumns))
 					continue
 				}
 				if ruleResult.Override {
@@ -468,9 +473,9 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 				} else if strings.HasPrefix(classificationSource, "rule_") {
 					sourceLabel = "rule"
 				}
-				sendClassificationProgress(job.TenantID, job.DatasetID,
-					fmt.Sprintf("Classified: %s → %s (%.0f%% via %s)", col.Name, entityType, confidence*100, sourceLabel),
-					i+1, len(allColumns))
+			sendClassificationProgressAndLog(ctx, db, job.ScanID, job.TenantID, job.DatasetID,
+				fmt.Sprintf("Classified: %s → %s (%.0f%% via %s)", col.Name, entityType, confidence*100, sourceLabel),
+				i+1, len(allColumns))
 			}
 
 			// STEP 5: Apply label rules after all columns are classified
@@ -485,7 +490,7 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		} else {
 			// Fallback: No DataHub data and direct schema query failed, skip classification
 			log.Warn().Str("dataset_id", job.DatasetID).Msg("No schema available for classification")
-			sendClassificationProgress(job.TenantID, job.DatasetID,
+			sendClassificationProgressAndLog(ctx, db, job.ScanID, job.TenantID, job.DatasetID,
 				"No schema data available. Please run a scan first to discover the schema.", 0, 0)
 		}
 
@@ -502,9 +507,11 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		// Update scan_log and datasource status so the UI reflects completion
 		if job.ScanID != "" {
 			now := time.Now()
+			completionMsg := fmt.Sprintf("Scan completed: %d columns classified", columnsClassified)
+			appendScanLog(ctx, db, job.ScanID, completionMsg)
 			db.ExecContext(ctx,
 				`UPDATE scan_logs SET status = 'completed', message = $1, completed_at = $2 WHERE id = $3`,
-				fmt.Sprintf("Scan completed: %d columns classified", columnsClassified), now, job.ScanID)
+				completionMsg, now, job.ScanID)
 			log.Info().Str("scan_id", job.ScanID).Int("columns_classified", columnsClassified).Msg("scan_log updated to completed")
 		}
 		db.ExecContext(ctx,
@@ -518,6 +525,34 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			"columns":      columnsClassified,
 		})
 	}
+}
+
+// appendScanLog appends a progress entry to scan_logs.logs JSONB for the given scanID.
+// This persists progress messages to DB so the frontend can load them after the scan
+// completes, even if the SSE connection was established after the events were emitted.
+func appendScanLog(ctx context.Context, db *store.DB, scanID, message string) {
+	if scanID == "" {
+		return
+	}
+	entry := fmt.Sprintf(`{"time":%s,"message":%s}`,
+		strconv.Quote(time.Now().Format("15:04:05")),
+		strconv.Quote(message))
+	db.ExecContext(ctx, `
+		UPDATE scan_logs
+		SET logs = COALESCE(logs, '[]'::jsonb) || ($1::jsonb)
+		WHERE id = $2`,
+		"["+entry+"]", scanID)
+}
+
+// sendClassificationProgressAndLog sends a progress update via HTTP to the gateway
+// and also persists the message to scan_logs.logs so late-connecting clients can load it.
+func sendClassificationProgressAndLog(ctx context.Context, db *store.DB, scanID, tenantID, datasetID, message string, current, total int) {
+	msg := message
+	if current > 0 && total > 0 {
+		msg = fmt.Sprintf("[%d/%d] %s", current, total, message)
+	}
+	appendScanLog(ctx, db, scanID, msg)
+	sendClassificationProgress(tenantID, datasetID, message, current, total)
 }
 
 // sendClassificationCallback sends a completion callback to the gateway for SSE broadcast
