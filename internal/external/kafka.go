@@ -368,18 +368,29 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					}
 				}
 
-			// STEP 3: Fall back to pattern matching if ML didn't produce results
-			if entityType == "" {
-				entityType, confidence = classifyColumnName(col.Name)
-				classificationSource = "pattern_matching"
-				// Generate a synthetic masked example so the UI can show "Sample Values"
-				if entityType != "" && valueSample == nil {
+		// STEP 3: Fall back to pattern matching if ML didn't produce results
+		if entityType == "" {
+			entityType, confidence = classifyColumnName(col.Name)
+			classificationSource = "pattern_matching"
+			// Try to sample real values even for pattern-matched columns so the UI shows
+			// actual masked data rather than fabricated examples.
+			if entityType != "" && valueSample == nil {
+				realSamples, sampleErr := sampleColumnValues(ctx, &ds, col.TableName, col.Name, 5)
+				if sampleErr == nil && len(realSamples) > 0 {
+					masked := buildValueSample(realSamples, entityType, 3)
+					if masked != "" {
+						valueSample = &masked
+					}
+				}
+				// Fall back to synthetic only when no real data can be obtained
+				if valueSample == nil {
 					synth := syntheticValueSample(entityType)
 					if synth != "" {
 						valueSample = &synth
 					}
 				}
 			}
+		}
 
 				// STEP 4: Apply threshold rules - mark low confidence for review
 				if entityType != "" {
@@ -1338,8 +1349,9 @@ func classifyValues(ctx context.Context, c *ClassifierClient, samples []string, 
 	return &result, nil
 }
 
-// maskValue masks a PII value based on its entity type, producing examples like
-// n*****@g****.com or ***-**-1234 for SSNs.
+// maskValue masks a PII value based on its entity type, preserving enough context
+// to confirm the value is real while protecting sensitive data.
+// Rules: show first 3 chars of each segment, mask the rest; preserve special chars (@ . - _).
 func maskValue(value, entityType string) string {
 	if value == "" {
 		return value
@@ -1348,58 +1360,73 @@ func maskValue(value, entityType string) string {
 	case "EMAIL":
 		parts := strings.SplitN(value, "@", 2)
 		if len(parts) == 2 {
-			local := parts[0]
-			domain := parts[1]
-			// Keep first char + stars + last char of local, partial domain
-			maskedLocal := maskMiddle(local)
-			domainParts := strings.SplitN(domain, ".", 2)
-			maskedDomain := maskMiddle(domainParts[0])
+			maskedLocal := maskFirst3(parts[0])
+			domainParts := strings.SplitN(parts[1], ".", 2)
+			maskedDomain := maskFirst3(domainParts[0])
 			if len(domainParts) > 1 {
 				maskedDomain += "." + domainParts[1]
 			}
 			return maskedLocal + "@" + maskedDomain
 		}
-		return maskMiddle(value)
-	case "SSN":
-		// Format: ***-**-1234 (keep last 4)
+		return maskFirst3(value)
+	case "SSN", "US_SSN":
 		digits := regexp.MustCompile(`\D`).ReplaceAllString(value, "")
 		if len(digits) >= 4 {
 			return "***-**-" + digits[len(digits)-4:]
 		}
 		return "***-**-****"
 	case "CREDIT_CARD", "CREDIT_CARD_FORMATTED":
-		// Keep last 4 digits: ****-****-****-1234
 		digits := regexp.MustCompile(`\D`).ReplaceAllString(value, "")
 		if len(digits) >= 4 {
 			return "****-****-****-" + digits[len(digits)-4:]
 		}
 		return "****-****-****-****"
-	case "PHONE":
+	case "PHONE", "PHONE_NUMBER":
 		digits := regexp.MustCompile(`\D`).ReplaceAllString(value, "")
 		if len(digits) >= 4 {
-			return strings.Repeat("*", len(digits)-4) + digits[len(digits)-4:]
+			return "***-***-" + digits[len(digits)-4:]
 		}
-		return strings.Repeat("*", len(value))
-	case "PERSON_NAME":
+		return "***-***-****"
+	case "PERSON", "PERSON_NAME":
 		words := strings.Fields(value)
 		masked := make([]string, len(words))
 		for i, w := range words {
-			masked[i] = maskMiddle(w)
+			masked[i] = maskFirst3(w)
 		}
 		return strings.Join(masked, " ")
+	case "IP_ADDRESS":
+		parts := strings.Split(value, ".")
+		if len(parts) == 4 {
+			return parts[0] + ".***.***." + parts[3]
+		}
+		return maskFirst3(value)
+	case "ADDRESS":
+		// Show first 3 chars of each word
+		words := strings.Fields(value)
+		masked := make([]string, len(words))
+		for i, w := range words {
+			masked[i] = maskFirst3(w)
+		}
+		return strings.Join(masked, " ")
+	case "DATE_OF_BIRTH":
+		// Show year only: 1990-**-**
+		if len(value) >= 4 {
+			return value[:4] + "-**-**"
+		}
+		return "****-**-**"
 	default:
-		// Generic: keep first and last char, mask the middle
-		return maskMiddle(value)
+		return maskFirst3(value)
 	}
 }
 
-// maskMiddle keeps the first and last character of a string and replaces the middle with stars.
-func maskMiddle(s string) string {
+// maskFirst3 shows the first 3 characters and replaces the rest with stars.
+func maskFirst3(s string) string {
 	r := []rune(s)
-	if len(r) <= 2 {
-		return strings.Repeat("*", len(r))
+	show := 3
+	if len(r) <= show {
+		return s
 	}
-	return string(r[0]) + strings.Repeat("*", len(r)-2) + string(r[len(r)-1])
+	return string(r[:show]) + strings.Repeat("*", len(r)-show)
 }
 
 // buildValueSample produces a comma-separated string of up to n masked sample values.
