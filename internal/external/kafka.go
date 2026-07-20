@@ -388,7 +388,15 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			// Try to sample real values even for pattern-matched columns so the UI shows
 			// actual masked data rather than fabricated examples.
 			if entityType != "" && valueSample == nil {
-				realSamples, sampleErr := sampleColumnValues(ctx, &ds, col.TableName, col.Name, 5)
+				var realSamples []string
+				var sampleErr error
+				// Use the pre-parsed configMap rather than re-parsing ds.Config to avoid
+				// encoding issues with json.RawMessage read from the database.
+				if len(configMap) > 0 && (ds.Type == "postgresql" || ds.Type == "postgres" || ds.Type == "mysql") {
+					realSamples, sampleErr = sampleDBValues(ctx, ds.Type, configMap, col.TableName, col.Name, 5)
+				} else {
+					realSamples, sampleErr = sampleColumnValues(ctx, &ds, col.TableName, col.Name, 5)
+				}
 				if sampleErr != nil {
 					log.Debug().Err(sampleErr).Str("column", col.Name).Str("table", col.TableName).Msg("Real value sampling failed, using synthetic fallback")
 				} else if len(realSamples) > 0 {
