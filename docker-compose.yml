@@ -90,6 +90,10 @@ services:
       - KAFKA_BOOTSTRAP_SERVER=kafka:9092
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
+      - SKIP_ELASTICSEARCH_CHECK=false
+      - GRAPH_SERVICE_IMPL=elasticsearch
+      - ENTITY_SERVICE_IMPL=ebean
+      - DATAHUB_ANALYTICS_ENABLED=false
     depends_on:
       - mysql
       - kafka
