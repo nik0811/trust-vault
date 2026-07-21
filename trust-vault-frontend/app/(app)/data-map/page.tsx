@@ -6,7 +6,7 @@ import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { StatCard } from '@/components/base/stat-card'
 import { Search, Globe, PieChart, Database, Cloud, HardDrive, Server, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useDataMapSources } from '@/hooks/use-datamap'
+import { useDataMapSources, useDataMapCoverage } from '@/hooks/use-datamap'
 import { toast } from 'sonner'
 
 type Sensitivity = 'public' | 'internal' | 'confidential' | 'restricted'
@@ -49,6 +49,7 @@ export default function DataMapPage() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<Sensitivity | 'all'>('all')
   const { data: sourcesRaw, isLoading, error } = useDataMapSources()
+  const { data: coverage } = useDataMapCoverage()
 
   useEffect(() => {
     if (error) toast.error('Failed to load data sources')
@@ -103,7 +104,7 @@ export default function DataMapPage() {
           <StatCard label="Total Sources" value={String(sources.length)} />
           <StatCard label="Total Datasets" value={String(totalDatasets)} />
           <StatCard label="Total Records" value={`${totalRecords.toFixed(1)}M`} />
-          <StatCard label="Governed" value={sources.length > 0 ? '84%' : '—'} />
+          <StatCard label="Governed" value={coverage?.coverage_percentage != null ? `${Math.round(coverage.coverage_percentage * 100)}%` : '—'} />
         </div>
 
         <div className="flex flex-col gap-4 md:flex-row md:items-center">

@@ -257,15 +257,27 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			})
 			appendScanLog(ctx, db, job.ScanID, "DataHub schema not available, querying source database directly")
 			// Fallback: query schema directly from the source database
-			if !isEmptyConfig(ds.Config) {
+			if isEmptyConfig(ds.Config) {
+				log.Warn().Str("datasource", ds.Name).Msg("Direct schema query skipped: empty config")
+				appendScanLog(ctx, db, job.ScanID, "Direct schema query skipped: datasource has no connection config")
+			} else {
 				var cfgMap map[string]any
-				if jsonErr := json.Unmarshal(ds.Config, &cfgMap); jsonErr == nil {
+				if jsonErr := json.Unmarshal(ds.Config, &cfgMap); jsonErr != nil {
+					log.Warn().Err(jsonErr).Str("datasource", ds.Name).Msg("Failed to parse datasource config for direct query")
+					appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Config parse error: %v", jsonErr))
+				} else {
+					log.Info().Str("datasource", ds.Name).Str("type", ds.Type).Interface("config_keys", getMapKeys(cfgMap)).Msg("Attempting direct schema query")
 					directCols, directErr := querySchemaDirectly(ctx, ds.Type, cfgMap)
 					if directErr != nil {
 						log.Warn().Err(directErr).Str("datasource", ds.Name).Msg("Direct schema query failed")
-					} else if len(directCols) > 0 {
+						appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Direct schema query failed: %v", directErr))
+					} else if len(directCols) == 0 {
+						log.Warn().Str("datasource", ds.Name).Msg("Direct schema query returned 0 columns")
+						appendScanLog(ctx, db, job.ScanID, "Direct schema query returned 0 columns")
+					} else {
 						allColumns = directCols
 						log.Info().Int("columns", len(allColumns)).Str("datasource", ds.Name).Msg("Direct schema query succeeded")
+						appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Direct schema query found %d columns", len(allColumns)))
 					}
 				}
 			}
@@ -1888,6 +1900,14 @@ func isEmptyConfig(raw []byte) bool {
 	}
 	s := strings.TrimSpace(string(raw))
 	return s == "" || s == "null" || s == "none" || s == `""` || s == "{}"
+}
+
+func getMapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func getConfigString(config map[string]any, key, defaultVal string) string {
