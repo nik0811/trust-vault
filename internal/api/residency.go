@@ -115,6 +115,60 @@ func (s *Server) persistViolationsForRule(
 	}
 }
 
+// reevaluateResidencyViolations re-evaluates all residency rules for a single datasource
+// after its region has been updated. It deletes existing violations for this datasource
+// and creates new ones if the new region violates any rules.
+func (s *Server) reevaluateResidencyViolations(ctx context.Context, tenantID string, ds *store.DataSource) {
+	// Delete existing violations for this datasource
+	_, err := s.db.ExecContext(ctx,
+		`DELETE FROM residency_violations WHERE tenant_id = $1 AND datasource_id = $2`,
+		tenantID, ds.ID)
+	if err != nil {
+		log.Warn().Err(err).Str("datasource_id", ds.ID).Msg("residency: failed to delete old violations")
+	}
+
+	// Get all active rules
+	rules, err := s.residencyRules.List(ctx, tenantID, store.ListOpts{Limit: 500})
+	if err != nil {
+		log.Warn().Err(err).Msg("residency: failed to list rules for re-evaluation")
+		return
+	}
+
+	region := ""
+	if ds.Region != nil {
+		region = *ds.Region
+	}
+
+	// Check each rule
+	for _, rule := range rules {
+		if !rule.Active {
+			continue
+		}
+		allowedRegions := []string(rule.AllowedRegions)
+		allowed := make(map[string]bool, len(allowedRegions))
+		for _, r := range allowedRegions {
+			allowed[r] = true
+		}
+
+		// If region is empty or not in allowed list, create violation
+		if region == "" || !allowed[region] {
+			regionsJSON, _ := json.Marshal(allowedRegions)
+			id := uuid.New().String()
+			_, err := s.db.ExecContext(ctx,
+				`INSERT INTO residency_violations
+					(id, tenant_id, rule_id, datasource_id, datasource_name, datasource_region, rule_name, regulation, allowed_regions, created_at)
+				 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW())
+				 ON CONFLICT (rule_id, datasource_id) DO NOTHING`,
+				id, tenantID, rule.ID, ds.ID, ds.Name, region, rule.Name, rule.Regulation,
+				store.JSON(regionsJSON),
+			)
+			if err != nil {
+				log.Warn().Err(err).Str("datasource_id", ds.ID).Str("rule_id", rule.ID).Msg("residency: failed to insert violation")
+			}
+		}
+	}
+}
+
 func (s *Server) listResidencyRules(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)

@@ -214,6 +214,11 @@ func (s *Server) updateDataSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Re-evaluate residency rules if region was updated
+	if req.Region != nil {
+		s.reevaluateResidencyViolations(ctx, tenantID, ds)
+	}
+
 	events.Emit("datasource.updated", ds)
 	
 	// Audit log
