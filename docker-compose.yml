@@ -6,6 +6,8 @@ services:
     build:
       context: ./trust-vault-frontend
       dockerfile: Dockerfile
+      args:
+        - NEXT_PUBLIC_API_URL=https://api.securelens.ai/api/v1
     ports:
       - "3000:3000"
     environment:
