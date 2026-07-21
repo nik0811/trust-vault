@@ -26,7 +26,10 @@ func (j *JSON) Scan(value any) error {
 	}
 	switch v := value.(type) {
 	case []byte:
-		*j = v
+		// Make a copy to avoid buffer reuse issues
+		cp := make([]byte, len(v))
+		copy(cp, v)
+		*j = cp
 	case string:
 		*j = []byte(v)
 	default:
