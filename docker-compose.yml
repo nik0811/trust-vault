@@ -68,6 +68,18 @@ services:
     volumes:
       - kafka_data:/var/lib/kafka/data
 
+  # Schema Registry for DataHub
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.6.0
+    ports:
+      - "8085:8081"
+    environment:
+      - SCHEMA_REGISTRY_HOST_NAME=schema-registry
+      - SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS=kafka:29092
+      - SCHEMA_REGISTRY_LISTENERS=http://0.0.0.0:8081
+    depends_on:
+      - kafka
+
   # Qdrant Vector Database
   qdrant:
     image: qdrant/qdrant:v1.8.4
@@ -89,6 +101,7 @@ services:
       - EBEAN_DATASOURCE_USERNAME=datahub
       - EBEAN_DATASOURCE_PASSWORD=datahub
       - KAFKA_BOOTSTRAP_SERVER=kafka:29092
+      - KAFKA_SCHEMAREGISTRY_URL=http://schema-registry:8081
       - ELASTICSEARCH_HOST=elasticsearch
       - ELASTICSEARCH_PORT=9200
       - ELASTICSEARCH_INDEX_BUILDER_ENABLED=true
@@ -106,6 +119,8 @@ services:
       kafka:
         condition: service_started
       elasticsearch:
+        condition: service_started
+      schema-registry:
         condition: service_started
 
   # MySQL for DataHub
