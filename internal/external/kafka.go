@@ -257,13 +257,14 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 			})
 			appendScanLog(ctx, db, job.ScanID, "DataHub schema not available, querying source database directly")
 			// Fallback: query schema directly from the source database
+			log.Debug().Str("config_raw", string(ds.Config)).Int("config_len", len(ds.Config)).Msg("Datasource config for direct query")
 			if isEmptyConfig(ds.Config) {
 				log.Warn().Str("datasource", ds.Name).Msg("Direct schema query skipped: empty config")
 				appendScanLog(ctx, db, job.ScanID, "Direct schema query skipped: datasource has no connection config")
 			} else {
 				var cfgMap map[string]any
 				if jsonErr := json.Unmarshal(ds.Config, &cfgMap); jsonErr != nil {
-					log.Warn().Err(jsonErr).Str("datasource", ds.Name).Msg("Failed to parse datasource config for direct query")
+					log.Warn().Err(jsonErr).Str("datasource", ds.Name).Str("config_raw", string(ds.Config)).Msg("Failed to parse datasource config for direct query")
 					appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Config parse error: %v", jsonErr))
 				} else {
 					log.Info().Str("datasource", ds.Name).Str("type", ds.Type).Interface("config_keys", getMapKeys(cfgMap)).Msg("Attempting direct schema query")
