@@ -1,6 +1,18 @@
 version: '3.8'
 
 services:
+  # SecureLens Frontend
+  trustvault-frontend:
+    build:
+      context: ./trust-vault-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=https://api.securelens.ai/api/v1
+    depends_on:
+      - trustvault-gateway
+
   # TrustVault API Gateway
   trustvault-gateway:
     build: .
