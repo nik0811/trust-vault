@@ -635,17 +635,50 @@ func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var stats struct {
-		TotalSources         int `db:"sources"`
-		TotalClassifications int `db:"classifications"`
-		TotalPolicies        int `db:"policies"`
-		TotalQueries         int `db:"queries"`
-	}
+	var totalSources, totalClassifications, totalPolicies, totalQueries int
+	s.db.GetContext(ctx, &totalSources, "SELECT COUNT(*) FROM datasources WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &totalClassifications, "SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &totalPolicies, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &totalQueries, "SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1", tenantID)
 
-	s.db.GetContext(ctx, &stats.TotalSources, "SELECT COUNT(*) FROM datasources WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &stats.TotalClassifications, "SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &stats.TotalPolicies, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &stats.TotalQueries, "SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1", tenantID)
+	// Get total records scanned (count of classifications as proxy for records)
+	var totalRecords int
+	s.db.GetContext(ctx, &totalRecords, 
+		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
+
+	// Get PII detected count
+	var piiDetected int
+	s.db.GetContext(ctx, &piiDetected,
+		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND entity_type IN ('PII', 'SSN', 'EMAIL', 'PHONE', 'CREDIT_CARD', 'ADDRESS', 'NAME', 'DOB', 'PHI')", tenantID)
+
+	// Get columns classified (distinct column_name from classifications)
+	var columnsClassified int
+	s.db.GetContext(ctx, &columnsClassified,
+		"SELECT COUNT(DISTINCT column_name) FROM classifications WHERE tenant_id = $1", tenantID)
+
+	// Get documents processed
+	var documentsProcessed int
+	s.db.GetContext(ctx, &documentsProcessed,
+		"SELECT COUNT(*) FROM document_classifications WHERE tenant_id = $1", tenantID)
+
+	// Get average confidence
+	var avgConfidence float64
+	s.db.GetContext(ctx, &avgConfidence,
+		"SELECT COALESCE(AVG(confidence), 0) FROM classifications WHERE tenant_id = $1", tenantID)
+
+	// Get top entity types
+	type EntityCount struct {
+		Type  string `db:"entity_type" json:"type"`
+		Count int    `db:"count" json:"count"`
+	}
+	var topEntities []EntityCount
+	s.db.SelectContext(ctx, &topEntities,
+		`SELECT entity_type, COUNT(*) as count 
+		 FROM classifications WHERE tenant_id = $1 
+		 GROUP BY entity_type ORDER BY count DESC LIMIT 10`, tenantID)
+	if topEntities == nil {
+		topEntities = []EntityCount{}
+	}
 
 	advCtx := s.buildAdvisorContext(ctx, tenantID)
 	recommendations := domain.GenerateRecommendations(advCtx)
@@ -665,10 +698,16 @@ func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
 	complianceScore := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount) / 100.0
 
 	pkg.JSON(w, map[string]any{
-		"total_sources":         stats.TotalSources,
-		"total_classifications": stats.TotalClassifications,
-		"total_policies":        stats.TotalPolicies,
-		"total_queries":         stats.TotalQueries,
+		"total_sources":         totalSources,
+		"total_classifications": totalClassifications,
+		"total_policies":        totalPolicies,
+		"total_queries":         totalQueries,
+		"total_records":         totalRecords,
+		"pii_detected":          piiDetected,
+		"columns_classified":    columnsClassified,
+		"documents_processed":   documentsProcessed,
+		"avg_confidence":        avgConfidence,
+		"top_entities":          topEntities,
 		"compliance_score":      complianceScore,
 	})
 }

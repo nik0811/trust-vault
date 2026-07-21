@@ -167,23 +167,24 @@ func (s *Server) setupRoutes() {
 	r.Get("/api/openapi.json", s.openAPISpec)
 
 	r.Route("/api/v1", func(r chi.Router) {
-		// Auth endpoints - stricter rate limiting (10/min per IP)
+		// Auth endpoints - rate limiting (60/min per IP for login attempts)
 		r.Group(func(r chi.Router) {
-			r.Use(pkg.RateLimitByIP(10))
+			r.Use(pkg.RateLimitByIP(60))
 			r.Post("/auth/login", s.login)
 			r.Post("/auth/refresh", s.refreshToken)
 			r.Get("/invitations/verify/{token}", s.verifyInvitation)
 			r.Post("/auth/register", s.registerWithInvitation)
 		})
 
-		// Protected routes with general rate limiting (100/min per tenant+IP)
+		// Protected routes with general rate limiting (1000/min per tenant+IP)
 		r.Group(func(r chi.Router) {
 			r.Use(s.authMiddleware)
 			r.Use(s.tenantMiddleware)
-			r.Use(pkg.RateLimitByTenant(100))
+			r.Use(pkg.RateLimitByTenant(1000))
 
 			// Auth
 			r.Post("/auth/logout", s.logout)
+			r.Get("/auth/api-keys", s.listAPIKeys)
 			r.Post("/auth/api-keys", s.createAPIKey)
 			r.Delete("/auth/api-keys/{id}", s.revokeAPIKey)
 

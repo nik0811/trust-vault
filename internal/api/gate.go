@@ -509,21 +509,25 @@ func (s *Server) gateStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tenantID := pkg.TenantFromCtx(ctx)
 
-	var stats struct {
-		TotalQueries   int     `json:"total_queries"`
-		QueriesBlocked int     `json:"queries_blocked"`
-		AvgLatencyMs   float64 `json:"avg_latency_ms"`
-		QueriesPerMin  float64 `json:"queries_per_min"`
-	}
+	var totalQueries, blockedQueries, allowedQueries int
+	var avgLatencyMs float64
 
-	s.db.GetContext(ctx, &stats.TotalQueries,
+	s.db.GetContext(ctx, &totalQueries,
 		"SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1", tenantID)
-	s.db.GetContext(ctx, &stats.QueriesBlocked,
+	s.db.GetContext(ctx, &blockedQueries,
 		"SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND decision = 'deny'", tenantID)
-	s.db.GetContext(ctx, &stats.AvgLatencyMs,
+	s.db.GetContext(ctx, &avgLatencyMs,
 		"SELECT COALESCE(AVG(latency_ms), 0) FROM gate_queries WHERE tenant_id = $1", tenantID)
+	
+	allowedQueries = totalQueries - blockedQueries
 
-	pkg.JSON(w, stats)
+	pkg.JSON(w, map[string]any{
+		"total_queries":   totalQueries,
+		"blocked_queries": blockedQueries,
+		"allowed_queries": allowedQueries,
+		"queries_blocked": blockedQueries, // backward compat
+		"avg_latency_ms":  avgLatencyMs,
+	})
 }
 
 func (s *Server) listGateQueries(w http.ResponseWriter, r *http.Request) {
