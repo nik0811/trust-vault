@@ -6,6 +6,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type JSON json.RawMessage
@@ -560,14 +562,14 @@ type EndpointAgent struct {
 
 // ResidencyRule defines geographic data residency requirements
 type ResidencyRule struct {
-	ID             string    `db:"id" json:"id"`
-	TenantID       string    `db:"tenant_id" json:"-"`
-	Name           string    `db:"name" json:"name" validate:"required"`
-	Regulation     string    `db:"regulation" json:"regulation"`
-	AllowedRegions JSON      `db:"allowed_regions" json:"allowed_regions"`
-	DataTypes      JSON      `db:"data_types" json:"data_types"`
-	Active         bool      `db:"active" json:"active"`
-	CreatedAt      time.Time `db:"created_at" json:"created_at"`
+	ID             string         `db:"id" json:"id"`
+	TenantID       string         `db:"tenant_id" json:"-"`
+	Name           string         `db:"name" json:"name" validate:"required"`
+	Regulation     string         `db:"regulation" json:"regulation"`
+	AllowedRegions pq.StringArray `db:"allowed_regions" json:"allowed_regions"`
+	DataTypes      pq.StringArray `db:"data_types" json:"data_types"`
+	Active         bool           `db:"active" json:"active"`
+	CreatedAt      time.Time      `db:"created_at" json:"created_at"`
 }
 
 // ConsentWidgetConfig holds the tenant's consent banner configuration

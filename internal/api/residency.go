@@ -56,17 +56,13 @@ func (s *Server) createResidencyRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store as JSON for the response
-	regionsJSON, _ := json.Marshal(req.AllowedRegions)
-	typesJSON, _ := json.Marshal(req.DataTypes)
-
 	rule := &store.ResidencyRule{
 		ID:             ruleID,
 		TenantID:       tenantID,
 		Name:           req.Name,
 		Regulation:     req.Regulation,
-		AllowedRegions: store.JSON(regionsJSON),
-		DataTypes:      store.JSON(typesJSON),
+		AllowedRegions: req.AllowedRegions,
+		DataTypes:      req.DataTypes,
 		Active:         true,
 	}
 
@@ -263,10 +259,7 @@ func (s *Server) getResidencyViolationsInline(w http.ResponseWriter, r *http.Req
 			if !rule.Active {
 				continue
 			}
-			var allowedRegions []string
-			if err := json.Unmarshal(rule.AllowedRegions, &allowedRegions); err != nil {
-				continue
-			}
+			allowedRegions := []string(rule.AllowedRegions)
 			inAllowed := false
 			for _, ar := range allowedRegions {
 				if ar == region {
@@ -422,10 +415,7 @@ func (s *Server) countViolationsInline(rules []store.ResidencyRule, datasources 
 			if !rule.Active {
 				continue
 			}
-			var allowedRegions []string
-			if err := json.Unmarshal(rule.AllowedRegions, &allowedRegions); err != nil {
-				continue
-			}
+			allowedRegions := []string(rule.AllowedRegions)
 			inAllowed := false
 			for _, ar := range allowedRegions {
 				if ar == region {

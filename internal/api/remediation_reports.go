@@ -2169,6 +2169,15 @@ func (s *Server) getRiskScore(w http.ResponseWriter, r *http.Request) {
 	var violations int
 	s.db.GetContext(ctx, &violations, "SELECT COUNT(*) FROM retention_violations WHERE tenant_id = $1", tenantID)
 
+	var ropaCount int
+	s.db.GetContext(ctx, &ropaCount, "SELECT COUNT(*) FROM ropa WHERE tenant_id = $1", tenantID)
+
+	var consentCount int
+	s.db.GetContext(ctx, &consentCount, "SELECT COUNT(*) FROM consent_records WHERE tenant_id = $1", tenantID)
+
+	var dpiaCount int
+	s.db.GetContext(ctx, &dpiaCount, "SELECT COUNT(*) FROM dpias WHERE tenant_id = $1", tenantID)
+
 	dataExposure := 0.3
 	if totalClassifications > 0 {
 		dataExposure = float64(piiCount) / float64(totalClassifications)
@@ -2188,15 +2197,77 @@ func (s *Server) getRiskScore(w http.ResponseWriter, r *http.Request) {
 		riskLevel = "medium"
 	}
 
+	// Calculate per-regulation scores based on actual compliance indicators
+	gdprScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "gdpr")
+	ccpaScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "ccpa")
+	hipaaScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "hipaa")
+	pciScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "pci")
+	dpdpScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "dpdp")
+	uaePdplScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "uae_pdpl")
+	euAiActScore := calculateRegulationScore(policyCount, ropaCount, consentCount, totalClassifications, "eu_ai_act")
+
 	pkg.JSON(w, map[string]any{
-		"overall_score": overallScore,
-		"risk_level":    riskLevel,
+		"overall_score":    overallScore,
+		"risk_level":       riskLevel,
+		"gdpr_score":       gdprScore,
+		"ccpa_score":       ccpaScore,
+		"hipaa_score":      hipaaScore,
+		"pci_score":        pciScore,
+		"dpdp_score":       dpdpScore,
+		"uae_pdpl_score":   uaePdplScore,
+		"eu_ai_act_score":  euAiActScore,
 		"factors": map[string]float64{
 			"data_exposure":   dataExposure,
 			"policy_coverage": policyCoverage,
 			"compliance_gaps": complianceGaps,
 		},
 	})
+}
+
+func calculateRegulationScore(policyCount, ropaCount, consentCount, classificationCount int, regulation string) float64 {
+	baseScore := 0.5
+
+	// Policy coverage contributes 30%
+	policyContrib := min(1.0, float64(policyCount)/3.0) * 0.3
+
+	// RoPA coverage contributes 20% (especially important for GDPR, DPDP)
+	ropaContrib := 0.0
+	if ropaCount > 0 {
+		ropaContrib = 0.2
+	}
+
+	// Consent management contributes 20% (important for GDPR, CCPA, DPDP)
+	consentContrib := 0.0
+	if consentCount > 0 {
+		consentContrib = 0.2
+	}
+
+	// Classification coverage contributes 30%
+	classContrib := 0.0
+	if classificationCount > 0 {
+		classContrib = 0.3
+	}
+
+	score := baseScore + policyContrib + ropaContrib + consentContrib + classContrib
+
+	// Adjust based on regulation-specific requirements
+	switch regulation {
+	case "gdpr":
+		if ropaCount == 0 {
+			score -= 0.15 // RoPA is mandatory for GDPR
+		}
+	case "hipaa":
+		// HIPAA requires specific PHI handling
+		score = min(score, 0.85) // Cap until PHI-specific policies exist
+	case "pci":
+		// PCI-DSS requires specific card data handling
+		score = min(score, 0.80) // Cap until PCI-specific controls exist
+	case "eu_ai_act":
+		// EU AI Act is newer, give benefit of doubt if AI governance exists
+		score = min(score+0.1, 1.0)
+	}
+
+	return min(1.0, max(0.0, score))
 }
 
 func (s *Server) runComplianceAssessment(w http.ResponseWriter, r *http.Request) {
