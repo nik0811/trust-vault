@@ -95,6 +95,7 @@ services:
       - GRAPH_SERVICE_IMPL=elasticsearch
       - ENTITY_SERVICE_IMPL=ebean
       - DATAHUB_ANALYTICS_ENABLED=false
+      - ENTITY_REGISTRY_CONFIG_PATH=/datahub/datahub-gms/resources/entity-registry.yml
     depends_on:
       - mysql
       - kafka
