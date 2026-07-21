@@ -31,10 +31,13 @@ services:
       - SUPERADMIN_PASSWORD=SecureLens@2026!
       - SUPERADMIN_NAME=Super Admin
       - CORS_ORIGINS=https://app.securelens.ai,https://trust-vault.oortfy.com
+      - INGESTION_SIDECAR_URL=http://securelens-ingestion:8090
+      - INGESTION_CALLBACK_URL=http://trustvault-gateway:8080/api/v1/datasources/callback
     depends_on:
       - postgres
       - kafka
       - qdrant
+      - securelens-ingestion
     command: ["./server", "--mode=gateway"]
 
   # TrustVault Classification Worker
@@ -178,6 +181,24 @@ services:
       - MODEL_PATH=/models/paddleocr-vl
     volumes:
       - docservice_models:/models
+
+  # DataHub Ingestion Sidecar (Python)
+  securelens-ingestion:
+    build:
+      context: ./ingestion
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8090"
+    environment:
+      - DATAHUB_URL=http://datahub-gms:8080
+    depends_on:
+      - datahub-gms
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
 volumes:
   postgres_data:

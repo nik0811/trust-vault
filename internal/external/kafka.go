@@ -249,51 +249,46 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 		var allColumns []DatasetColumn
 
 		if err != nil || len(datasetURNs) == 0 {
-			log.Warn().Err(err).Str("datasource", ds.Name).Msg("Could not fetch datasets from DataHub, trying direct schema query")
-			events.Emit("datasource.scan.progress", map[string]any{
+			// DataHub has no schema for this datasource - this is an error condition
+			// The ingestion sidecar should have populated DataHub before classification runs
+			errMsg := "DataHub has no schema for this datasource. Ensure the ingestion sidecar ran successfully before classification."
+			if err != nil {
+				errMsg = fmt.Sprintf("Failed to fetch datasets from DataHub: %v. Ensure DataHub ingestion completed successfully.", err)
+			}
+			log.Error().Err(err).Str("datasource", ds.Name).Str("platform", platform).Str("database", databaseName).Msg("DataHub schema not available - ingestion may have failed")
+			
+			events.Emit("datasource.scan.failed", map[string]any{
 				"tenant_id":  job.TenantID,
 				"dataset_id": job.DatasetID,
-				"message":    "DataHub schema not available, querying source database directly",
+				"error":      errMsg,
 			})
-			appendScanLog(ctx, db, job.ScanID, "DataHub schema not available, querying source database directly")
-			// Fallback: query schema directly from the source database
-			log.Debug().Str("config_raw", string(ds.Config)).Int("config_len", len(ds.Config)).Msg("Datasource config for direct query")
-			if isEmptyConfig(ds.Config) {
-				log.Warn().Str("datasource", ds.Name).Msg("Direct schema query skipped: empty config")
-				appendScanLog(ctx, db, job.ScanID, "Direct schema query skipped: datasource has no connection config")
-			} else {
-				var cfgMap map[string]any
-				if jsonErr := json.Unmarshal(ds.Config, &cfgMap); jsonErr != nil {
-					log.Warn().Err(jsonErr).Str("datasource", ds.Name).Str("config_raw", string(ds.Config)).Msg("Failed to parse datasource config for direct query")
-					appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Config parse error: %v", jsonErr))
-				} else {
-					log.Info().Str("datasource", ds.Name).Str("type", ds.Type).Interface("config_keys", getMapKeys(cfgMap)).Msg("Attempting direct schema query")
-					directCols, directErr := querySchemaDirectly(ctx, ds.Type, cfgMap)
-					if directErr != nil {
-						log.Warn().Err(directErr).Str("datasource", ds.Name).Msg("Direct schema query failed")
-						appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Direct schema query failed: %v", directErr))
-					} else if len(directCols) == 0 {
-						log.Warn().Str("datasource", ds.Name).Msg("Direct schema query returned 0 columns")
-						appendScanLog(ctx, db, job.ScanID, "Direct schema query returned 0 columns")
-					} else {
-						allColumns = directCols
-						log.Info().Int("columns", len(allColumns)).Str("datasource", ds.Name).Msg("Direct schema query succeeded")
-						appendScanLog(ctx, db, job.ScanID, fmt.Sprintf("Direct schema query found %d columns", len(allColumns)))
-					}
-				}
+			appendScanLog(ctx, db, job.ScanID, errMsg)
+			
+			// Update scan_log and datasource status to failed
+			if job.ScanID != "" {
+				now := time.Now()
+				db.ExecContext(ctx,
+					`UPDATE scan_logs SET status = 'failed', message = $1, completed_at = $2 WHERE id = $3`,
+					errMsg, now, job.ScanID)
 			}
-		} else {
-			// Fetch schema for each dataset found
-			for _, urn := range datasetURNs {
-				columns, err := datahub.GetDatasetSchema(ctx, urn)
-				if err != nil {
-					log.Warn().Err(err).Str("urn", urn).Msg("Failed to get schema for dataset")
-					continue
-				}
-				allColumns = append(allColumns, columns...)
-			}
-			log.Info().Int("datasets", len(datasetURNs)).Int("columns", len(allColumns)).Msg("Fetched schema from DataHub")
+			db.ExecContext(ctx,
+				`UPDATE datasources SET status = 'error', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+				job.DatasetID, job.TenantID)
+			
+			sendClassificationCallback(job.TenantID, job.DatasetID, "failed", 0, errMsg, errMsg)
+			return
 		}
+		
+		// Fetch schema for each dataset found in DataHub
+		for _, urn := range datasetURNs {
+			columns, err := datahub.GetDatasetSchema(ctx, urn)
+			if err != nil {
+				log.Warn().Err(err).Str("urn", urn).Msg("Failed to get schema for dataset")
+				continue
+			}
+			allColumns = append(allColumns, columns...)
+		}
+		log.Info().Int("datasets", len(datasetURNs)).Int("columns", len(allColumns)).Msg("Fetched schema from DataHub")
 
 		// If we got real columns from DataHub, classify them
 		if len(allColumns) > 0 {
@@ -501,10 +496,24 @@ func (k *Kafka) processClassificationJob(ctx context.Context, db *store.DB, clas
 					assignedLabel, job.DatasetID, job.TenantID)
 			}
 		} else {
-			// Fallback: No DataHub data and direct schema query failed, skip classification
-			log.Warn().Str("dataset_id", job.DatasetID).Msg("No schema available for classification")
-			sendClassificationProgressAndLog(ctx, db, job.ScanID, job.TenantID, job.DatasetID,
-				"No schema data available. Please run a scan first to discover the schema.", 0, 0)
+			// No columns found in DataHub - this should not happen if ingestion succeeded
+			errMsg := "No schema columns found in DataHub. The ingestion may have failed or the datasource has no tables."
+			log.Error().Str("dataset_id", job.DatasetID).Msg(errMsg)
+			sendClassificationProgressAndLog(ctx, db, job.ScanID, job.TenantID, job.DatasetID, errMsg, 0, 0)
+			
+			// Update scan_log and datasource status to failed
+			if job.ScanID != "" {
+				now := time.Now()
+				db.ExecContext(ctx,
+					`UPDATE scan_logs SET status = 'failed', message = $1, completed_at = $2 WHERE id = $3`,
+					errMsg, now, job.ScanID)
+			}
+			db.ExecContext(ctx,
+				`UPDATE datasources SET status = 'error', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
+				job.DatasetID, job.TenantID)
+			
+			sendClassificationCallback(job.TenantID, job.DatasetID, "failed", 0, errMsg, errMsg)
+			return
 		}
 
 		log.Info().

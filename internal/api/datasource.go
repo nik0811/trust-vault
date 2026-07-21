@@ -328,21 +328,45 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 	go func(scanLogID, tid string, snapshot store.DataSource) {
 		bgCtx := context.Background()
 
-		// Publish directly to the job-executions topic so the worker
-		// handles the scan without the ingestion sidecar.
-		jobConfig, _ := json.Marshal(map[string]any{
-			"dataset_id": snapshot.ID,
-			"scan_id":    scanLogID,
-		})
-		err := s.kafka.Produce(bgCtx, "job-executions", tid, map[string]any{
-			"job_id":    scanLogID,
-			"tenant_id": tid,
-			"type":      "classification",
-			"config":    json.RawMessage(jobConfig),
-		})
-		if err != nil {
-			log.Error().Err(err).Str("scan_id", scanLogID).Msg("failed to queue classification job")
+		// STEP 1: Call ingestion sidecar to populate DataHub with schema metadata
+		// This is required before classification can query DataHub for schema
+		ingestionURL := s.ingestionSidecarURL() + "/ingest"
+		callbackURL := s.ingestionCallbackURL()
 
+		// Parse datasource config for ingestion
+		var configMap map[string]any
+		if len(snapshot.Config) > 0 {
+			json.Unmarshal(snapshot.Config, &configMap)
+		}
+		if configMap == nil {
+			configMap = map[string]any{}
+		}
+
+		ingestionPayload := map[string]any{
+			"datasource_id": snapshot.ID,
+			"tenant_id":     tid,
+			"type":          snapshot.Type,
+			"config":        configMap,
+			"callback_url":  callbackURL,
+			"scan_log_id":   scanLogID,
+		}
+
+		log.Info().
+			Str("datasource_id", snapshot.ID).
+			Str("tenant_id", tid).
+			Str("type", snapshot.Type).
+			Str("ingestion_url", ingestionURL).
+			Msg("Calling ingestion sidecar to populate DataHub")
+
+		// Append progress to scan log
+		appendScanLogEntry(bgCtx, s.db, scanLogID, "Starting DataHub ingestion...")
+
+		ingestionResult, err := s.callIngestionSidecar(bgCtx, ingestionURL, ingestionPayload)
+		if err != nil {
+			log.Error().Err(err).Str("datasource_id", snapshot.ID).Msg("Ingestion sidecar call failed")
+			appendScanLogEntry(bgCtx, s.db, scanLogID, fmt.Sprintf("Ingestion failed: %v", err))
+
+			// Update status to error - ingestion is required, not optional
 			snapshot.Status = "error"
 			s.datasources.Update(bgCtx, &snapshot)
 
@@ -351,12 +375,42 @@ func (s *Server) triggerScan(w http.ResponseWriter, r *http.Request) {
 			sl.ID = scanLogID
 			sl.Status = "failed"
 			sl.CompletedAt = &now
-			sl.Message = fmt.Sprintf("Failed to queue scan job: %v", err)
+			sl.Message = fmt.Sprintf("DataHub ingestion failed: %v. Ensure the ingestion sidecar is running and DataHub is accessible.", err)
 			s.scanLogs.Update(bgCtx, &sl)
 
-			events.Emit("scan.failed", map[string]any{"scan_id": scanLogID, "error": err.Error(), "tenant_id": tid})
+			events.Emit("scan.failed", map[string]any{
+				"scan_id":   scanLogID,
+				"tenant_id": tid,
+				"error":     fmt.Sprintf("DataHub ingestion failed: %v", err),
+			})
+			return
 		}
+
+		log.Info().
+			Str("datasource_id", snapshot.ID).
+			Interface("ingestion_result", ingestionResult).
+			Msg("Ingestion sidecar accepted job")
+
+		appendScanLogEntry(bgCtx, s.db, scanLogID, "DataHub ingestion started, waiting for completion...")
+
+		// The ingestion sidecar runs asynchronously and will call back to /callback
+		// when complete. At that point, scanCallback() will trigger classification.
+		// For now, we just wait for the callback - the scan status remains "scanning"
 	}(scanLog.ID, tenantID, dsCopy)
+}
+
+// appendScanLogEntry appends a progress entry to scan_logs.logs JSONB
+func appendScanLogEntry(ctx context.Context, db *store.DB, scanID, message string) {
+	if scanID == "" || db == nil {
+		return
+	}
+	entry := fmt.Sprintf(`{"time":%q,"message":%q}`,
+		time.Now().Format("15:04:05"), message)
+	db.ExecContext(ctx, `
+		UPDATE scan_logs
+		SET logs = COALESCE(logs, '[]'::jsonb) || ($1::jsonb)
+		WHERE id = $2`,
+		"["+entry+"]", scanID)
 }
 
 func (s *Server) getScanStatus(w http.ResponseWriter, r *http.Request) {
@@ -441,7 +495,7 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse job_id format: tenant_id-datasource_id
+	// Parse job_id format: tenant_id::datasource_id
 	parts := splitJobID(callback.JobID)
 	if len(parts) != 2 {
 		pkg.Error(w, fmt.Errorf("invalid job_id format"), http.StatusBadRequest)
@@ -456,135 +510,118 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update datasource status based on callback
-	now := time.Now()
-	ds.LastScan = &now
-	if callback.Status == "completed" {
-		ds.Status = "connected"
-	} else {
-		ds.Status = "error"
-	}
-
-	if err := s.datasources.Update(ctx, ds); err != nil {
-		pkg.Error(w, err)
-		return
-	}
-
-	// Update scan log entry if scan_log_id provided
-	if callback.ScanLogID != "" {
-		scanLog, err := s.scanLogs.FindByID(ctx, tenantID, callback.ScanLogID)
-		if err == nil && scanLog != nil {
-			scanLog.CompletedAt = &now
-			scanLog.DatasetsDiscovered = callback.DatasetsDiscovered
-			scanLog.Message = callback.Message
-			if callback.Status == "completed" {
-				scanLog.Status = "success"
-			} else {
-				scanLog.Status = "failed"
-			}
-			s.scanLogs.Update(ctx, scanLog)
-		}
-	} else {
-		// Fallback: find the most recent running scan log for this datasource
-		query := `SELECT id, tenant_id, datasource_id, status, started_at, completed_at, message, logs, datasets_discovered, created_at 
-			FROM scan_logs 
-			WHERE tenant_id = $1 AND datasource_id = $2 AND status = 'running' 
-			ORDER BY started_at DESC 
-			LIMIT 1`
-		row := s.db.QueryRowContext(ctx, query, tenantID, datasourceID)
-		var scanLog store.ScanLog
-		if err := row.Scan(&scanLog.ID, &scanLog.TenantID, &scanLog.DatasourceID, &scanLog.Status, &scanLog.StartedAt, &scanLog.CompletedAt, &scanLog.Message, &scanLog.Logs, &scanLog.DatasetsDiscovered, &scanLog.CreatedAt); err == nil {
-			scanLog.CompletedAt = &now
-			scanLog.DatasetsDiscovered = callback.DatasetsDiscovered
-			scanLog.Message = callback.Message
-			if callback.Status == "completed" {
-				scanLog.Status = "success"
-			} else {
-				scanLog.Status = "failed"
-			}
-			s.scanLogs.Update(ctx, &scanLog)
-		}
-	}
-
-	// Emit SSE event for scan completion
-	events.Emit("datasource.scan.completed", map[string]any{
-		"datasource_id":       datasourceID,
-		"tenant_id":           tenantID,
-		"status":              callback.Status,
-		"message":             callback.Message,
-		"datasets_discovered": callback.DatasetsDiscovered,
-	})
-
-	// Create lineage entry for successful scans
-	if callback.Status == "completed" && callback.DatasetsDiscovered > 0 {
-		dataFlow := store.DataFlow{
-			TenantID:        tenantID,
-			SourceDatasetID: datasourceID,
-			TargetDatasetID: "securelens-classification",
-			FlowType:        "ingestion",
-		}
-		s.dataFlows.Create(ctx, &dataFlow)
-	}
-
-	// Re-run region detection on scan completion if region not yet set
-	if callback.Status == "completed" {
-		go func(id, tid string) {
-			bgCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			fresh, err := s.datasources.FindByID(bgCtx, tid, id)
-			if err != nil || fresh == nil || (fresh.Region != nil && *fresh.Region != "") {
-				return
-			}
-			if info := domain.DetectRegionInfo(bgCtx, fresh); info.Region != "" {
-				fresh.Region = &info.Region
-				if info.Country != "" {
-					fresh.Country = &info.Country
-				}
-				if err := s.datasources.Update(bgCtx, fresh); err == nil {
-					log.Info().Str("datasource_id", id).Str("region", info.Region).Str("country", info.Country).Msg("auto-detected region on scan completion")
-					events.Emit("datasource.region_detected", map[string]string{
-						"datasource_id": id,
-						"tenant_id":     tid,
-						"region":        info.Region,
-						"country":       info.Country,
-					})
-				}
-			}
-		}(datasourceID, tenantID)
-
-		// Trigger quality assessment for this datasource after scan
-		go func(id, tid string) {
-			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-			defer cancel()
-			if err := s.kafka.Produce(bgCtx, "job-executions", tid, map[string]any{
-				"tenant_id": tid,
-				"type":      "quality_assessment",
-				"config":    map[string]any{"datasource_id": id},
-			}); err != nil {
-				log.Warn().Err(err).Str("datasource_id", id).Msg("Failed to queue quality assessment after scan")
-			}
-		}(datasourceID, tenantID)
-
-		// Trigger ROT scan after successful scan
-		go func(id, tid string) {
-			bgCtx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-			defer cancel()
-			if err := s.kafka.Produce(bgCtx, "job-executions", tid, map[string]any{
-				"tenant_id": tid,
-				"type":      "rot_scan",
-				"config":    map[string]any{"datasource_id": id},
-			}); err != nil {
-				log.Warn().Err(err).Str("datasource_id", id).Msg("Failed to queue ROT scan after scan")
-			}
-		}(datasourceID, tenantID)
-	}
-
 	log.Info().
 		Str("datasource_id", datasourceID).
 		Str("tenant_id", tenantID).
 		Str("status", callback.Status).
 		Int("datasets", callback.DatasetsDiscovered).
-		Msg("scan callback received")
+		Str("scan_log_id", callback.ScanLogID).
+		Msg("Ingestion callback received")
+
+	// Update scan log with ingestion result
+	if callback.ScanLogID != "" {
+		appendScanLogEntry(ctx, s.db, callback.ScanLogID, 
+			fmt.Sprintf("DataHub ingestion %s: %s (discovered %d datasets)", 
+				callback.Status, callback.Message, callback.DatasetsDiscovered))
+	}
+
+	if callback.Status == "completed" && callback.DatasetsDiscovered > 0 {
+		// Ingestion succeeded - now trigger classification
+		// Classification will query DataHub for schema (no fallback)
+		log.Info().
+			Str("datasource_id", datasourceID).
+			Int("datasets_discovered", callback.DatasetsDiscovered).
+			Msg("Ingestion completed, triggering classification")
+
+		if callback.ScanLogID != "" {
+			appendScanLogEntry(ctx, s.db, callback.ScanLogID, "Starting classification...")
+		}
+
+		// Queue classification job
+		jobConfig, _ := json.Marshal(map[string]any{
+			"dataset_id": datasourceID,
+			"scan_id":    callback.ScanLogID,
+		})
+		err := s.kafka.Produce(ctx, "job-executions", tenantID, map[string]any{
+			"job_id":    callback.ScanLogID,
+			"tenant_id": tenantID,
+			"type":      "classification",
+			"config":    json.RawMessage(jobConfig),
+		})
+		if err != nil {
+			log.Error().Err(err).Str("datasource_id", datasourceID).Msg("Failed to queue classification job after ingestion")
+			if callback.ScanLogID != "" {
+				appendScanLogEntry(ctx, s.db, callback.ScanLogID, fmt.Sprintf("Failed to queue classification: %v", err))
+			}
+			// Mark scan as failed
+			now := time.Now()
+			ds.Status = "error"
+			ds.LastScan = &now
+			s.datasources.Update(ctx, ds)
+
+			if callback.ScanLogID != "" {
+				scanLog, _ := s.scanLogs.FindByID(ctx, tenantID, callback.ScanLogID)
+				if scanLog != nil {
+					scanLog.CompletedAt = &now
+					scanLog.Status = "failed"
+					scanLog.Message = fmt.Sprintf("Classification queue failed: %v", err)
+					s.scanLogs.Update(ctx, scanLog)
+				}
+			}
+		}
+		// Classification will update status when complete
+	} else if callback.Status == "completed" && callback.DatasetsDiscovered == 0 {
+		// Ingestion completed but found no datasets
+		log.Warn().
+			Str("datasource_id", datasourceID).
+			Msg("Ingestion completed but discovered 0 datasets")
+
+		now := time.Now()
+		ds.LastScan = &now
+		ds.Status = "error"
+		s.datasources.Update(ctx, ds)
+
+		if callback.ScanLogID != "" {
+			scanLog, _ := s.scanLogs.FindByID(ctx, tenantID, callback.ScanLogID)
+			if scanLog != nil {
+				scanLog.CompletedAt = &now
+				scanLog.Status = "failed"
+				scanLog.Message = "Ingestion completed but no datasets were discovered. Check datasource connection settings."
+				scanLog.DatasetsDiscovered = 0
+				s.scanLogs.Update(ctx, scanLog)
+			}
+		}
+
+		events.Emit("datasource.scan.failed", map[string]any{
+			"datasource_id": datasourceID,
+			"tenant_id":     tenantID,
+			"status":        "error",
+			"message":       "No datasets discovered during ingestion",
+		})
+	} else {
+		// Ingestion failed
+		now := time.Now()
+		ds.LastScan = &now
+		ds.Status = "error"
+		s.datasources.Update(ctx, ds)
+
+		if callback.ScanLogID != "" {
+			scanLog, _ := s.scanLogs.FindByID(ctx, tenantID, callback.ScanLogID)
+			if scanLog != nil {
+				scanLog.CompletedAt = &now
+				scanLog.Status = "failed"
+				scanLog.Message = callback.Message
+				s.scanLogs.Update(ctx, scanLog)
+			}
+		}
+
+		events.Emit("datasource.scan.failed", map[string]any{
+			"datasource_id": datasourceID,
+			"tenant_id":     tenantID,
+			"status":        "error",
+			"message":       callback.Message,
+		})
+	}
 
 	pkg.JSON(w, map[string]string{"status": "ok"})
 }
