@@ -109,22 +109,37 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	key := store.APIKey{
-		TenantID:  tenantID,
-		UserID:    userID,
-		Name:      req.Name,
-		ExpiresAt: time.Now().AddDate(0, 0, req.ExpiresIn),
+	// Default to 30 days if not specified
+	expiresInDays := req.ExpiresIn
+	if expiresInDays <= 0 {
+		expiresInDays = 30
 	}
 
-	if err := s.db.QueryRowContext(ctx,
+	now := time.Now()
+	expiresAt := now.AddDate(0, 0, expiresInDays)
+
+	type APIKeyResult struct {
+		ID        string    `db:"id" json:"id"`
+		Name      string    `db:"name" json:"name"`
+		UserID    string    `db:"user_id" json:"user_id"`
+		ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
+		CreatedAt time.Time `db:"created_at" json:"created_at"`
+	}
+
+	var result APIKeyResult
+	err := s.db.QueryRowContext(ctx,
 		`INSERT INTO api_keys (id, tenant_id, user_id, key_hash, name, permissions, expires_at, created_at)
-		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, NOW()) RETURNING id`,
-		tenantID, userID, "hash", req.Name, "{}", key.ExpiresAt).Scan(&key.ID); err != nil {
+		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7) 
+		 RETURNING id, name, user_id, expires_at, created_at`,
+		tenantID, userID, "hash", req.Name, "{}", expiresAt, now,
+	).Scan(&result.ID, &result.Name, &result.UserID, &result.ExpiresAt, &result.CreatedAt)
+
+	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
-	pkg.JSON(w, key, http.StatusCreated)
+	pkg.JSON(w, result, http.StatusCreated)
 }
 
 func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +154,37 @@ func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pkg.JSON(w, map[string]string{"status": "deleted"})
+}
+
+func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	limit, offset := pkg.ParseListOpts(r)
+
+	type APIKeyResponse struct {
+		ID        string    `db:"id" json:"id"`
+		Name      string    `db:"name" json:"name"`
+		UserID    string    `db:"user_id" json:"user_id"`
+		ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
+		CreatedAt time.Time `db:"created_at" json:"created_at"`
+	}
+
+	var keys []APIKeyResponse
+	err := s.db.SelectContext(ctx, &keys,
+		`SELECT id, name, user_id, expires_at, created_at 
+		 FROM api_keys WHERE tenant_id = $1 
+		 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+		tenantID, limit, offset)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	if keys == nil {
+		keys = []APIKeyResponse{}
+	}
+
+	pkg.JSON(w, keys)
 }
 
 // User handlers

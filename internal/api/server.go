@@ -557,6 +557,43 @@ func (s *Server) setupRoutes() {
 				r.Get("/preferences/{subject_id}", s.getConsentPreferences)
 				r.Put("/preferences/{subject_id}", s.updateConsentPreferences)
 			})
+
+			// Dashboard endpoints
+			r.Route("/dashboard", func(r chi.Router) {
+				r.Get("/stats", s.getDashboardStats)
+				r.Get("/recent-activity", s.getDashboardRecentActivity)
+				r.Get("/charts", s.getDashboardCharts)
+			})
+
+			// Route aliases for frontend compatibility
+			r.Get("/classification/rules", s.listClassificationRules)
+			r.Post("/classification/rules", s.createClassificationRule)
+			r.Get("/classification/rules/{id}", s.getClassificationRule)
+			r.Put("/classification/rules/{id}", s.updateClassificationRule)
+			r.Delete("/classification/rules/{id}", s.deleteClassificationRule)
+
+			r.Get("/sensitivity-labels", s.getLabelRules)
+			r.Post("/sensitivity-labels", s.createLabelRule)
+			r.Put("/sensitivity-labels/{id}", s.updateLabelRule)
+			r.Delete("/sensitivity-labels/{id}", s.deleteLabelRule)
+
+			r.Get("/data-quality", s.getQualityOverview)
+			r.Get("/data-quality/dimensions", s.getQualityDimensions)
+			r.Get("/data-quality/trends", s.getQualityTrends)
+
+			r.Get("/audit-logs", s.getAuditTrail)
+
+			r.Get("/scheduled-jobs", s.listJobs)
+			r.Post("/scheduled-jobs", s.createJob)
+			r.Get("/scheduled-jobs/{id}", s.getJob)
+			r.Put("/scheduled-jobs/{id}", s.updateJob)
+			r.Delete("/scheduled-jobs/{id}", s.deleteJob)
+
+			r.Get("/api-keys", s.listAPIKeys)
+			r.Post("/api-keys", s.createAPIKey)
+			r.Delete("/api-keys/{id}", s.revokeAPIKey)
+
+			r.Get("/ai-gate/history", s.listGateQueries)
 		})
 	})
 }

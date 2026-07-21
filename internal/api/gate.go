@@ -312,7 +312,13 @@ func (s *Server) gateQuery(w http.ResponseWriter, r *http.Request) {
 
 	var responseText string
 	if err != nil {
-		responseText = "Error calling LLM: " + err.Error()
+		// Check for connection refused errors and provide helpful message
+		errStr := err.Error()
+		if strings.Contains(errStr, "connection refused") || strings.Contains(errStr, "dial tcp") {
+			responseText = "LLM service is not available. Please configure an LLM endpoint (e.g., set LLM_ENDPOINT environment variable) or ensure the LLM service is running."
+		} else {
+			responseText = "Error calling LLM: " + errStr
+		}
 	} else if len(llmResp.Choices) > 0 {
 		responseText = llmResp.Choices[0].Message.Content
 	}

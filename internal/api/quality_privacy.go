@@ -83,7 +83,24 @@ func (s *Server) getQualityTrends(w http.ResponseWriter, r *http.Request) {
 		 GROUP BY DATE(created_at) ORDER BY date DESC LIMIT 30`,
 		tenantID)
 
-	pkg.JSON(w, trends)
+	// If no data, return a proper structure with empty array and metadata
+	if trends == nil || len(trends) == 0 {
+		pkg.JSON(w, map[string]any{
+			"trends":     []any{},
+			"total":      0,
+			"period":     "30d",
+			"message":    "No quality assessments have been run yet. Run a quality assessment to see trends.",
+			"has_data":   false,
+		})
+		return
+	}
+
+	pkg.JSON(w, map[string]any{
+		"trends":   trends,
+		"total":    len(trends),
+		"period":   "30d",
+		"has_data": true,
+	})
 }
 
 func (s *Server) setQualityThresholds(w http.ResponseWriter, r *http.Request) {

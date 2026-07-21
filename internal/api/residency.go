@@ -42,19 +42,32 @@ func (s *Server) createResidencyRule(w http.ResponseWriter, r *http.Request) {
 		pkg.Error(w, err, http.StatusBadRequest)
 		return
 	}
+
+	// Store as proper JSON arrays for PostgreSQL JSONB columns
 	regionsJSON, _ := json.Marshal(req.AllowedRegions)
 	typesJSON, _ := json.Marshal(req.DataTypes)
+
+	// Use direct SQL insert to avoid generic repo issues with JSONB
+	var ruleID string
+	err := s.db.QueryRowContext(ctx,
+		`INSERT INTO residency_rules (id, tenant_id, name, regulation, allowed_regions, data_types, active, created_at)
+		 VALUES (gen_random_uuid(), $1, $2, $3, $4::jsonb, $5::jsonb, true, NOW())
+		 RETURNING id`,
+		tenantID, req.Name, req.Regulation, regionsJSON, typesJSON,
+	).Scan(&ruleID)
+	if err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
 	rule := &store.ResidencyRule{
+		ID:             ruleID,
 		TenantID:       tenantID,
 		Name:           req.Name,
 		Regulation:     req.Regulation,
 		AllowedRegions: store.JSON(regionsJSON),
 		DataTypes:      store.JSON(typesJSON),
 		Active:         true,
-	}
-	if err := s.residencyRules.Create(ctx, rule); err != nil {
-		pkg.Error(w, err)
-		return
 	}
 
 	// Evaluate all existing datasources against the new rule and persist violations.
@@ -484,17 +497,20 @@ func (s *Server) getConsentWidgetConfig(w http.ResponseWriter, r *http.Request) 
 	err := s.db.GetContext(ctx, &cfg,
 		`SELECT * FROM consent_widget_configs WHERE tenant_id = $1`, tenantID)
 	if err != nil {
-		// Return defaults if not configured
-		pkg.JSON(w, store.ConsentWidgetConfig{
-			TenantID:        tenantID,
-			PrimaryColor:    "#6366f1",
-			BackgroundColor: "#ffffff",
-			TextColor:       "#111827",
-			BannerTitle:     "We value your privacy",
-			BannerText:      "We use cookies and similar technologies to improve your experience.",
-			AcceptLabel:     "Accept All",
-			RejectLabel:     "Reject Non-Essential",
-			Purposes:        store.JSON([]byte(`[]`)),
+		// Return defaults with null ID when not configured (indicates no config exists)
+		pkg.JSON(w, map[string]any{
+			"id":               nil,
+			"tenant_id":        tenantID,
+			"primary_color":    "#6366f1",
+			"background_color": "#ffffff",
+			"text_color":       "#111827",
+			"banner_title":     "We value your privacy",
+			"banner_text":      "We use cookies and similar technologies to improve your experience.",
+			"accept_label":     "Accept All",
+			"reject_label":     "Reject Non-Essential",
+			"purposes":         []any{},
+			"created_at":       nil,
+			"updated_at":       nil,
 		})
 		return
 	}

@@ -859,7 +859,56 @@ func (s *Server) getDataMapSources(w http.ResponseWriter, r *http.Request) {
 	tenantID := pkg.TenantFromCtx(ctx)
 
 	sources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
-	pkg.JSON(w, sources)
+
+	// Mask sensitive fields in config (password, secret, api_key, etc.)
+	type SafeDataSource struct {
+		ID               string     `json:"id"`
+		Name             string     `json:"name"`
+		Type             string     `json:"type"`
+		Status           string     `json:"status"`
+		LastScan         *time.Time `json:"last_scan,omitempty"`
+		SensitivityLabel *string    `json:"sensitivity_label,omitempty"`
+		Region           *string    `json:"region,omitempty"`
+		Country          *string    `json:"country,omitempty"`
+		CreatedAt        time.Time  `json:"created_at"`
+		UpdatedAt        time.Time  `json:"updated_at"`
+		Config           any        `json:"config,omitempty"`
+	}
+
+	safeSources := make([]SafeDataSource, 0, len(sources))
+	for _, src := range sources {
+		safe := SafeDataSource{
+			ID:               src.ID,
+			Name:             src.Name,
+			Type:             src.Type,
+			Status:           src.Status,
+			LastScan:         src.LastScan,
+			SensitivityLabel: src.SensitivityLabel,
+			Region:           src.Region,
+			Country:          src.Country,
+			CreatedAt:        src.CreatedAt,
+			UpdatedAt:        src.UpdatedAt,
+		}
+
+		// Parse and mask sensitive config fields
+		if len(src.Config) > 0 {
+			var cfg map[string]any
+			if err := json.Unmarshal(src.Config, &cfg); err == nil {
+				// Mask sensitive fields
+				sensitiveKeys := []string{"password", "secret", "api_key", "apikey", "api_secret", "token", "access_token", "private_key", "credentials"}
+				for _, key := range sensitiveKeys {
+					if _, exists := cfg[key]; exists {
+						cfg[key] = "********"
+					}
+				}
+				safe.Config = cfg
+			}
+		}
+
+		safeSources = append(safeSources, safe)
+	}
+
+	pkg.JSON(w, safeSources)
 }
 
 func (s *Server) getDataFlows(w http.ResponseWriter, r *http.Request) {

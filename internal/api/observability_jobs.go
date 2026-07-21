@@ -106,19 +106,47 @@ func (s *Server) getSourceHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getMetrics(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
 
-	var totalQueries, totalClassifications int
-	s.db.GetContext(ctx, &totalQueries, "SELECT COUNT(*) FROM gate_queries")
-	s.db.GetContext(ctx, &totalClassifications, "SELECT COUNT(*) FROM classifications")
+	var totalQueries, totalClassifications, totalDatasources, totalPolicies int
+	var avgLatency float64
 
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte(pkg.Sprintf(`# HELP securelens_queries_total Total gate queries
-# TYPE securelens_queries_total counter
-securelens_queries_total %d
-# HELP securelens_classifications_total Total classifications
-# TYPE securelens_classifications_total counter
-securelens_classifications_total %d
-`, totalQueries, totalClassifications)))
+	// Get tenant-scoped metrics
+	s.db.GetContext(ctx, &totalQueries, "SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &totalClassifications, "SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &totalDatasources, "SELECT COUNT(*) FROM datasources WHERE tenant_id = $1", tenantID)
+	s.db.GetContext(ctx, &totalPolicies, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true", tenantID)
+	s.db.GetContext(ctx, &avgLatency, "SELECT COALESCE(AVG(latency_ms), 0) FROM gate_queries WHERE tenant_id = $1", tenantID)
+
+	// Get queries in last 24h
+	var queriesLast24h int
+	s.db.GetContext(ctx, &queriesLast24h,
+		"SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '24 hours'", tenantID)
+
+	// Get blocked queries
+	var blockedQueries int
+	s.db.GetContext(ctx, &blockedQueries,
+		"SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND decision = 'deny'", tenantID)
+
+	// Return JSON format for frontend compatibility
+	pkg.JSON(w, map[string]any{
+		"queries": map[string]any{
+			"total":       totalQueries,
+			"last_24h":    queriesLast24h,
+			"blocked":     blockedQueries,
+			"avg_latency": avgLatency,
+		},
+		"classifications": map[string]any{
+			"total": totalClassifications,
+		},
+		"datasources": map[string]any{
+			"total": totalDatasources,
+		},
+		"policies": map[string]any{
+			"active": totalPolicies,
+		},
+		"timestamp": time.Now(),
+	})
 }
 
 func (s *Server) getAlerts(w http.ResponseWriter, r *http.Request) {
