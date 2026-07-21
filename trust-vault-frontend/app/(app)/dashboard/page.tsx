@@ -63,7 +63,7 @@ export default function DashboardPage() {
   const stats = useMemo(() => {
     const dsArray = Array.isArray(dataSources) ? dataSources : []
     const policiesArray = Array.isArray(policies) ? policies : []
-    const connectedSources = dsArray.filter(ds => ds.status === 'connected').length
+    const connectedSources = dsArray.filter(ds => ds.status === 'connected' || ds.status === 'active').length
     const totalSources = dsArray.length
     const activePolicies = policiesArray.filter(p => p.active).length
     const complianceScore = riskScore?.overall_score ? Math.round(riskScore.overall_score * 100) : 0
@@ -562,7 +562,7 @@ export default function DashboardPage() {
                   <div key={ds.id} className="flex items-center justify-between py-2 border-b border-border/40 last:border-0">
                     <span className="text-sm text-foreground truncate">{ds.name}</span>
                     <StatusIndicator
-                      status={ds.status === 'connected' ? 'success' : ds.status === 'scanning' ? 'pending' : 'error'}
+                      status={(ds.status === 'connected' || ds.status === 'active') ? 'success' : ds.status === 'scanning' ? 'pending' : 'error'}
                       label={ds.status}
                     />
                   </div>
