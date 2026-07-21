@@ -525,9 +525,10 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 				callback.Status, callback.Message, callback.DatasetsDiscovered))
 	}
 
-	if callback.Status == "completed" && callback.DatasetsDiscovered > 0 {
-		// Ingestion succeeded - now trigger classification
-		// Classification will query DataHub for schema (no fallback)
+	if callback.Status == "completed" {
+		// Ingestion succeeded - trigger classification
+		// Classification will query DataHub for schema
+		// Note: datasets_discovered may be 0 if parsing failed, but ingestion still succeeded
 		log.Info().
 			Str("datasource_id", datasourceID).
 			Int("datasets_discovered", callback.DatasetsDiscovered).
@@ -570,34 +571,6 @@ func (s *Server) scanCallback(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Classification will update status when complete
-	} else if callback.Status == "completed" && callback.DatasetsDiscovered == 0 {
-		// Ingestion completed but found no datasets
-		log.Warn().
-			Str("datasource_id", datasourceID).
-			Msg("Ingestion completed but discovered 0 datasets")
-
-		now := time.Now()
-		ds.LastScan = &now
-		ds.Status = "error"
-		s.datasources.Update(ctx, ds)
-
-		if callback.ScanLogID != "" {
-			scanLog, _ := s.scanLogs.FindByID(ctx, tenantID, callback.ScanLogID)
-			if scanLog != nil {
-				scanLog.CompletedAt = &now
-				scanLog.Status = "failed"
-				scanLog.Message = "Ingestion completed but no datasets were discovered. Check datasource connection settings."
-				scanLog.DatasetsDiscovered = 0
-				s.scanLogs.Update(ctx, scanLog)
-			}
-		}
-
-		events.Emit("datasource.scan.failed", map[string]any{
-			"datasource_id": datasourceID,
-			"tenant_id":     tenantID,
-			"status":        "error",
-			"message":       "No datasets discovered during ingestion",
-		})
 	} else {
 		// Ingestion failed
 		now := time.Now()

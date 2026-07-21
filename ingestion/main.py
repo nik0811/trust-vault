@@ -266,9 +266,22 @@ def run_ingestion(job_id: str, request: IngestionRequest):
 
 def parse_dataset_count(output: str) -> int:
     """Parse DataHub CLI output to get dataset count"""
-    # Look for patterns like "Emitted 42 datasets"
     import re
+    # Try multiple patterns that DataHub CLI might output
+    # Pattern 1: "Emitted 42 datasets"
     match = re.search(r'Emitted (\d+) datasets?', output)
+    if match:
+        return int(match.group(1))
+    # Pattern 2: "produced 259 events" - count events as proxy for datasets
+    match = re.search(r'produced (\d+) events?', output)
+    if match:
+        return int(match.group(1))
+    # Pattern 3: "total_records_written': 259"
+    match = re.search(r"'total_records_written':\s*(\d+)", output)
+    if match:
+        return int(match.group(1))
+    # Pattern 4: Look for table count in profiling output
+    match = re.search(r'Will profile (\d+) table', output)
     if match:
         return int(match.group(1))
     return 0
