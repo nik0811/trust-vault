@@ -227,7 +227,17 @@ func (s *Server) setupRoutes() {
 				r.Get("/{id}/logs", s.listScanLogs)
 			})
 
-			// Policies
+			// Policies (alias to governance/policies)
+			r.Route("/policies", func(r chi.Router) {
+				r.Use(s.rbacMiddleware("policies:read"))
+				r.Get("/", s.listPolicies)
+				r.Post("/", s.createPolicy)
+				r.Get("/{id}", s.getPolicy)
+				r.Put("/{id}", s.updatePolicy)
+				r.Delete("/{id}", s.deletePolicy)
+			})
+
+			// Policies under governance
 			r.Route("/governance/policies", func(r chi.Router) {
 				r.Use(s.rbacMiddleware("policies:read"))
 				r.Get("/", s.listPolicies)
@@ -270,6 +280,8 @@ func (s *Server) setupRoutes() {
 
 			// Quality
 			r.Route("/quality", func(r chi.Router) {
+				r.Get("/", s.getQualityOverview)
+				r.Get("/dimensions", s.getQualityDimensions)
 				r.Get("/datasets/{id}", s.getQualityScore)
 				r.Get("/datasets/{id}/issues", s.getQualityIssues)
 				r.Post("/assess", s.assessQuality)
@@ -290,6 +302,7 @@ func (s *Server) setupRoutes() {
 
 			// Privacy
 			r.Route("/privacy", func(r chi.Router) {
+				r.Get("/", s.getPrivacyOverview)
 				r.Post("/dsar", s.createDSAR)
 				r.Get("/dsar", s.listDSARs)
 				r.Get("/dsar/{id}", s.getDSAR)
@@ -450,9 +463,12 @@ func (s *Server) setupRoutes() {
 
 			// Advisor
 			r.Route("/advisor", func(r chi.Router) {
+				r.Get("/", s.getAdvisorOverview)
 				r.Get("/recommendations", s.getRecommendations)
 				r.Get("/gaps", s.getComplianceGaps)
+				r.Get("/defense-docket", s.getDefenseDocket)
 				r.Post("/defense-docket", s.generateDefenseDocket)
+				r.Get("/playbooks", s.listPlaybooks)
 				r.Get("/playbook/{issue_type}", s.getPlaybook)
 				r.Get("/risk-score", s.getRiskScore)
 				r.Post("/assess", s.runComplianceAssessment)

@@ -2346,3 +2346,226 @@ func (s *Server) listAssessmentLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	pkg.JSON(w, assessments)
 }
+
+func (s *Server) getAdvisorOverview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var piiCount, totalClassifications int
+	s.db.GetContext(ctx, &piiCount,
+		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND entity_type IN ('PII', 'SSN', 'CREDIT_CARD', 'PHI')", tenantID)
+	s.db.GetContext(ctx, &totalClassifications,
+		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1", tenantID)
+
+	var policyCount int
+	s.db.GetContext(ctx, &policyCount, "SELECT COUNT(*) FROM policies WHERE tenant_id = $1 AND active = true", tenantID)
+
+	var dsarOverdue int
+	s.db.GetContext(ctx, &dsarOverdue,
+		"SELECT COUNT(*) FROM dsars WHERE tenant_id = $1 AND status = 'pending' AND due_date < NOW()", tenantID)
+
+	var retentionViolations int
+	s.db.GetContext(ctx, &retentionViolations,
+		"SELECT COUNT(*) FROM retention_violations WHERE tenant_id = $1 AND resolved = false", tenantID)
+
+	var gapsCount int
+	s.db.GetContext(ctx, &gapsCount,
+		"SELECT COUNT(*) FROM compliance_assessments WHERE tenant_id = $1 AND score < 70", tenantID)
+
+	riskScore := 100
+	if totalClassifications > 0 {
+		piiRatio := float64(piiCount) / float64(totalClassifications)
+		riskScore -= int(piiRatio * 30)
+	}
+	if policyCount < 3 {
+		riskScore -= 20
+	}
+	riskScore -= dsarOverdue * 5
+	riskScore -= retentionViolations * 3
+	if riskScore < 0 {
+		riskScore = 0
+	}
+
+	riskLevel := "low"
+	if riskScore < 50 {
+		riskLevel = "critical"
+	} else if riskScore < 70 {
+		riskLevel = "high"
+	} else if riskScore < 85 {
+		riskLevel = "medium"
+	}
+
+	var recentAssessments []store.ComplianceAssessment
+	s.db.SelectContext(ctx, &recentAssessments,
+		`SELECT * FROM compliance_assessments WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 5`, tenantID)
+
+	pkg.JSON(w, map[string]any{
+		"risk_score":           riskScore,
+		"risk_level":           riskLevel,
+		"compliance_gaps":      gapsCount,
+		"dsar_overdue":         dsarOverdue,
+		"retention_violations": retentionViolations,
+		"active_policies":      policyCount,
+		"pii_exposure":         piiCount,
+		"recent_assessments":   recentAssessments,
+	})
+}
+
+func (s *Server) listPlaybooks(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var playbooks []store.Playbook
+	err := s.db.SelectContext(ctx, &playbooks,
+		`SELECT * FROM playbooks WHERE tenant_id = $1 OR tenant_id IS NULL ORDER BY name`, tenantID)
+	if err != nil || len(playbooks) == 0 {
+		defaultPlaybooks := []map[string]any{
+			{
+				"id":          "data_breach",
+				"issue_type":  "data_breach",
+				"name":        "Data Breach Response Playbook",
+				"description": "Step-by-step guide for responding to data breaches",
+				"steps_count": 6,
+			},
+			{
+				"id":          "dsar_overdue",
+				"issue_type":  "dsar_overdue",
+				"name":        "Overdue DSAR Response Playbook",
+				"description": "Process for handling overdue data subject access requests",
+				"steps_count": 6,
+			},
+			{
+				"id":          "retention_violation",
+				"issue_type":  "retention_violation",
+				"name":        "Data Retention Violation Playbook",
+				"description": "Remediation steps for data retention policy violations",
+				"steps_count": 6,
+			},
+			{
+				"id":          "consent_withdrawal",
+				"issue_type":  "consent_withdrawal",
+				"name":        "Consent Withdrawal Processing Playbook",
+				"description": "Handling consent withdrawal requests from data subjects",
+				"steps_count": 6,
+			},
+			{
+				"id":          "quality_degradation",
+				"issue_type":  "quality_degradation",
+				"name":        "Data Quality Remediation Playbook",
+				"description": "Steps to address data quality issues and degradation",
+				"steps_count": 6,
+			},
+			{
+				"id":          "unauthorized_access",
+				"issue_type":  "unauthorized_access",
+				"name":        "Unauthorized Access Response Playbook",
+				"description": "Response procedures for unauthorized data access incidents",
+				"steps_count": 6,
+			},
+		}
+		pkg.JSON(w, defaultPlaybooks)
+		return
+	}
+
+	pkg.JSON(w, playbooks)
+}
+
+func (s *Server) getDefenseDocket(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	dateFrom := time.Now().AddDate(0, -3, 0)
+	dateTo := time.Now()
+
+	if fromStr := r.URL.Query().Get("date_from"); fromStr != "" {
+		if t, err := time.Parse(time.RFC3339, fromStr); err == nil {
+			dateFrom = t
+		}
+	}
+	if toStr := r.URL.Query().Get("date_to"); toStr != "" {
+		if t, err := time.Parse(time.RFC3339, toStr); err == nil {
+			dateTo = t
+		}
+	}
+
+	docket := map[string]any{
+		"generated_at": time.Now(),
+		"date_range": map[string]any{
+			"from": dateFrom,
+			"to":   dateTo,
+		},
+		"sections": []map[string]any{},
+	}
+
+	sections := []map[string]any{}
+
+	var classificationStats struct {
+		TotalClassifications int `db:"total"`
+		PIICount             int `db:"pii_count"`
+		UniqueDatasets       int `db:"unique_datasets"`
+	}
+	s.db.GetContext(ctx, &classificationStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE entity_type IN ('PII', 'SSN', 'CREDIT_CARD', 'EMAIL', 'PHONE', 'ADDRESS', 'NAME', 'DOB', 'PHI')) as pii_count,
+			COUNT(DISTINCT dataset_id) as unique_datasets
+		FROM classifications 
+		WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "Data Classification Summary",
+		"type":  "classification",
+		"data": map[string]any{
+			"total_classifications": classificationStats.TotalClassifications,
+			"pii_detections":        classificationStats.PIICount,
+			"datasets_scanned":      classificationStats.UniqueDatasets,
+		},
+	})
+
+	var policyStats struct {
+		ActivePolicies   int `db:"active"`
+		TotalEvaluations int `db:"evaluations"`
+	}
+	s.db.GetContext(ctx, &policyStats, `
+		SELECT 
+			COUNT(*) FILTER (WHERE active = true) as active,
+			(SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'policy%' AND created_at BETWEEN $2 AND $3) as evaluations
+		FROM policies WHERE tenant_id = $1
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "Policy Enforcement",
+		"type":  "policies",
+		"data": map[string]any{
+			"active_policies":    policyStats.ActivePolicies,
+			"policy_evaluations": policyStats.TotalEvaluations,
+		},
+	})
+
+	var dsarStats struct {
+		TotalDSARs     int `db:"total"`
+		CompletedDSARs int `db:"completed"`
+		PendingDSARs   int `db:"pending"`
+	}
+	s.db.GetContext(ctx, &dsarStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed,
+			COUNT(*) FILTER (WHERE status = 'pending') as pending
+		FROM dsars WHERE tenant_id = $1 AND created_at BETWEEN $2 AND $3
+	`, tenantID, dateFrom, dateTo)
+
+	sections = append(sections, map[string]any{
+		"title": "DSAR Processing",
+		"type":  "dsar",
+		"data": map[string]any{
+			"total_requests":     dsarStats.TotalDSARs,
+			"completed_requests": dsarStats.CompletedDSARs,
+			"pending_requests":   dsarStats.PendingDSARs,
+		},
+	})
+
+	docket["sections"] = sections
+	pkg.JSON(w, docket)
+}

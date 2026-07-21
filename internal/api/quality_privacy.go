@@ -987,3 +987,219 @@ func (s *Server) listComplianceFrameworks(w http.ResponseWriter, r *http.Request
 	}
 	pkg.JSON(w, frameworks)
 }
+
+func (s *Server) getQualityOverview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var totalDatasets int
+	s.db.GetContext(ctx, &totalDatasets,
+		"SELECT COUNT(DISTINCT dataset_id) FROM quality_scores WHERE tenant_id = $1", tenantID)
+
+	var avgs struct {
+		Overall      float64 `db:"avg_overall"`
+		Completeness float64 `db:"avg_completeness"`
+		Accuracy     float64 `db:"avg_accuracy"`
+		Consistency  float64 `db:"avg_consistency"`
+		Timeliness   float64 `db:"avg_timeliness"`
+		Uniqueness   float64 `db:"avg_uniqueness"`
+	}
+	s.db.GetContext(ctx, &avgs,
+		`SELECT COALESCE(AVG(overall),0) as avg_overall,
+		        COALESCE(AVG(completeness),0) as avg_completeness,
+		        COALESCE(AVG(accuracy),0) as avg_accuracy,
+		        COALESCE(AVG(consistency),0) as avg_consistency,
+		        COALESCE(AVG(timeliness),0) as avg_timeliness,
+		        COALESCE(AVG(uniqueness),0) as avg_uniqueness
+		 FROM quality_scores WHERE tenant_id = $1`, tenantID)
+
+	if totalDatasets == 0 {
+		avgs.Completeness = s.calcCompletenessScore(ctx, tenantID)
+		avgs.Accuracy = s.calcAccuracyScore(ctx, tenantID)
+		avgs.Consistency = s.calcConsistencyScore(ctx, tenantID)
+		avgs.Timeliness = s.calcTimelinessScore(ctx, tenantID)
+		avgs.Uniqueness = s.calcUniquenessScore(ctx, tenantID)
+		avgs.Overall = (avgs.Completeness + avgs.Accuracy + avgs.Consistency + avgs.Timeliness + avgs.Uniqueness) / 5.0
+	}
+
+	var issuesFound int
+	s.db.GetContext(ctx, &issuesFound,
+		`SELECT COUNT(*) FROM (
+		   SELECT DISTINCT dataset_id FROM quality_scores
+		   WHERE tenant_id = $1 AND overall < 0.7
+		 ) sub`, tenantID)
+
+	var unassessedCount int
+	s.db.GetContext(ctx, &unassessedCount,
+		`SELECT COUNT(*) FROM datasources d
+		 WHERE d.tenant_id = $1
+		   AND NOT EXISTS (
+		     SELECT 1 FROM quality_scores q
+		     WHERE q.tenant_id = $1 AND q.dataset_id = d.id::text
+		   )`, tenantID)
+	issuesFound += unassessedCount
+
+	var recentScores []store.QualityScore
+	s.db.SelectContext(ctx, &recentScores,
+		`SELECT * FROM quality_scores WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 10`, tenantID)
+
+	pkg.JSON(w, map[string]any{
+		"overall_score":  avgs.Overall,
+		"completeness":   avgs.Completeness,
+		"accuracy":       avgs.Accuracy,
+		"consistency":    avgs.Consistency,
+		"timeliness":     avgs.Timeliness,
+		"uniqueness":     avgs.Uniqueness,
+		"total_datasets": totalDatasets,
+		"issues_found":   issuesFound,
+		"recent_scores":  recentScores,
+	})
+}
+
+func (s *Server) getQualityDimensions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	completeness := s.calcCompletenessScore(ctx, tenantID)
+	accuracy := s.calcAccuracyScore(ctx, tenantID)
+	consistency := s.calcConsistencyScore(ctx, tenantID)
+	timeliness := s.calcTimelinessScore(ctx, tenantID)
+	uniqueness := s.calcUniquenessScore(ctx, tenantID)
+
+	dimensions := []map[string]any{
+		{
+			"id":          "completeness",
+			"name":        "Completeness",
+			"description": "Measures the extent to which data is not missing and has all required values",
+			"score":       completeness,
+			"weight":      0.2,
+			"status":      dimensionStatus(completeness),
+		},
+		{
+			"id":          "accuracy",
+			"name":        "Accuracy",
+			"description": "Measures how well data reflects the real-world entities it represents",
+			"score":       accuracy,
+			"weight":      0.25,
+			"status":      dimensionStatus(accuracy),
+		},
+		{
+			"id":          "consistency",
+			"name":        "Consistency",
+			"description": "Measures uniformity of data across different sources and systems",
+			"score":       consistency,
+			"weight":      0.2,
+			"status":      dimensionStatus(consistency),
+		},
+		{
+			"id":          "timeliness",
+			"name":        "Timeliness",
+			"description": "Measures how current and up-to-date the data is",
+			"score":       timeliness,
+			"weight":      0.15,
+			"status":      dimensionStatus(timeliness),
+		},
+		{
+			"id":          "uniqueness",
+			"name":        "Uniqueness",
+			"description": "Measures the absence of duplicate records in the data",
+			"score":       uniqueness,
+			"weight":      0.2,
+			"status":      dimensionStatus(uniqueness),
+		},
+	}
+
+	overall := (completeness*0.2 + accuracy*0.25 + consistency*0.2 + timeliness*0.15 + uniqueness*0.2)
+
+	pkg.JSON(w, map[string]any{
+		"dimensions":    dimensions,
+		"overall_score": overall,
+	})
+}
+
+func dimensionStatus(score float64) string {
+	if score >= 0.8 {
+		return "good"
+	}
+	if score >= 0.6 {
+		return "warning"
+	}
+	return "critical"
+}
+
+func (s *Server) getPrivacyOverview(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+
+	var dsarStats struct {
+		Total     int `db:"total"`
+		Pending   int `db:"pending"`
+		Completed int `db:"completed"`
+		Overdue   int `db:"overdue"`
+	}
+	s.db.GetContext(ctx, &dsarStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE status = 'pending') as pending,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed,
+			COUNT(*) FILTER (WHERE status = 'pending' AND due_date < NOW()) as overdue
+		FROM dsars WHERE tenant_id = $1
+	`, tenantID)
+
+	var dpiaStats struct {
+		Total      int `db:"total"`
+		InProgress int `db:"in_progress"`
+		Completed  int `db:"completed"`
+	}
+	s.db.GetContext(ctx, &dpiaStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE status IN ('draft', 'in_progress', 'review')) as in_progress,
+			COUNT(*) FILTER (WHERE status = 'completed') as completed
+		FROM dpias WHERE tenant_id = $1
+	`, tenantID)
+
+	var consentStats struct {
+		Total     int `db:"total"`
+		Active    int `db:"active"`
+		Withdrawn int `db:"withdrawn"`
+	}
+	s.db.GetContext(ctx, &consentStats, `
+		SELECT 
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE status = 'active') as active,
+			COUNT(*) FILTER (WHERE status = 'withdrawn') as withdrawn
+		FROM consent_records WHERE tenant_id = $1
+	`, tenantID)
+
+	var retentionViolations int
+	s.db.GetContext(ctx, &retentionViolations,
+		"SELECT COUNT(*) FROM retention_violations WHERE tenant_id = $1 AND resolved = false", tenantID)
+
+	var piiDatasets int
+	s.db.GetContext(ctx, &piiDatasets, `
+		SELECT COUNT(DISTINCT dataset_id) FROM classifications 
+		WHERE tenant_id = $1 AND entity_type IN ('PII', 'SSN', 'CREDIT_CARD', 'EMAIL', 'PHONE', 'ADDRESS', 'NAME', 'DOB', 'PHI')
+	`, tenantID)
+
+	pkg.JSON(w, map[string]any{
+		"dsar": map[string]any{
+			"total":     dsarStats.Total,
+			"pending":   dsarStats.Pending,
+			"completed": dsarStats.Completed,
+			"overdue":   dsarStats.Overdue,
+		},
+		"dpia": map[string]any{
+			"total":       dpiaStats.Total,
+			"in_progress": dpiaStats.InProgress,
+			"completed":   dpiaStats.Completed,
+		},
+		"consent": map[string]any{
+			"total":     consentStats.Total,
+			"active":    consentStats.Active,
+			"withdrawn": consentStats.Withdrawn,
+		},
+		"retention_violations": retentionViolations,
+		"pii_datasets":         piiDatasets,
+	})
+}

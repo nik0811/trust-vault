@@ -337,3 +337,14 @@ ENVIRONMENT=production               # Environment name
 - **Removed duplicate route:** Fixed duplicate `r.Delete("/{id}", s.deletePolicy)` in server.go
 - **Added hooks:** `useGovernanceStats()` hook in `use-policies.ts`
 - All COMPLY pages verified: Policies CRUD, Policy Evaluation, Privacy Center (DSAR/Consent/DPIA), Reports generation
+
+### 2026-07-21 — Missing Route Fixes
+- **7 routes fixed:** Added missing routes that were returning 404/405:
+  - `GET /quality` — quality overview with scores and recent assessments
+  - `GET /quality/dimensions` — 5 quality dimension scores (completeness, accuracy, consistency, timeliness, uniqueness)
+  - `GET /privacy` — privacy center overview (DSAR, DPIA, consent stats)
+  - `GET /policies` — alias to `/governance/policies` for direct access
+  - `GET /advisor` — advisor overview with risk score and compliance gaps
+  - `GET /advisor/playbooks` — list all available playbooks
+  - `GET /advisor/defense-docket` — was POST-only, now supports GET with query params
+- All handlers implemented with real data from database
