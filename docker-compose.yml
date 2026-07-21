@@ -27,6 +27,10 @@ services:
       - DATAHUB_URL=http://datahub-gms:8080
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=change-me-in-production
+      - SUPERADMIN_EMAIL=admin@securelens.local
+      - SUPERADMIN_PASSWORD=SecureLens@2026!
+      - SUPERADMIN_NAME=Super Admin
+      - CORS_ORIGINS=https://app.securelens.ai,https://trust-vault.oortfy.com
     depends_on:
       - postgres
       - kafka
