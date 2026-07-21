@@ -1,0 +1,2774 @@
+[
+  {
+    "page": "Dashboard",
+    "url": "/dashboard",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "major",
+        "page": "Dashboard",
+        "url": "/dashboard",
+        "description": "Data check failed: N/A values",
+        "details": "Found 4 instances",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Dashboard-issues.png"
+      },
+      {
+        "severity": "major",
+        "page": "Dashboard",
+        "url": "/dashboard",
+        "description": "Data check failed: Dashboard has non-zero stats",
+        "details": "",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Dashboard-issues.png"
+      }
+    ],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": false,
+        "value": "Found 4 instances"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 1 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      },
+      {
+        "check": "Dashboard has non-zero stats",
+        "passed": false,
+        "value": ""
+      },
+      {
+        "check": "Charts are rendered",
+        "passed": true
+      }
+    ]
+  },
+  {
+    "page": "Data Sources List",
+    "url": "/data-sources",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      },
+      {
+        "check": "Data sources list has items",
+        "passed": true,
+        "value": "5 items"
+      }
+    ]
+  },
+  {
+    "page": "Data Source Detail",
+    "url": "/data-sources",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      },
+      {
+        "check": "Data source name displayed",
+        "passed": true,
+        "value": "Data Sources"
+      }
+    ]
+  },
+  {
+    "page": "Classification",
+    "url": "/classification",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Classification Rules",
+    "url": "/classification/rules",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "major",
+        "page": "Classification Rules",
+        "url": "/classification/rules",
+        "description": "Data check failed: Rules table has data",
+        "details": "0 rules",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Classification-Rules-issues.png"
+      }
+    ],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      },
+      {
+        "check": "Rules table has data",
+        "passed": false,
+        "value": "0 rules"
+      }
+    ]
+  },
+  {
+    "page": "Classification Models",
+    "url": "/classification/models",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "5 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Data Map Geographic",
+    "url": "/data-map",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      },
+      {
+        "check": "Map visualization rendered",
+        "passed": true
+      }
+    ]
+  },
+  {
+    "page": "Data Map Residency",
+    "url": "/data-map/residency",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Data Lineage",
+    "url": "/lineage",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "ROT Data",
+    "url": "/rot",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      },
+      {
+        "check": "ROT categories displayed",
+        "passed": true
+      }
+    ]
+  },
+  {
+    "page": "Sensitivity Labels",
+    "url": "/labels",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Label Rules",
+    "url": "/labels/rules",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Data Quality",
+    "url": "/quality",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "major",
+        "page": "Data Quality",
+        "url": "/quality",
+        "description": "Data check failed: Quality scores displayed",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Data-Quality-issues.png"
+      }
+    ],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 1 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      },
+      {
+        "check": "Quality scores displayed",
+        "passed": false
+      }
+    ]
+  },
+  {
+    "page": "Quality Dimensions",
+    "url": "/quality/dimensions",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Quality Dimensions",
+        "url": "/quality/dimensions",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Quality-Dimensions-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Quality Profile",
+    "url": "/quality/profile",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Quality Profile",
+        "url": "/quality/profile",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Quality-Profile-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Governance",
+    "url": "/governance",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 1 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Governance Policies",
+    "url": "/governance/policies",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "major",
+        "page": "Governance Policies",
+        "url": "/governance/policies",
+        "description": "Data check failed: Policies table has data",
+        "details": "0 policies",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Governance-Policies-issues.png"
+      }
+    ],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      },
+      {
+        "check": "Policies table has data",
+        "passed": false,
+        "value": "0 policies"
+      }
+    ]
+  },
+  {
+    "page": "AI Gate",
+    "url": "/ai-gate",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "AI Gate Playground",
+    "url": "/ai-gate/playground",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "AI Gate History",
+    "url": "/ai-gate/history",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "AI Gate History",
+        "url": "/ai-gate/history",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/AI-Gate-History-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Privacy",
+    "url": "/privacy",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "DSAR",
+    "url": "/privacy/dsar",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Consent Management",
+    "url": "/privacy/consent",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "DPIA",
+    "url": "/privacy/dpia",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Compliance Advisor",
+    "url": "/advisor",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Compliance Assessment",
+    "url": "/advisor/assessment",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Compliance Assessment",
+        "url": "/advisor/assessment",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Compliance-Assessment-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Compliance Gaps",
+    "url": "/advisor/gaps",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Compliance Playbooks",
+    "url": "/advisor/playbooks",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Audit Trail",
+    "url": "/audit",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "67 rows found"
+      },
+      {
+        "check": "Audit logs displayed",
+        "passed": true,
+        "value": "67 entries"
+      }
+    ]
+  },
+  {
+    "page": "Observability",
+    "url": "/observability",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "major",
+        "page": "Observability",
+        "url": "/observability",
+        "description": "Data check failed: N/A values",
+        "details": "Found 1 instances",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Observability-issues.png"
+      }
+    ],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": false,
+        "value": "Found 1 instances"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "System Health",
+    "url": "/observability/health",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "System Health",
+        "url": "/observability/health",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/System-Health-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Metrics",
+    "url": "/observability/metrics",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Metrics",
+        "url": "/observability/metrics",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Metrics-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Alerts",
+    "url": "/observability/alerts",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Integrations",
+    "url": "/integrations",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Scheduled Jobs",
+    "url": "/jobs",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Job History",
+    "url": "/jobs/history",
+    "status": "partial",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Job History",
+        "url": "/jobs/history",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Job-History-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Remediation Actions",
+    "url": "/remediation",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Remediation Actions",
+        "url": "/remediation",
+        "description": "Console errors found: 1",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Remediation-Actions-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Remediation Actions",
+        "url": "/remediation",
+        "description": "API call failed: https://api.securelens.ai/api/v1/remediation/actions",
+        "details": "Status: 429, Body: {\"error\":\"rate limit exceeded\",\"request_id\":\"a6b697b8-85f4-444c-8bf8-97ce69229e0f\"}\n",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Remediation-Actions-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/remediation/actions",
+        "status": 429,
+        "body": "{\"error\":\"rate limit exceeded\",\"request_id\":\"a6b697b8-85f4-444c-8bf8-97ce69229e0f\"}\n"
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Remediation Logs",
+    "url": "/remediation/logs",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Remediation Logs",
+        "url": "/remediation/logs",
+        "description": "Console errors found: 3",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Remediation-Logs-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Remediation Logs",
+        "url": "/remediation/logs",
+        "description": "API call failed: https://api.securelens.ai/api/v1/advisor/recommendations",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Remediation-Logs-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Remediation Logs",
+        "url": "/remediation/logs",
+        "description": "API call failed: https://api.securelens.ai/api/v1/audit/trail?limit=10",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Remediation-Logs-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/advisor/recommendations",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/audit/trail?limit=10",
+        "status": 429,
+        "body": ""
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Reports",
+    "url": "/reports",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Reports",
+        "url": "/reports",
+        "description": "Console errors found: 2",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 404 (Not Found)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Reports-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Reports",
+        "url": "/reports",
+        "description": "API call failed: https://api.securelens.ai/api/v1/audit/trail?limit=10",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Reports-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/audit/trail?limit=10",
+        "status": 429,
+        "body": ""
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Feedback Corrections",
+    "url": "/feedback",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Feedback Corrections",
+        "url": "/feedback",
+        "description": "Console errors found: 3",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Corrections-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Feedback Corrections",
+        "url": "/feedback",
+        "description": "API call failed: https://api.securelens.ai/api/v1/analytics/summary",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Corrections-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Feedback Corrections",
+        "url": "/feedback",
+        "description": "API call failed: https://api.securelens.ai/api/v1/feedback/trend",
+        "details": "Status: 429, Body: {\"error\":\"rate limit exceeded\",\"request_id\":\"58605ff7-1c99-418a-a482-ca5aa6814126\"}\n",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Corrections-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Feedback Corrections",
+        "url": "/feedback",
+        "description": "API call failed: https://api.securelens.ai/api/v1/feedback/stats",
+        "details": "Status: 429, Body: {\"error\":\"rate limit exceeded\",\"request_id\":\"37f6d7f4-d073-429e-872b-195493a3ff3c\"}\n",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Corrections-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/analytics/summary",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/feedback/trend",
+        "status": 429,
+        "body": "{\"error\":\"rate limit exceeded\",\"request_id\":\"58605ff7-1c99-418a-a482-ca5aa6814126\"}\n"
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/feedback/stats",
+        "status": 429,
+        "body": "{\"error\":\"rate limit exceeded\",\"request_id\":\"37f6d7f4-d073-429e-872b-195493a3ff3c\"}\n"
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Feedback Entities",
+    "url": "/feedback/entities",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Feedback Entities",
+        "url": "/feedback/entities",
+        "description": "Console errors found: 3",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Entities-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Feedback Entities",
+        "url": "/feedback/entities",
+        "description": "API call failed: https://api.securelens.ai/api/v1/quality/trends",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Entities-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Feedback Entities",
+        "url": "/feedback/entities",
+        "description": "API call failed: https://api.securelens.ai/api/v1/analytics/summary",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Entities-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Feedback Entities",
+        "url": "/feedback/entities",
+        "description": "API call failed: https://api.securelens.ai/api/v1/feedback/custom-entities",
+        "details": "Status: 429, Body: {\"error\":\"rate limit exceeded\",\"request_id\":\"9a1c1aef-89eb-4364-b55d-be0c7b92ede5\"}\n",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Feedback-Entities-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/quality/trends",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/analytics/summary",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/feedback/custom-entities",
+        "status": 429,
+        "body": "{\"error\":\"rate limit exceeded\",\"request_id\":\"9a1c1aef-89eb-4364-b55d-be0c7b92ede5\"}\n"
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "1 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Documents",
+    "url": "/documents",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Documents",
+        "url": "/documents",
+        "description": "Console errors found: 2",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Documents-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Documents",
+        "url": "/documents",
+        "description": "API call failed: https://api.securelens.ai/api/v1/quality/trends",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Documents-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Documents",
+        "url": "/documents",
+        "description": "API call failed: https://api.securelens.ai/api/v1/analytics/summary",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Documents-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/quality/trends",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/analytics/summary",
+        "status": 429,
+        "body": ""
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Settings",
+    "url": "/settings",
+    "status": "pass",
+    "issues": [],
+    "consoleErrors": [],
+    "failedApiCalls": [],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  },
+  {
+    "page": "Users",
+    "url": "/settings/users",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "Users",
+        "url": "/settings/users",
+        "description": "Console errors found: 2",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Users-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Users",
+        "url": "/settings/users",
+        "description": "API call failed: https://api.securelens.ai/api/v1/analytics/summary",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Users-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "Users",
+        "url": "/settings/users",
+        "description": "API call failed: https://api.securelens.ai/api/v1/invitations",
+        "details": "Status: 429, Body: {\"error\":\"rate limit exceeded\",\"request_id\":\"4f4e966d-6f2b-471f-92a3-543c770adff8\"}\n",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/Users-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/analytics/summary",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/invitations",
+        "status": 429,
+        "body": "{\"error\":\"rate limit exceeded\",\"request_id\":\"4f4e966d-6f2b-471f-92a3-543c770adff8\"}\n"
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "3 rows found"
+      },
+      {
+        "check": "Users table has data",
+        "passed": true,
+        "value": "3 users"
+      }
+    ]
+  },
+  {
+    "page": "API Keys",
+    "url": "/settings/api-keys",
+    "status": "fail",
+    "issues": [
+      {
+        "severity": "minor",
+        "page": "API Keys",
+        "url": "/settings/api-keys",
+        "description": "Console errors found: 4",
+        "details": "Failed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 429 (Too Many Requests)\nFailed to load resource: the server responded with a status of 405 (Method Not Allowed)\nFailed to load resource: the server responded with a status of 405 (Method Not Allowed)",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/API-Keys-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "API Keys",
+        "url": "/settings/api-keys",
+        "description": "API call failed: https://api.securelens.ai/api/v1/quality/trends",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/API-Keys-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "API Keys",
+        "url": "/settings/api-keys",
+        "description": "API call failed: https://api.securelens.ai/api/v1/analytics/summary",
+        "details": "Status: 429, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/API-Keys-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "API Keys",
+        "url": "/settings/api-keys",
+        "description": "API call failed: https://api.securelens.ai/api/v1/auth/api-keys",
+        "details": "Status: 405, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/API-Keys-issues.png"
+      },
+      {
+        "severity": "critical",
+        "page": "API Keys",
+        "url": "/settings/api-keys",
+        "description": "API call failed: https://api.securelens.ai/api/v1/auth/api-keys",
+        "details": "Status: 405, Body: ",
+        "screenshot": "/Users/apple/Documents/trustvault/trust-vault-frontend/audit-screenshots/API-Keys-issues.png"
+      }
+    ],
+    "consoleErrors": [
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 429 (Too Many Requests)",
+      "Failed to load resource: the server responded with a status of 405 (Method Not Allowed)",
+      "Failed to load resource: the server responded with a status of 405 (Method Not Allowed)"
+    ],
+    "failedApiCalls": [
+      {
+        "url": "https://api.securelens.ai/api/v1/quality/trends",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/analytics/summary",
+        "status": 429,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/auth/api-keys",
+        "status": 405,
+        "body": ""
+      },
+      {
+        "url": "https://api.securelens.ai/api/v1/auth/api-keys",
+        "status": 405,
+        "body": ""
+      }
+    ],
+    "dataChecks": [
+      {
+        "check": "No data message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "No results message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Nothing to show message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Empty message",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "N/A values",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Dash placeholders",
+        "passed": true,
+        "value": "None found"
+      },
+      {
+        "check": "Zero values in stat cards",
+        "passed": true,
+        "value": "Found 0 cards with zero values"
+      },
+      {
+        "check": "Table has data rows",
+        "passed": true,
+        "value": "0 rows found"
+      }
+    ]
+  }
+]

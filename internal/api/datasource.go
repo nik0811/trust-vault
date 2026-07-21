@@ -186,8 +186,10 @@ func (s *Server) updateDataSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Name   string     `json:"name"`
-		Config store.JSON `json:"config"`
+		Name    string     `json:"name"`
+		Config  store.JSON `json:"config"`
+		Region  *string    `json:"region"`
+		Country *string    `json:"country"`
 	}
 	if err := pkg.Bind(r, &req); err != nil {
 		pkg.Error(w, err, http.StatusBadRequest)
@@ -199,6 +201,12 @@ func (s *Server) updateDataSource(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Config != nil {
 		ds.Config = req.Config
+	}
+	if req.Region != nil {
+		ds.Region = req.Region
+	}
+	if req.Country != nil {
+		ds.Country = req.Country
 	}
 
 	if err := s.datasources.Update(ctx, ds); err != nil {
