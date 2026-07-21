@@ -16,6 +16,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -96,6 +97,11 @@ func HashPassword(password string) (string, error) {
 
 func CheckPassword(password, hash string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
+}
+
+// PGArray converts a Go string slice to a PostgreSQL array type for use in queries.
+func PGArray(arr []string) interface{} {
+	return pq.Array(arr)
 }
 
 func TenantFromCtx(ctx context.Context) string {

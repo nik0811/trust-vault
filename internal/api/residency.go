@@ -43,22 +43,22 @@ func (s *Server) createResidencyRule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store as proper JSON arrays for PostgreSQL JSONB columns
-	regionsJSON, _ := json.Marshal(req.AllowedRegions)
-	typesJSON, _ := json.Marshal(req.DataTypes)
-
-	// Use direct SQL insert to avoid generic repo issues with JSONB
+	// Convert Go slices to PostgreSQL array format using pq.Array
 	var ruleID string
 	err := s.db.QueryRowContext(ctx,
 		`INSERT INTO residency_rules (id, tenant_id, name, regulation, allowed_regions, data_types, active, created_at)
-		 VALUES (gen_random_uuid(), $1, $2, $3, $4::jsonb, $5::jsonb, true, NOW())
+		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, true, NOW())
 		 RETURNING id`,
-		tenantID, req.Name, req.Regulation, regionsJSON, typesJSON,
+		tenantID, req.Name, req.Regulation, pkg.PGArray(req.AllowedRegions), pkg.PGArray(req.DataTypes),
 	).Scan(&ruleID)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
+
+	// Store as JSON for the response
+	regionsJSON, _ := json.Marshal(req.AllowedRegions)
+	typesJSON, _ := json.Marshal(req.DataTypes)
 
 	rule := &store.ResidencyRule{
 		ID:             ruleID,
