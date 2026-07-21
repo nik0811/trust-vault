@@ -79,7 +79,7 @@ services:
 
   # DataHub Setup Job (creates ES indices and MySQL schema)
   datahub-setup:
-    image: linkedin/datahub-upgrade:v0.13.0
+    image: acryldata/datahub-upgrade:v0.13.0
     environment:
       - EBEAN_DATASOURCE_URL=jdbc:mysql://mysql:3306/datahub?verifyServerCertificate=false&useSSL=true&useUnicode=yes&characterEncoding=UTF-8
       - EBEAN_DATASOURCE_USERNAME=datahub
