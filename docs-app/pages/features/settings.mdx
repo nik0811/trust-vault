@@ -1,0 +1,149 @@
+# User Management
+
+Manage users, roles, and permissions.
+
+![Settings](/screenshots/settings.png)
+
+## Overview
+
+SecureLens user management provides:
+
+- **User administration** — Create, update, delete users
+- **Role-based access** — Fine-grained permissions
+- **Multi-tenancy** — Tenant isolation
+- **SSO integration** — SAML, OIDC support
+
+## Users
+
+### Creating Users
+
+1. Navigate to **Settings → Users**
+2. Click **Add User**
+3. Enter details:
+
+```yaml
+user:
+  email: analyst@company.com
+  name: Jane Analyst
+  role: analyst
+  tenant: data-team
+  mfa_required: true
+```
+
+4. Click **Create**
+
+### User Roles
+
+| Role | Description | Permissions |
+|------|-------------|-------------|
+| **Admin** | Full access | All operations |
+| **Analyst** | Data operations | View, classify, label |
+| **Viewer** | Read-only | View only |
+| **API** | Programmatic | API access only |
+
+### Role Permissions
+
+| Permission | Admin | Analyst | Viewer |
+|------------|-------|---------|--------|
+| View data | ✅ | ✅ | ✅ |
+| Classify | ✅ | ✅ | ❌ |
+| Create policies | ✅ | ❌ | ❌ |
+| Manage users | ✅ | ❌ | ❌ |
+| System settings | ✅ | ❌ | ❌ |
+
+## Tenants
+
+### Multi-Tenancy
+
+SecureLens supports multiple tenants:
+
+```yaml
+tenant:
+  id: data-team
+  name: Data Engineering
+  admin: admin@company.com
+  settings:
+    data_sources: [prod-db, data-lake]
+    policies: [pii-access, retention]
+```
+
+### Tenant Isolation
+
+- Data is isolated per tenant
+- Users belong to one or more tenants
+- Policies are tenant-scoped
+- Audit logs are tenant-separated
+
+## SSO Integration
+
+### SAML Configuration
+
+```yaml
+sso:
+  type: saml
+  idp_url: https://idp.company.com/saml
+  idp_cert: |
+    -----BEGIN CERTIFICATE-----
+    ...
+    -----END CERTIFICATE-----
+  sp_entity_id: securelens
+  attribute_mapping:
+    email: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
+    name: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name
+```
+
+### OIDC Configuration
+
+```yaml
+sso:
+  type: oidc
+  issuer: https://auth.company.com
+  client_id: securelens
+  client_secret: ${OIDC_SECRET}
+  scopes: [openid, email, profile]
+```
+
+## API Keys
+
+### Creating API Keys
+
+1. Navigate to **Settings → API Keys**
+2. Click **Generate Key**
+3. Configure:
+
+```yaml
+api_key:
+  name: CI/CD Pipeline
+  permissions: [read, classify]
+  expires: 2025-01-01
+  rate_limit: 1000/hour
+```
+
+4. Copy the key (shown only once)
+
+## API Access
+
+### List Users
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/users" \
+  -H "Authorization: Bearer $API_KEY"
+```
+
+### Create User
+
+```bash
+curl -X POST "https://api.securelens.ai/v1/users" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "email": "user@company.com",
+    "name": "New User",
+    "role": "analyst"
+  }'
+```
+
+## Next Steps
+
+- [Governance](/features/governance) — Access policies
+- [Audit](/features/audit) — User activity logs
+- [API Reference](/api-reference) — API documentation

@@ -1,0 +1,122 @@
+# Dashboard
+
+The SecureLens dashboard provides a real-time overview of your data governance posture.
+
+## Overview
+
+![Dashboard Overview](/screenshots/dashboard.png)
+
+The dashboard displays key metrics and insights at a glance:
+
+- **Data Sources**: Connected sources and health status
+- **Classifications**: PII detected across all sources
+- **Policy Violations**: Recent governance violations
+- **Data Quality**: Overall quality scores
+
+## Key Metrics
+
+### Data Discovery
+
+| Metric | Description |
+|--------|-------------|
+| **Total Records** | Records scanned across all sources |
+| **Classified Records** | Records with sensitivity labels |
+| **PII Detected** | Count of PII instances found |
+| **Coverage** | Percentage of data classified |
+
+### Governance
+
+| Metric | Description |
+|--------|-------------|
+| **Active Policies** | Policies currently enforced |
+| **Violations (24h)** | Policy violations in last 24 hours |
+| **Blocked Requests** | AI Gate blocked requests |
+| **Compliance Score** | Overall compliance percentage |
+
+### Data Quality
+
+| Metric | Description |
+|--------|-------------|
+| **Quality Score** | Average data quality (0-100) |
+| **ROT Detected** | Redundant/obsolete/trivial data |
+| **Issues Found** | Data quality issues |
+| **Remediation Rate** | Issues fixed vs. found |
+
+## Widgets
+
+### Classification Breakdown
+
+Pie chart showing distribution of sensitive data types:
+
+- Personal Information (PII)
+- Financial Data (PCI)
+- Health Information (PHI)
+- Confidential Business Data
+- Public Data
+
+### Trend Charts
+
+Line charts showing trends over time:
+
+- Classifications per day
+- Policy violations per day
+- AI Gate requests per day
+- Data quality score trend
+
+### Recent Activity
+
+Live feed of recent events:
+
+- New classifications
+- Policy violations
+- Data source scans
+- User actions
+
+### Alerts
+
+Active alerts requiring attention:
+
+- Critical policy violations
+- Data source connection issues
+- Classification anomalies
+- System health warnings
+
+## Customization
+
+### Add Widgets
+
+1. Click **Customize** in the top right
+2. Select widgets from the catalog
+3. Drag to arrange layout
+4. Click **Save**
+
+### Filter by Tenant
+
+For multi-tenant deployments:
+
+1. Use the tenant selector in the header
+2. Dashboard shows tenant-specific data
+3. Admins can view cross-tenant metrics
+
+### Date Range
+
+Adjust the time range for metrics:
+
+- Last 24 hours
+- Last 7 days
+- Last 30 days
+- Custom range
+
+## Export
+
+Export dashboard data:
+
+- **PDF**: Full dashboard snapshot
+- **CSV**: Raw metrics data
+- **API**: Programmatic access
+
+## Next Steps
+
+- [Data Sources](/features/data-sources)
+- [Classification](/features/classification)
+- [Observability](/features/observability)

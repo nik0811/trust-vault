@@ -1,0 +1,290 @@
+# Audit Trail
+
+Complete logging of all data access and governance actions.
+
+## Overview
+
+![Audit Trail](/screenshots/audit-trail.png)
+
+SecureLens maintains a comprehensive audit trail:
+
+- **Data Access**: Who accessed what data
+- **Policy Actions**: Governance decisions
+- **Configuration Changes**: System modifications
+- **User Actions**: Administrative activities
+
+## Audit Events
+
+### Event Categories
+
+| Category | Examples |
+|----------|----------|
+| **Data Access** | Query, export, view |
+| **Classification** | Label assigned, changed |
+| **Policy** | Evaluated, violated, enforced |
+| **AI Gate** | Prompt sent, response filtered |
+| **User** | Login, logout, permission change |
+| **System** | Config change, scan completed |
+
+### Event Structure
+
+```json
+{
+  "event_id": "evt_abc123",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "tenant_id": "tenant_xyz",
+  "category": "data_access",
+  "action": "query",
+  "actor": {
+    "type": "user",
+    "id": "user_123",
+    "email": "analyst@company.com",
+    "ip_address": "192.168.1.100"
+  },
+  "resource": {
+    "type": "table",
+    "source": "prod-db",
+    "name": "customers",
+    "columns": ["email", "phone"]
+  },
+  "context": {
+    "application": "analytics-dashboard",
+    "session_id": "sess_456"
+  },
+  "result": {
+    "status": "allowed",
+    "policy_applied": "pii-access-policy",
+    "rows_returned": 150
+  }
+}
+```
+
+## Viewing Audit Logs
+
+### Search & Filter
+
+Filter audit events by:
+
+- **Time range**: Last hour, day, week, custom
+- **Category**: Data access, policy, user, etc.
+- **Actor**: User, service, system
+- **Resource**: Data source, table, column
+- **Result**: Allowed, denied, error
+
+### Query Examples
+
+Find all PII access:
+
+```
+category:data_access AND resource.pii_types:*
+```
+
+Find policy violations:
+
+```
+category:policy AND result.status:denied
+```
+
+Find user activity:
+
+```
+actor.email:analyst@company.com AND timestamp:[now-7d TO now]
+```
+
+## Data Access Auditing
+
+### Query Logging
+
+Every data query is logged:
+
+| Field | Description |
+|-------|-------------|
+| **User** | Who ran the query |
+| **Source** | Data source accessed |
+| **Tables** | Tables queried |
+| **Columns** | Columns accessed |
+| **Filters** | WHERE conditions |
+| **Rows** | Records returned |
+| **Duration** | Query time |
+
+### Sensitive Data Access
+
+Enhanced logging for sensitive data:
+
+- PII types accessed
+- Sensitivity labels
+- Policy evaluation
+- Redaction applied
+
+## Policy Audit
+
+### Policy Evaluation
+
+Every policy check is logged:
+
+```json
+{
+  "event_id": "evt_policy_123",
+  "category": "policy",
+  "action": "evaluate",
+  "policy": {
+    "id": "pol_abc",
+    "name": "PII Access Control",
+    "version": 3
+  },
+  "evaluation": {
+    "conditions_matched": true,
+    "rules_evaluated": 3,
+    "decision": "deny",
+    "reason": "User lacks required role"
+  }
+}
+```
+
+### Policy Changes
+
+Track policy modifications:
+
+- Created, updated, deleted
+- Version history
+- Who made changes
+- Before/after comparison
+
+## OpenLineage Integration
+
+### Lineage Events
+
+SecureLens emits OpenLineage events:
+
+```json
+{
+  "eventType": "COMPLETE",
+  "eventTime": "2024-01-15T10:30:00Z",
+  "producer": "securelens",
+  "run": {
+    "runId": "run_abc123",
+    "facets": {
+      "securelens_classification": {
+        "pii_detected": ["EMAIL", "PHONE"],
+        "sensitivity_label": "Confidential"
+      }
+    }
+  },
+  "job": {
+    "namespace": "securelens",
+    "name": "classification-scan"
+  },
+  "inputs": [{
+    "namespace": "postgres://prod-db",
+    "name": "customers"
+  }],
+  "outputs": [{
+    "namespace": "securelens",
+    "name": "classification_results"
+  }]
+}
+```
+
+### DataHub Integration
+
+Lineage flows to DataHub:
+
+- Data source → Classification → Policy → AI Gate
+- Complete data journey visibility
+
+## Retention & Storage
+
+### Retention Policy
+
+Configure audit retention:
+
+```yaml
+audit:
+  retention:
+    default: 90d
+    sensitive_access: 365d
+    policy_violations: 730d
+    
+  archive:
+    enabled: true
+    destination: s3://audit-archive/
+    after: 30d
+```
+
+### Storage Options
+
+| Option | Use Case |
+|--------|----------|
+| **PostgreSQL** | Default, small-medium |
+| **Elasticsearch** | Large scale, fast search |
+| **S3 + Athena** | Long-term archive |
+| **Splunk** | Enterprise SIEM |
+
+## Export & Integration
+
+### Export Formats
+
+Export audit logs:
+
+- JSON (default)
+- CSV
+- CEF (Common Event Format)
+- LEEF (Log Event Extended Format)
+
+### SIEM Integration
+
+Stream to SIEM platforms:
+
+```yaml
+siem_integration:
+  type: splunk
+  endpoint: https://splunk.company.com:8088
+  token: ${SPLUNK_HEC_TOKEN}
+  index: securelens_audit
+  
+  # Or Elasticsearch
+  type: elasticsearch
+  endpoint: https://elastic.company.com:9200
+  index_pattern: securelens-audit-%Y.%m.%d
+```
+
+### Webhook Integration
+
+Send events to webhooks:
+
+```yaml
+webhooks:
+  - name: "Security alerts"
+    url: https://security.company.com/webhook
+    events:
+      - policy.violation
+      - user.login_failed
+    headers:
+      Authorization: Bearer ${WEBHOOK_TOKEN}
+```
+
+## Compliance Reports
+
+### Access Reports
+
+Generate access reports:
+
+- Who accessed what data
+- When and how often
+- From which applications
+- Policy decisions made
+
+### Audit Reports
+
+Compliance-ready reports:
+
+- SOC 2 audit trail
+- HIPAA access logs
+- GDPR Article 30 records
+- PCI-DSS access logs
+
+## Next Steps
+
+- [Observability](/features/observability)
+- [Reports](/features/reports)
+- [Compliance Advisor](/features/compliance-advisor)

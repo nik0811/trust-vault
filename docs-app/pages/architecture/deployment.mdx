@@ -1,0 +1,423 @@
+# Deployment
+
+Deploy SecureLens in various environments.
+
+## Deployment Options
+
+| Option | Best For |
+|--------|----------|
+| **Docker Compose** | Development, small deployments |
+| **Kubernetes** | Production, enterprise |
+| **Cloud Managed** | Minimal operations |
+
+## Docker Compose
+
+### Quick Start
+
+```bash
+git clone https://github.com/securelens/securelens.git
+cd securelens
+cp .env.example .env
+docker-compose up -d
+```
+
+### Production Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  api:
+    image: securelens/api:latest
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - KAFKA_BROKERS=${KAFKA_BROKERS}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  worker:
+    image: securelens/api:latest
+    command: ["--mode=worker"]
+    deploy:
+      replicas: 4
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+```
+
+## Kubernetes
+
+### Helm Installation
+
+```bash
+# Add Helm repo
+helm repo add securelens https://charts.securelens.io
+helm repo update
+
+# Install
+helm install securelens securelens/securelens \
+  --namespace securelens \
+  --create-namespace \
+  --values values.yaml
+```
+
+### values.yaml
+
+```yaml
+global:
+  imageTag: "1.0.0"
+  
+api:
+  replicas: 3
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+    targetCPUUtilization: 70
+
+worker:
+  replicas: 4
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"
+
+postgresql:
+  enabled: true
+  primary:
+    persistence:
+      size: 100Gi
+  
+kafka:
+  enabled: true
+  replicaCount: 3
+  
+qdrant:
+  enabled: true
+  persistence:
+    size: 50Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  hosts:
+    - host: securelens.company.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: securelens-tls
+      hosts:
+        - securelens.company.com
+```
+
+### Kubernetes Manifests
+
+#### Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: securelens-api
+  namespace: securelens
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: securelens-api
+  template:
+    metadata:
+      labels:
+        app: securelens-api
+    spec:
+      containers:
+        - name: api
+          image: securelens/api:1.0.0
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: securelens-secrets
+                  key: database-url
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+```
+
+#### Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: securelens-api
+  namespace: securelens
+spec:
+  selector:
+    app: securelens-api
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+```
+
+#### Ingress
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: securelens
+  namespace: securelens
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - securelens.company.com
+      secretName: securelens-tls
+  rules:
+    - host: securelens.company.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: securelens-api
+                port:
+                  number: 80
+```
+
+## Cloud Deployments
+
+### AWS
+
+```yaml
+# EKS with managed services
+infrastructure:
+  compute: EKS
+  database: RDS PostgreSQL
+  kafka: MSK
+  storage: S3
+  secrets: Secrets Manager
+  monitoring: CloudWatch
+```
+
+### Azure
+
+```yaml
+# AKS with managed services
+infrastructure:
+  compute: AKS
+  database: Azure Database for PostgreSQL
+  kafka: Event Hubs (Kafka API)
+  storage: Blob Storage
+  secrets: Key Vault
+  monitoring: Azure Monitor
+```
+
+### GCP
+
+```yaml
+# GKE with managed services
+infrastructure:
+  compute: GKE
+  database: Cloud SQL PostgreSQL
+  kafka: Confluent Cloud
+  storage: Cloud Storage
+  secrets: Secret Manager
+  monitoring: Cloud Monitoring
+```
+
+## High Availability
+
+### Multi-Zone
+
+```yaml
+# Spread across availability zones
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app: securelens-api
+          topologyKey: topology.kubernetes.io/zone
+```
+
+### Database HA
+
+```yaml
+postgresql:
+  architecture: replication
+  primary:
+    persistence:
+      size: 100Gi
+  readReplicas:
+    replicaCount: 2
+    persistence:
+      size: 100Gi
+```
+
+### Kafka HA
+
+```yaml
+kafka:
+  replicaCount: 3
+  defaultReplicationFactor: 3
+  minInsyncReplicas: 2
+```
+
+## Security
+
+### Network Policies
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: securelens-api
+  namespace: securelens
+spec:
+  podSelector:
+    matchLabels:
+      app: securelens-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - port: 8080
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgresql
+      ports:
+        - port: 5432
+```
+
+### Pod Security
+
+```yaml
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+containers:
+  - name: api
+    securityContext:
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+      capabilities:
+        drop:
+          - ALL
+```
+
+## Monitoring
+
+### Prometheus ServiceMonitor
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: securelens
+  namespace: securelens
+spec:
+  selector:
+    matchLabels:
+      app: securelens-api
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+```
+
+### Grafana Dashboard
+
+Import pre-built dashboards:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/securelens/securelens/main/deploy/grafana-dashboards.yaml
+```
+
+## Backup & Recovery
+
+### Database Backup
+
+```yaml
+# CronJob for PostgreSQL backup
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+spec:
+  schedule: "0 2 * * *"
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: backup
+              image: postgres:15
+              command:
+                - /bin/sh
+                - -c
+                - pg_dump -h $PGHOST -U $PGUSER $PGDATABASE | gzip > /backup/backup-$(date +%Y%m%d).sql.gz
+```
+
+## Next Steps
+
+- [Configuration](/getting-started/configuration)
+- [Observability](/features/observability)
+- [API Reference](/api-reference)

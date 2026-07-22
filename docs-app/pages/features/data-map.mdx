@@ -1,0 +1,194 @@
+# Data Map & Residency
+
+Visual data inventory showing where sensitive data lives and flows.
+
+## Overview
+
+![Data Map](/screenshots/data-map.png)
+
+The Data Map provides a visual representation of your data landscape:
+
+- Where sensitive data is stored
+- How data flows between systems
+- Data residency and compliance status
+
+## Data Inventory
+
+### Visual Map
+
+The interactive map shows:
+
+- **Data Sources**: Databases, warehouses, storage
+- **Data Types**: PII categories detected
+- **Connections**: Data flow relationships
+- **Regions**: Geographic data locations
+
+### Table View
+
+Detailed inventory in tabular format:
+
+| Source | Table | Column | PII Type | Region | Compliance |
+|--------|-------|--------|----------|--------|------------|
+| prod-db | customers | email | EMAIL | US-East | CCPA ✓ |
+| prod-db | customers | ssn | SSN | US-East | CCPA ✓ |
+| analytics | users | ip_addr | IP_ADDRESS | EU-West | GDPR ⚠️ |
+
+## Data Residency
+
+### Region Configuration
+
+Define allowed regions for data types:
+
+```yaml
+residency_rules:
+  - pii_type: SSN
+    allowed_regions:
+      - US-East
+      - US-West
+    prohibited_regions:
+      - EU-*
+      - APAC-*
+      
+  - pii_type: EU_PERSONAL_DATA
+    allowed_regions:
+      - EU-*
+    prohibited_regions:
+      - US-*
+```
+
+### Compliance Mapping
+
+Map regions to compliance frameworks:
+
+| Region | Frameworks |
+|--------|------------|
+| EU-West | GDPR |
+| US-East | CCPA, HIPAA |
+| US-West | CCPA |
+| APAC-Singapore | PDPA |
+
+### Violation Detection
+
+SecureLens automatically detects residency violations:
+
+- Data in prohibited regions
+- Cross-border transfers
+- Missing data localization
+
+## Data Lineage
+
+### Flow Visualization
+
+Track data from source to destination:
+
+```
+┌─────────┐     ┌─────────┐     ┌─────────┐
+│ Source  │────▶│   ETL   │────▶│  Target │
+│   DB    │     │ Pipeline│     │   DW    │
+└─────────┘     └─────────┘     └─────────┘
+     │                               │
+     └───────────┬───────────────────┘
+                 ▼
+           ┌─────────┐
+           │   AI    │
+           │  Model  │
+           └─────────┘
+```
+
+### OpenLineage Integration
+
+SecureLens emits OpenLineage events:
+
+```json
+{
+  "eventType": "COMPLETE",
+  "eventTime": "2024-01-15T10:30:00Z",
+  "run": {
+    "runId": "abc-123"
+  },
+  "job": {
+    "namespace": "securelens",
+    "name": "classification-job"
+  },
+  "inputs": [{
+    "namespace": "postgres",
+    "name": "customers"
+  }],
+  "outputs": [{
+    "namespace": "datahub",
+    "name": "customers_classified"
+  }]
+}
+```
+
+## Search & Filter
+
+### Search
+
+Find specific data:
+
+- By table/column name
+- By PII type
+- By data source
+- By region
+
+### Filters
+
+Filter the data map:
+
+- **Sensitivity**: High, Medium, Low
+- **PII Type**: Select specific types
+- **Region**: Geographic filter
+- **Compliance**: Framework filter
+- **Status**: Compliant, Violation, Unknown
+
+## Export
+
+### Data Inventory Report
+
+Export complete inventory:
+
+```bash
+# CSV export
+GET /api/v1/data-map/export?format=csv
+
+# JSON export
+GET /api/v1/data-map/export?format=json
+```
+
+### Compliance Report
+
+Generate compliance-specific reports:
+
+- GDPR Article 30 Records
+- CCPA Data Inventory
+- HIPAA PHI Inventory
+
+## Actions
+
+### Remediate Violations
+
+From the data map:
+
+1. Click on a violation
+2. View details and impact
+3. Choose remediation:
+   - Move data to compliant region
+   - Delete data
+   - Apply encryption
+   - Request exception
+
+### Create Policy
+
+Create governance policy from data map:
+
+1. Select data elements
+2. Click **Create Policy**
+3. Define rules
+4. Activate
+
+## Next Steps
+
+- [ROT Detection](/features/rot-detection)
+- [Governance Policies](/features/governance-policies)
+- [Compliance Advisor](/features/compliance-advisor)

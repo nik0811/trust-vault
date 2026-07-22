@@ -1,0 +1,207 @@
+# ROT Detection
+
+Identify and remediate Redundant, Obsolete, and Trivial data.
+
+## Overview
+
+![ROT Detection](/screenshots/rot-detection.png)
+
+ROT data creates risk without value:
+
+- **Redundant**: Duplicate data across systems
+- **Obsolete**: Outdated data past retention
+- **Trivial**: Low-value data consuming resources
+
+## Why ROT Matters
+
+### Risk
+
+| Risk | Impact |
+|------|--------|
+| **Compliance** | Retaining data beyond legal limits |
+| **Security** | Larger attack surface |
+| **Privacy** | Unnecessary PII exposure |
+| **Cost** | Storage and processing waste |
+
+### Statistics
+
+Typical enterprise findings:
+
+- 30% of data is redundant
+- 25% is obsolete
+- 15% is trivial
+- Only 30% is actively used
+
+## Detection Methods
+
+### Redundant Data
+
+SecureLens detects duplicates:
+
+1. **Exact duplicates**: Identical records
+2. **Near duplicates**: Similar with minor differences
+3. **Cross-system duplicates**: Same data in multiple sources
+
+```
+┌─────────────┐     ┌─────────────┐
+│  Source A   │     │  Source B   │
+│             │     │             │
+│ customer_id │ ════│ cust_id     │  ← Duplicate
+│ email       │     │ email_addr  │  ← Duplicate
+│ created_at  │     │ create_date │  ← Duplicate
+└─────────────┘     └─────────────┘
+```
+
+### Obsolete Data
+
+Identify data past its useful life:
+
+- **Age-based**: Data older than retention policy
+- **Access-based**: Data not accessed in X days
+- **Business rules**: Closed accounts, completed projects
+
+### Trivial Data
+
+Find low-value data:
+
+- **Test data**: Dev/test records in production
+- **Incomplete records**: Missing required fields
+- **Orphaned data**: References to deleted records
+
+## Configuration
+
+### Retention Policies
+
+Define retention rules:
+
+```yaml
+retention_policies:
+  - name: "Customer PII"
+    applies_to:
+      pii_types: [PERSON_NAME, EMAIL, PHONE]
+    retention_period: 7y
+    action: archive
+    
+  - name: "Financial Records"
+    applies_to:
+      pii_types: [CREDIT_CARD, BANK_ACCOUNT]
+    retention_period: 10y
+    action: delete
+    
+  - name: "Log Data"
+    applies_to:
+      tables: ["*_logs", "*_audit"]
+    retention_period: 90d
+    action: delete
+```
+
+### Access Thresholds
+
+Configure access-based detection:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Stale threshold** | 180 days | No access = stale |
+| **Cold threshold** | 365 days | No access = cold |
+| **Archive threshold** | 730 days | No access = archive |
+
+## ROT Dashboard
+
+### Summary Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Total ROT** | GB of ROT data detected |
+| **Redundant** | Duplicate data volume |
+| **Obsolete** | Past-retention data |
+| **Trivial** | Low-value data |
+| **Savings** | Potential cost savings |
+
+### Breakdown by Source
+
+View ROT by data source:
+
+| Source | Redundant | Obsolete | Trivial | Total |
+|--------|-----------|----------|---------|-------|
+| prod-db | 15 GB | 8 GB | 3 GB | 26 GB |
+| analytics | 45 GB | 12 GB | 5 GB | 62 GB |
+| archive | 2 GB | 120 GB | 1 GB | 123 GB |
+
+## Remediation
+
+### Review Queue
+
+ROT findings go to a review queue:
+
+1. Navigate to **ROT Detection** → **Review**
+2. Filter by type, source, or risk
+3. Review each finding
+4. Approve or dismiss
+
+### Actions
+
+Available remediation actions:
+
+| Action | Description |
+|--------|-------------|
+| **Delete** | Permanently remove data |
+| **Archive** | Move to cold storage |
+| **Merge** | Consolidate duplicates |
+| **Retain** | Mark as intentionally kept |
+| **Defer** | Review later |
+
+### Bulk Remediation
+
+Process multiple findings:
+
+1. Select findings
+2. Click **Bulk Action**
+3. Choose action
+4. Confirm
+
+### Automated Remediation
+
+Enable automatic actions:
+
+```yaml
+auto_remediation:
+  enabled: true
+  rules:
+    - condition: "obsolete AND low_sensitivity"
+      action: archive
+      approval: none
+      
+    - condition: "redundant AND exact_match"
+      action: merge
+      approval: required
+      
+    - condition: "trivial AND test_data"
+      action: delete
+      approval: none
+```
+
+## Reports
+
+### ROT Summary Report
+
+Weekly/monthly ROT summary:
+
+- Total ROT detected
+- Remediation progress
+- Cost savings achieved
+- Compliance improvements
+
+### Retention Compliance Report
+
+Verify retention policy compliance:
+
+- Data within retention
+- Data past retention
+- Exceptions granted
+- Actions taken
+
+## Next Steps
+
+- [Remediation](/features/remediation)
+- [Data Quality](/features/data-quality)
+- [Compliance Advisor](/features/compliance-advisor)

@@ -1,0 +1,320 @@
+# Key Endpoints
+
+Reference for the most commonly used API endpoints.
+
+## Data Sources
+
+### List Data Sources
+
+```bash
+GET /api/v1/data-sources
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "ds-123",
+      "name": "prod-db",
+      "type": "postgresql",
+      "status": "healthy",
+      "last_scan": "2024-01-20T10:00:00Z"
+    }
+  ]
+}
+```
+
+### Create Data Source
+
+```bash
+POST /api/v1/data-sources
+Content-Type: application/json
+
+{
+  "name": "prod-db",
+  "type": "postgresql",
+  "config": {
+    "host": "db.example.com",
+    "port": 5432,
+    "database": "myapp",
+    "username": "reader",
+    "password": "secret"
+  }
+}
+```
+
+### Trigger Scan
+
+```bash
+POST /api/v1/data-sources/{id}/scan
+Content-Type: application/json
+
+{
+  "scan_type": "incremental",
+  "sample_size": 10000
+}
+```
+
+## Classifications
+
+### List Classifications
+
+```bash
+GET /api/v1/classifications?data_source_id=ds-123&type=EMAIL
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "cls-456",
+      "data_source_id": "ds-123",
+      "table": "users",
+      "column": "email",
+      "type": "EMAIL",
+      "confidence": 0.98,
+      "record_count": 45230
+    }
+  ]
+}
+```
+
+### Submit Feedback
+
+```bash
+POST /api/v1/classifications/{id}/feedback
+Content-Type: application/json
+
+{
+  "feedback_type": "correct",
+  "notes": "Verified by analyst"
+}
+```
+
+## Policies
+
+### List Policies
+
+```bash
+GET /api/v1/policies
+```
+
+### Create Policy
+
+```bash
+POST /api/v1/policies
+Content-Type: application/json
+
+{
+  "name": "PII Access Control",
+  "type": "ACCESS",
+  "condition": {
+    "classification": ["SSN", "CREDIT_CARD"]
+  },
+  "action": "DENY",
+  "enabled": true
+}
+```
+
+### Evaluate Policy
+
+```bash
+POST /api/v1/policies/evaluate
+Content-Type: application/json
+
+{
+  "user_id": "usr-123",
+  "resource": {
+    "data_source": "prod-db",
+    "table": "users",
+    "column": "ssn"
+  },
+  "action": "READ"
+}
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "decision": "DENY",
+    "matched_policies": ["pol-123"],
+    "reason": "SSN access requires admin role"
+  }
+}
+```
+
+## AI Gate
+
+### Proxy Request
+
+```bash
+POST /api/v1/ai-gate/chat/completions
+Content-Type: application/json
+
+{
+  "model": "gpt-4",
+  "messages": [
+    {"role": "user", "content": "Hello!"}
+  ]
+}
+```
+
+### Get Usage
+
+```bash
+GET /api/v1/ai-gate/usage?period=today
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "requests": 1234,
+    "tokens": {
+      "input": 45000,
+      "output": 12000
+    },
+    "cost": 12.50,
+    "pii_detected": 23
+  }
+}
+```
+
+## Privacy (DSAR)
+
+### Create DSAR
+
+```bash
+POST /api/v1/privacy/dsar
+Content-Type: application/json
+
+{
+  "type": "ACCESS",
+  "data_subject": {
+    "email": "john@example.com",
+    "name": "John Smith"
+  }
+}
+```
+
+### Get DSAR Status
+
+```bash
+GET /api/v1/privacy/dsar/{id}
+```
+
+## Audit
+
+### Query Audit Logs
+
+```bash
+GET /api/v1/audit/events?start=2024-01-20T00:00:00Z&type=DATA_ACCESS
+```
+
+Response:
+
+```json
+{
+  "data": [
+    {
+      "id": "evt-789",
+      "timestamp": "2024-01-20T10:30:00Z",
+      "type": "DATA_ACCESS",
+      "user": "analyst@company.com",
+      "resource": "users.email",
+      "action": "READ",
+      "result": "SUCCESS"
+    }
+  ]
+}
+```
+
+## Reports
+
+### Generate Report
+
+```bash
+POST /api/v1/reports/generate
+Content-Type: application/json
+
+{
+  "type": "COMPLIANCE_SUMMARY",
+  "framework": "GDPR",
+  "format": "PDF",
+  "period": {
+    "start": "2024-01-01",
+    "end": "2024-01-31"
+  }
+}
+```
+
+### Download Report
+
+```bash
+GET /api/v1/reports/{id}/download
+```
+
+## Jobs
+
+### List Jobs
+
+```bash
+GET /api/v1/jobs
+```
+
+### Trigger Job
+
+```bash
+POST /api/v1/jobs/{id}/run
+```
+
+### Get Execution Status
+
+```bash
+GET /api/v1/jobs/{id}/executions/{execution_id}
+```
+
+## Health
+
+### Health Check
+
+```bash
+GET /health
+```
+
+Response:
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "components": {
+    "database": "healthy",
+    "kafka": "healthy",
+    "classification_engine": "healthy"
+  }
+}
+```
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| `VALIDATION_ERROR` | Invalid request parameters |
+| `AUTHENTICATION_ERROR` | Invalid credentials |
+| `AUTHORIZATION_ERROR` | Insufficient permissions |
+| `NOT_FOUND` | Resource not found |
+| `RATE_LIMITED` | Too many requests |
+| `INTERNAL_ERROR` | Server error |
+
+## Next Steps
+
+- [Authentication](/api-reference/authentication)
+- [SDK Libraries](/api-reference#sdk-libraries)

@@ -1,0 +1,145 @@
+# Authentication
+
+SecureLens supports multiple authentication methods.
+
+## JWT Authentication
+
+### Login
+
+```bash
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@company.com",
+  "password": "your-password"
+}
+```
+
+Response:
+
+```json
+{
+  "data": {
+    "access_token": "eyJhbGciOiJIUzI1NiIs...",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIs...",
+    "expires_in": 3600,
+    "token_type": "Bearer"
+  }
+}
+```
+
+### Using JWT
+
+Include in Authorization header:
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/classifications" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+```
+
+### Refresh Token
+
+```bash
+POST /api/v1/auth/refresh
+Content-Type: application/json
+
+{
+  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+}
+```
+
+## API Key Authentication
+
+### Creating API Keys
+
+1. Navigate to **Settings → API Keys**
+2. Click **Generate Key**
+3. Configure permissions
+4. Copy the key
+
+### Using API Keys
+
+Include in header:
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/classifications" \
+  -H "X-API-Key: sl_live_abc123..."
+```
+
+Or as query parameter:
+
+```bash
+curl "https://api.securelens.ai/v1/classifications?api_key=sl_live_abc123..."
+```
+
+### API Key Scopes
+
+| Scope | Permissions |
+|-------|-------------|
+| `read` | Read-only access |
+| `write` | Create and update |
+| `delete` | Delete resources |
+| `admin` | Full access |
+
+## OAuth 2.0 / OIDC
+
+For SSO integration:
+
+```bash
+# Authorization URL
+GET /oauth/authorize?
+  client_id=your-client-id&
+  redirect_uri=https://your-app.com/callback&
+  response_type=code&
+  scope=openid profile email
+
+# Token exchange
+POST /oauth/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&
+code=AUTH_CODE&
+client_id=your-client-id&
+client_secret=your-client-secret&
+redirect_uri=https://your-app.com/callback
+```
+
+## Multi-Tenant Authentication
+
+### Tenant Header
+
+Specify tenant in requests:
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/classifications" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "X-Tenant-ID: tenant-abc"
+```
+
+### Tenant from Token
+
+JWT includes tenant claim:
+
+```json
+{
+  "sub": "user-123",
+  "email": "user@company.com",
+  "tenant_id": "tenant-abc",
+  "roles": ["analyst"],
+  "exp": 1705750800
+}
+```
+
+## Security Best Practices
+
+1. **Never expose API keys** in client-side code
+2. **Use short-lived JWTs** (1 hour recommended)
+3. **Rotate API keys** regularly
+4. **Use scoped API keys** with minimal permissions
+5. **Enable MFA** for user accounts
+
+## Next Steps
+
+- [Key Endpoints](/api-reference/endpoints)
+- [User Management](/features/settings)

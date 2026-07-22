@@ -1,0 +1,104 @@
+# Document Processing
+
+Extract and classify data from documents and images.
+
+![Documents](/screenshots/documents.png)
+
+## Overview
+
+SecureLens document processing provides:
+
+- **OCR** for scanned documents and images
+- **Text extraction** from PDFs and Office files
+- **PII classification** of extracted content
+- **Structured data** extraction
+
+## Supported Formats
+
+| Format | OCR | Text Extract | Classification |
+|--------|-----|--------------|----------------|
+| **PDF** | ✅ | ✅ | ✅ |
+| **Images** (PNG, JPG) | ✅ | N/A | ✅ |
+| **Word** (.docx) | N/A | ✅ | ✅ |
+| **Excel** (.xlsx) | N/A | ✅ | ✅ |
+| **PowerPoint** (.pptx) | N/A | ✅ | ✅ |
+| **Text** (.txt, .csv) | N/A | ✅ | ✅ |
+
+## Processing Pipeline
+
+```
+Document → Extract → OCR (if needed) → Classify → Store
+    │         │           │              │          │
+    ▼         ▼           ▼              ▼          ▼
+ Upload   Parse      PaddleOCR      GLiNER     Results
+          format     for images     for PII    in DB
+```
+
+## Configuration
+
+```yaml
+document_processing:
+  enabled: true
+  ocr:
+    engine: paddleocr
+    languages: [en, es, fr, de]
+    confidence_threshold: 0.8
+  extraction:
+    max_file_size: 100MB
+    timeout: 300s
+  classification:
+    enabled: true
+    batch_size: 10
+```
+
+## Processing Documents
+
+### Upload via UI
+
+1. Navigate to **Documents**
+2. Click **Upload**
+3. Select files
+4. Wait for processing
+5. View results
+
+### Upload via API
+
+```bash
+curl -X POST "https://api.securelens.ai/v1/documents" \
+  -H "Authorization: Bearer $API_KEY" \
+  -F "file=@document.pdf"
+```
+
+## Results
+
+### Document Details
+
+```yaml
+document:
+  id: doc-123
+  filename: contract.pdf
+  size: 2.4MB
+  pages: 15
+  
+  extraction:
+    text_length: 45000
+    ocr_used: false
+    
+  classification:
+    pii_found: true
+    entities:
+      - type: PERSON_NAME
+        count: 12
+      - type: EMAIL
+        count: 5
+      - type: PHONE
+        count: 3
+      - type: ADDRESS
+        count: 2
+```
+
+## Next Steps
+
+- [Classification](/features/classification) — PII detection
+- [Data Sources](/features/data-sources) — Connect storage
+- [Governance](/features/governance) — Document policies

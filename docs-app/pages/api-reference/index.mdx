@@ -1,0 +1,152 @@
+# API Reference
+
+SecureLens provides a comprehensive REST API for programmatic access.
+
+## Base URL
+
+```
+https://api.securelens.ai/v1
+```
+
+For self-hosted deployments:
+
+```
+http://localhost:8080/api/v1
+```
+
+## API Versioning
+
+The API is versioned via URL path:
+
+- `v1` — Current stable version
+- `v2` — Future version (when available)
+
+## Response Format
+
+All responses are JSON:
+
+```json
+{
+  "data": { ... },
+  "meta": {
+    "request_id": "req-abc123",
+    "timestamp": "2024-01-20T10:30:00Z"
+  }
+}
+```
+
+### Error Response
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid request parameters",
+    "details": [
+      {
+        "field": "email",
+        "message": "Invalid email format"
+      }
+    ]
+  },
+  "meta": {
+    "request_id": "req-abc123"
+  }
+}
+```
+
+## HTTP Status Codes
+
+| Code | Description |
+|------|-------------|
+| `200` | Success |
+| `201` | Created |
+| `204` | No Content |
+| `400` | Bad Request |
+| `401` | Unauthorized |
+| `403` | Forbidden |
+| `404` | Not Found |
+| `429` | Rate Limited |
+| `500` | Server Error |
+
+## Rate Limiting
+
+Default limits:
+
+| Tier | Requests/Hour |
+|------|---------------|
+| Free | 1,000 |
+| Pro | 10,000 |
+| Enterprise | 100,000 |
+
+Rate limit headers:
+
+```
+X-RateLimit-Limit: 10000
+X-RateLimit-Remaining: 9500
+X-RateLimit-Reset: 1705750800
+```
+
+## Pagination
+
+List endpoints support pagination:
+
+```bash
+GET /api/v1/classifications?page=1&per_page=50
+```
+
+Response includes pagination metadata:
+
+```json
+{
+  "data": [...],
+  "meta": {
+    "page": 1,
+    "per_page": 50,
+    "total": 1234,
+    "total_pages": 25
+  }
+}
+```
+
+## Filtering
+
+Filter with query parameters:
+
+```bash
+GET /api/v1/classifications?type=EMAIL&confidence_gte=0.9
+```
+
+Common operators:
+- `_eq` — Equals
+- `_ne` — Not equals
+- `_gt` — Greater than
+- `_gte` — Greater than or equal
+- `_lt` — Less than
+- `_lte` — Less than or equal
+- `_in` — In list
+- `_contains` — Contains string
+
+## Sorting
+
+Sort with `sort` parameter:
+
+```bash
+GET /api/v1/classifications?sort=-created_at,type
+```
+
+- Prefix with `-` for descending
+- Comma-separate multiple fields
+
+## SDK Libraries
+
+| Language | Package |
+|----------|---------|
+| Python | `pip install securelens-sdk` |
+| JavaScript | `npm install @securelens/sdk` |
+| Go | `go get github.com/securelens/sdk-go` |
+
+## Next Steps
+
+- [Authentication](/api-reference/authentication)
+- [Key Endpoints](/api-reference/endpoints)

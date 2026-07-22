@@ -1,0 +1,348 @@
+# AI Gate
+
+Secure proxy for all LLM interactions with governance and audit capabilities.
+
+![AI Gate](/screenshots/ai-gate.png)
+
+## Overview
+
+AI Gate is SecureLens's LLM proxy that:
+
+- **Intercepts** all AI/LLM requests
+- **Scans** prompts for sensitive data
+- **Redacts** PII before sending to LLMs
+- **Filters** responses for data leakage
+- **Audits** all interactions for compliance
+
+## Architecture
+
+```
+┌─────────┐     ┌─────────────┐     ┌─────────┐
+│  User   │────▶│   AI Gate   │────▶│   LLM   │
+│  App    │     │   (Proxy)   │     │ Provider│
+└─────────┘     └──────┬──────┘     └─────────┘
+                       │
+              ┌────────┴────────┐
+              │                 │
+         ┌────┴────┐      ┌────┴────┐
+         │  Scan   │      │  Audit  │
+         │ & Redact│      │   Log   │
+         └─────────┘      └─────────┘
+```
+
+## Supported LLM Providers
+
+| Provider | Status | Models |
+|----------|--------|--------|
+| **OpenAI** | ✅ GA | GPT-4, GPT-3.5, Embeddings |
+| **Anthropic** | ✅ GA | Claude 3, Claude 2 |
+| **Azure OpenAI** | ✅ GA | All Azure models |
+| **Google Vertex** | ✅ GA | Gemini, PaLM |
+| **AWS Bedrock** | ✅ GA | Claude, Titan, Llama |
+| **Cohere** | ✅ GA | Command, Embed |
+| **Local/Custom** | ✅ GA | Any OpenAI-compatible |
+
+## Configuration
+
+### Basic Setup
+
+```yaml
+ai_gate:
+  enabled: true
+  listen_port: 8081
+  
+  providers:
+    openai:
+      api_key: ${OPENAI_API_KEY}
+      base_url: https://api.openai.com/v1
+      
+    anthropic:
+      api_key: ${ANTHROPIC_API_KEY}
+      
+    azure:
+      endpoint: ${AZURE_OPENAI_ENDPOINT}
+      api_key: ${AZURE_OPENAI_KEY}
+      api_version: "2024-02-01"
+```
+
+### Scanning Configuration
+
+```yaml
+ai_gate:
+  scanning:
+    enabled: true
+    scan_prompts: true
+    scan_responses: true
+    classification_types:
+      - SSN
+      - CREDIT_CARD
+      - EMAIL
+      - PHONE_NUMBER
+    confidence_threshold: 0.8
+```
+
+### Redaction Configuration
+
+```yaml
+ai_gate:
+  redaction:
+    enabled: true
+    method: MASK  # MASK, TOKENIZE, REMOVE
+    patterns:
+      SSN: "[SSN REDACTED]"
+      CREDIT_CARD: "[CARD REDACTED]"
+      EMAIL: "[EMAIL]"
+    preserve_format: true
+```
+
+## Using AI Gate
+
+### API Endpoint
+
+Replace your LLM provider URL with AI Gate:
+
+```bash
+# Before (direct to OpenAI)
+curl https://api.openai.com/v1/chat/completions
+
+# After (through AI Gate)
+curl https://ai-gate.securelens.ai/v1/chat/completions
+```
+
+### SDK Integration
+
+```python
+# Python with OpenAI SDK
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="your-api-key",
+    base_url="https://ai-gate.securelens.ai/v1"
+)
+
+response = client.chat.completions.create(
+    model="gpt-4",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+```
+
+```javascript
+// JavaScript with OpenAI SDK
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'your-api-key',
+  baseURL: 'https://ai-gate.securelens.ai/v1'
+});
+```
+
+## Prompt Scanning
+
+### How It Works
+
+1. User sends prompt to AI Gate
+2. AI Gate scans for sensitive data
+3. Detected PII is redacted
+4. Clean prompt sent to LLM
+5. Response scanned and filtered
+6. Clean response returned to user
+
+### Example
+
+**Original Prompt:**
+```
+Summarize this customer complaint:
+Customer John Smith (SSN: 123-45-6789) called about 
+their credit card 4111-1111-1111-1111 being charged twice.
+```
+
+**After Redaction:**
+```
+Summarize this customer complaint:
+Customer [PERSON] (SSN: [SSN REDACTED]) called about 
+their credit card [CARD REDACTED] being charged twice.
+```
+
+### Scan Results
+
+```yaml
+scan_result:
+  prompt_length: 156
+  entities_found: 3
+  entities:
+    - type: PERSON_NAME
+      value: "John Smith"
+      position: [9, 19]
+      confidence: 0.95
+      action: REDACTED
+    - type: SSN
+      value: "123-45-6789"
+      position: [26, 37]
+      confidence: 0.99
+      action: REDACTED
+    - type: CREDIT_CARD
+      value: "4111-1111-1111-1111"
+      position: [68, 87]
+      confidence: 0.99
+      action: REDACTED
+```
+
+## Response Filtering
+
+### Filter Configuration
+
+```yaml
+ai_gate:
+  response_filter:
+    enabled: true
+    block_patterns:
+      - "internal use only"
+      - "confidential"
+    scan_for_pii: true
+    max_response_length: 10000
+```
+
+### Filter Actions
+
+| Action | Description | Use Case |
+|--------|-------------|----------|
+| `PASS` | Allow response | Clean response |
+| `REDACT` | Mask sensitive data | PII in response |
+| `BLOCK` | Block entire response | Policy violation |
+| `WARN` | Allow with warning | Borderline content |
+
+## Usage Tracking
+
+### Metrics Dashboard
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   AI Gate Usage Dashboard                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Today's Requests: 12,456                                    │
+│  Tokens Used: 2.4M (input: 1.8M, output: 0.6M)              │
+│  Estimated Cost: $48.20                                      │
+│                                                              │
+│  By Model:                                                   │
+│  ├─ GPT-4: 3,200 requests ($32.00)                          │
+│  ├─ GPT-3.5: 8,500 requests ($8.50)                         │
+│  └─ Claude: 756 requests ($7.70)                            │
+│                                                              │
+│  PII Detected: 234 prompts (1.9%)                           │
+│  Redactions: 456 entities                                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Cost Allocation
+
+Track costs by team/project:
+
+| Team | Requests | Tokens | Cost |
+|------|----------|--------|------|
+| Engineering | 5,200 | 1.1M | $22.00 |
+| Support | 4,800 | 0.8M | $16.00 |
+| Analytics | 2,456 | 0.5M | $10.20 |
+
+## AI Governance Policies
+
+### Model Restrictions
+
+```yaml
+policy:
+  name: Approved Models Only
+  type: AI_GOVERNANCE
+  condition:
+    model:
+      not_in: ["gpt-4", "gpt-3.5-turbo", "claude-3"]
+  action: DENY
+  message: "Model not approved for use"
+```
+
+### Usage Limits
+
+```yaml
+policy:
+  name: Daily Token Limit
+  type: AI_GOVERNANCE
+  condition:
+    daily_tokens: "> 100000"
+    user_role: "analyst"
+  action: DENY
+  message: "Daily token limit exceeded"
+```
+
+### Content Policies
+
+```yaml
+policy:
+  name: No Code Generation
+  type: AI_GOVERNANCE
+  condition:
+    prompt_contains:
+      - "write code"
+      - "generate script"
+    user_department: "non-engineering"
+  action: DENY
+```
+
+## Audit Trail
+
+### Request Logging
+
+Every AI Gate request is logged:
+
+```yaml
+audit_entry:
+  request_id: "req-abc123"
+  timestamp: "2024-01-20T10:30:00Z"
+  user: "analyst@company.com"
+  model: "gpt-4"
+  provider: "openai"
+  prompt_tokens: 150
+  completion_tokens: 200
+  pii_detected: true
+  pii_types: ["EMAIL", "PHONE"]
+  redactions: 2
+  latency_ms: 1250
+  cost: 0.0105
+```
+
+### Compliance Reports
+
+Generate AI usage reports:
+
+- Requests by user/team
+- PII exposure attempts
+- Policy violations
+- Cost analysis
+- Model usage patterns
+
+## API Access
+
+### Proxy Request
+
+```bash
+curl -X POST "https://ai-gate.securelens.ai/v1/chat/completions" \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### Get Usage Stats
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/ai-gate/usage" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d "period=today"
+```
+
+## Next Steps
+
+- [Privacy Center](/features/privacy) — Data subject rights
+- [Audit Trail](/features/audit) — Complete logging
+- [Governance](/features/governance) — Policy management

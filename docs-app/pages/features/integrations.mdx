@@ -1,0 +1,295 @@
+# Integrations
+
+Connect SecureLens with your existing tools and workflows.
+
+![Integrations](/screenshots/integrations.png)
+
+## Overview
+
+SecureLens integrates with:
+
+- **Data platforms** — Databases, warehouses, lakes
+- **Security tools** — SIEM, SOAR, DLP
+- **Collaboration** — Slack, Teams, email
+- **Ticketing** — Jira, ServiceNow
+- **Monitoring** — Prometheus, Grafana, Datadog
+
+## Available Integrations
+
+### Data Platforms
+
+| Integration | Type | Status |
+|-------------|------|--------|
+| **Snowflake** | Data Warehouse | ✅ GA |
+| **Databricks** | Lakehouse | ✅ GA |
+| **BigQuery** | Data Warehouse | ✅ GA |
+| **Redshift** | Data Warehouse | ✅ GA |
+| **DataHub** | Data Catalog | ✅ GA |
+| **Collibra** | Data Catalog | ✅ GA |
+| **Alation** | Data Catalog | 🔜 Beta |
+
+### Security & Compliance
+
+| Integration | Type | Status |
+|-------------|------|--------|
+| **Splunk** | SIEM | ✅ GA |
+| **Elastic** | SIEM | ✅ GA |
+| **Microsoft Sentinel** | SIEM | ✅ GA |
+| **CrowdStrike** | EDR | ✅ GA |
+| **OneTrust** | Privacy | ✅ GA |
+| **BigID** | Privacy | 🔜 Beta |
+
+### Collaboration
+
+| Integration | Type | Status |
+|-------------|------|--------|
+| **Slack** | Messaging | ✅ GA |
+| **Microsoft Teams** | Messaging | ✅ GA |
+| **Email (SMTP)** | Notifications | ✅ GA |
+| **PagerDuty** | Alerting | ✅ GA |
+| **Opsgenie** | Alerting | ✅ GA |
+
+### Ticketing
+
+| Integration | Type | Status |
+|-------------|------|--------|
+| **Jira** | Issue Tracking | ✅ GA |
+| **ServiceNow** | ITSM | ✅ GA |
+| **Zendesk** | Support | ✅ GA |
+| **Linear** | Issue Tracking | 🔜 Beta |
+
+### Monitoring
+
+| Integration | Type | Status |
+|-------------|------|--------|
+| **Prometheus** | Metrics | ✅ GA |
+| **Grafana** | Dashboards | ✅ GA |
+| **Datadog** | APM | ✅ GA |
+| **New Relic** | APM | ✅ GA |
+| **OpenTelemetry** | Tracing | ✅ GA |
+
+## Configuring Integrations
+
+### Slack Integration
+
+1. Navigate to **Settings → Integrations**
+2. Click **Slack**
+3. Click **Connect to Slack**
+4. Authorize SecureLens
+5. Select channels for notifications
+
+```yaml
+slack:
+  enabled: true
+  webhook_url: https://hooks.slack.com/services/...
+  channels:
+    alerts: "#securelens-alerts"
+    reports: "#compliance-reports"
+  notifications:
+    - type: POLICY_VIOLATION
+      channel: alerts
+      severity: [HIGH, CRITICAL]
+    - type: SCAN_COMPLETE
+      channel: reports
+```
+
+### Jira Integration
+
+```yaml
+jira:
+  enabled: true
+  url: https://company.atlassian.net
+  username: securelens@company.com
+  api_token: ${JIRA_API_TOKEN}
+  project: SEC
+  issue_types:
+    policy_violation: Bug
+    remediation: Task
+  custom_fields:
+    severity: customfield_10001
+    data_source: customfield_10002
+```
+
+### Splunk Integration
+
+```yaml
+splunk:
+  enabled: true
+  hec_url: https://splunk.company.com:8088
+  hec_token: ${SPLUNK_HEC_TOKEN}
+  index: securelens
+  source: securelens-api
+  events:
+    - AUDIT_LOG
+    - POLICY_VIOLATION
+    - CLASSIFICATION
+```
+
+## Webhooks
+
+### Outbound Webhooks
+
+Send events to any HTTP endpoint:
+
+```yaml
+webhooks:
+  - name: custom-siem
+    url: https://siem.company.com/api/events
+    method: POST
+    headers:
+      Authorization: Bearer ${SIEM_TOKEN}
+    events:
+      - POLICY_VIOLATION
+      - DATA_ACCESS
+    retry:
+      max_attempts: 3
+      backoff: exponential
+```
+
+### Webhook Payload
+
+```json
+{
+  "event_type": "POLICY_VIOLATION",
+  "timestamp": "2024-01-20T10:30:00Z",
+  "data": {
+    "policy_id": "pol-123",
+    "policy_name": "PII Access Control",
+    "user": "analyst@company.com",
+    "resource": "users.ssn",
+    "action": "DENIED",
+    "reason": "User lacks required role"
+  },
+  "metadata": {
+    "tenant_id": "tenant-abc",
+    "source": "securelens"
+  }
+}
+```
+
+### Inbound Webhooks
+
+Receive events from external systems:
+
+```yaml
+inbound_webhooks:
+  - name: github-events
+    path: /webhooks/github
+    secret: ${GITHUB_WEBHOOK_SECRET}
+    actions:
+      push:
+        - trigger_scan: true
+```
+
+## API Integration
+
+### REST API
+
+Full REST API for custom integrations:
+
+```bash
+# Authentication
+curl -X POST "https://api.securelens.ai/v1/auth/token" \
+  -d "client_id=xxx&client_secret=yyy"
+
+# Get classifications
+curl -X GET "https://api.securelens.ai/v1/classifications" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### GraphQL API
+
+```graphql
+query GetClassifications {
+  classifications(dataSourceId: "ds-123") {
+    id
+    column
+    type
+    confidence
+    createdAt
+  }
+}
+```
+
+### SDK Libraries
+
+| Language | Package | Status |
+|----------|---------|--------|
+| **Python** | `securelens-sdk` | ✅ GA |
+| **JavaScript** | `@securelens/sdk` | ✅ GA |
+| **Go** | `github.com/securelens/sdk-go` | ✅ GA |
+| **Java** | `com.securelens:sdk` | 🔜 Beta |
+
+```python
+# Python SDK example
+from securelens import SecureLens
+
+client = SecureLens(api_key="your-api-key")
+
+# Get classifications
+classifications = client.classifications.list(
+    data_source_id="ds-123"
+)
+
+# Create policy
+policy = client.policies.create(
+    name="PII Access Control",
+    type="ACCESS",
+    condition={"classification": "SSN"},
+    action="DENY"
+)
+```
+
+## Data Export
+
+### Export Destinations
+
+| Destination | Format | Schedule |
+|-------------|--------|----------|
+| **S3** | JSON, Parquet | Hourly/Daily |
+| **Azure Blob** | JSON, Parquet | Hourly/Daily |
+| **GCS** | JSON, Parquet | Hourly/Daily |
+| **SFTP** | CSV, JSON | Daily |
+| **Snowflake** | Direct load | Real-time |
+
+### Export Configuration
+
+```yaml
+exports:
+  - name: audit-to-s3
+    destination:
+      type: s3
+      bucket: securelens-exports
+      prefix: audit/
+      region: us-east-1
+    data:
+      - AUDIT_LOGS
+      - CLASSIFICATIONS
+    format: parquet
+    schedule: "0 * * * *"  # Hourly
+    partition_by: [date, tenant_id]
+```
+
+## Integration Health
+
+### Status Dashboard
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Integration Status                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Slack          ✅ Connected    Last sync: 2m ago           │
+│  Jira           ✅ Connected    Last sync: 5m ago           │
+│  Splunk         ✅ Connected    Events/hr: 1,234            │
+│  Snowflake      ⚠️ Degraded     Latency: 5s (high)          │
+│  PagerDuty      ✅ Connected    Alerts sent: 3              │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Next Steps
+
+- [Scheduled Jobs](/features/jobs) — Automate workflows
+- [Reports](/features/reports) — Export reports
+- [API Reference](/api-reference) — API documentation

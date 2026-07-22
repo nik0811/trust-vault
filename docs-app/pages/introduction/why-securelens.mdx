@@ -1,0 +1,131 @@
+# Why Enterprises Need SecureLens
+
+The rapid adoption of AI and large language models has created a **governance gap** that traditional security tools cannot address.
+
+## The AI Governance Challenge
+
+### Data Flows Have Changed
+
+Traditional data governance assumed predictable data flows:
+- Data stays in databases
+- Access is through known applications
+- Transformations are well-defined ETL pipelines
+
+**AI has changed everything:**
+- Data is copied into vector databases
+- Prompts contain sensitive information
+- LLM responses may leak training data
+- Shadow AI usage is rampant
+
+### Traditional Tools Fall Short
+
+| Tool | Limitation for AI |
+|------|-------------------|
+| **DLP** | Pattern-based, misses context |
+| **CASB** | Doesn't understand AI protocols |
+| **IAM** | Can't govern prompt content |
+| **SIEM** | Reactive, not preventive |
+
+## The SecureLens Approach
+
+SecureLens was built **AI-first** to address these challenges:
+
+### 1. Inline Governance
+
+Unlike traditional tools that scan after the fact, SecureLens sits **inline** in the data flow:
+
+```
+User → SecureLens → LLM → SecureLens → User
+         ↓                    ↓
+      Classify             Audit
+      Redact               Filter
+      Enforce              Log
+```
+
+### 2. Context-Aware Classification
+
+Our GLiNER-based classifier understands **context**, not just patterns:
+
+```
+"Call John at 555-1234"     → PHONE_NUMBER (detected)
+"Error code: 555-1234"      → NOT sensitive (context)
+"Patient ID: 555-1234"      → MEDICAL_ID (domain context)
+```
+
+### 3. Self-Learning System
+
+SecureLens improves over time through a feedback loop:
+
+1. **Classify** — AI detects sensitive data
+2. **Review** — Analysts verify classifications
+3. **Learn** — System improves from feedback
+4. **Adapt** — New patterns are recognized
+
+### 4. Multi-Tenant by Design
+
+Enterprise-grade isolation from day one:
+
+- **Tenant isolation** — Data never crosses boundaries
+- **RBAC** — Fine-grained access control
+- **Audit** — Per-tenant audit trails
+- **Customization** — Tenant-specific policies
+
+## Real-World Scenarios
+
+### Scenario 1: Preventing PII Leakage
+
+**Without SecureLens:**
+```
+User: "Summarize the customer complaint from John Smith, SSN 123-45-6789"
+LLM: [Processes and potentially stores PII]
+```
+
+**With SecureLens:**
+```
+User: "Summarize the customer complaint from John Smith, SSN 123-45-6789"
+SecureLens: [Detects PII, redacts SSN]
+LLM: "Summarize the customer complaint from [PERSON], SSN [REDACTED]"
+```
+
+### Scenario 2: Compliance Reporting
+
+**Auditor asks:** "Show me all instances where PII was accessed in the last 90 days"
+
+**SecureLens provides:**
+- Complete access log with timestamps
+- Classification of data accessed
+- User and application context
+- Policy decisions made
+
+### Scenario 3: Shadow AI Detection
+
+**Problem:** Employees using unauthorized AI tools
+
+**SecureLens detects:**
+- Unusual data access patterns
+- Data flowing to unknown endpoints
+- Sensitive data in unexpected contexts
+
+## The Cost of Inaction
+
+| Risk | Potential Impact |
+|------|------------------|
+| **Data breach** | $4.45M average cost (IBM 2023) |
+| **GDPR fine** | Up to 4% of global revenue |
+| **HIPAA violation** | $50K - $1.5M per incident |
+| **Reputation damage** | Immeasurable |
+
+## Why Now?
+
+The window for proactive AI governance is closing:
+
+1. **Regulations are coming** — EU AI Act, state privacy laws
+2. **AI adoption is accelerating** — 35% of companies using AI (McKinsey)
+3. **Attacks are evolving** — Prompt injection, model extraction
+4. **Data volumes are exploding** — 120 ZB by 2025
+
+## Next Steps
+
+- [Key Benefits & ROI](/introduction/benefits)
+- [Supported Compliance Frameworks](/introduction/compliance)
+- [Quick Start Guide](/getting-started/quickstart)

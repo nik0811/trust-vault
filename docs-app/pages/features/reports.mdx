@@ -1,0 +1,319 @@
+# Reports
+
+Generate compliance, operational, and executive reports.
+
+![Reports](/screenshots/reports.png)
+
+## Overview
+
+SecureLens provides comprehensive reporting:
+
+- **Compliance reports** for auditors
+- **Executive dashboards** for leadership
+- **Operational reports** for teams
+- **Custom reports** for specific needs
+
+## Report Types
+
+### Compliance Reports
+
+| Report | Description | Audience |
+|--------|-------------|----------|
+| **GDPR Summary** | EU compliance status | DPO, Auditors |
+| **CCPA Summary** | California compliance | Privacy Team |
+| **HIPAA Summary** | Healthcare compliance | Compliance |
+| **PCI-DSS Summary** | Payment card compliance | Security |
+| **SOC 2 Evidence** | Audit evidence package | Auditors |
+
+### Operational Reports
+
+| Report | Description | Audience |
+|--------|-------------|----------|
+| **Classification Summary** | PII detection results | Data Team |
+| **Scan Report** | Data source scan results | Operations |
+| **Quality Report** | Data quality metrics | Data Team |
+| **ROT Analysis** | Redundant data findings | Storage Team |
+
+### Executive Reports
+
+| Report | Description | Audience |
+|--------|-------------|----------|
+| **Executive Summary** | High-level overview | C-Suite |
+| **Risk Dashboard** | Risk posture summary | CISO |
+| **Trend Analysis** | Month-over-month trends | Leadership |
+| **Cost Analysis** | Storage and AI costs | Finance |
+
+## Generating Reports
+
+### On-Demand Reports
+
+1. Navigate to **Reports**
+2. Select report type
+3. Configure parameters:
+
+```yaml
+report:
+  type: COMPLIANCE_SUMMARY
+  framework: GDPR
+  period:
+    start: 2024-01-01
+    end: 2024-01-31
+  scope:
+    tenants: [all]
+    data_sources: [all]
+  format: PDF
+  include:
+    - executive_summary
+    - gap_analysis
+    - evidence
+    - recommendations
+```
+
+4. Click **Generate**
+
+### Scheduled Reports
+
+```yaml
+scheduled_report:
+  name: Weekly Compliance Report
+  type: COMPLIANCE_SUMMARY
+  schedule: "0 8 * * MON"  # Monday 8 AM
+  config:
+    framework: [GDPR, CCPA]
+    format: PDF
+  delivery:
+    email:
+      to: [compliance@company.com, ciso@company.com]
+      subject: "Weekly Compliance Report - {{date}}"
+    slack:
+      channel: "#compliance-reports"
+```
+
+## Report Templates
+
+### GDPR Compliance Report
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              GDPR Compliance Report                          │
+│              January 2024                                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  EXECUTIVE SUMMARY                                           │
+│  ─────────────────                                          │
+│  Overall Compliance Score: 85%                               │
+│  Risk Level: Medium                                          │
+│  Key Issues: 3 high-priority gaps identified                │
+│                                                              │
+│  ARTICLE COMPLIANCE                                          │
+│  ─────────────────                                          │
+│  Art. 5 (Principles)      ████████████████░░░░  85%         │
+│  Art. 6 (Lawful Basis)    ██████████████████░░  92%         │
+│  Art. 13-14 (Transparency)████████████████████  100%        │
+│  Art. 15-22 (Rights)      ████████████████████  98%         │
+│  Art. 30 (Records)        ████████████░░░░░░░░  65%         │
+│  Art. 32 (Security)       ██████████████████░░  90%         │
+│  Art. 35 (DPIA)           ████████░░░░░░░░░░░░  45%         │
+│                                                              │
+│  GAP ANALYSIS                                                │
+│  ────────────                                               │
+│  1. DPIA required for AI processing (Art. 35)               │
+│  2. Records of processing incomplete (Art. 30)              │
+│  3. Cross-border transfer documentation (Art. 46)           │
+│                                                              │
+│  RECOMMENDATIONS                                             │
+│  ───────────────                                            │
+│  1. Conduct DPIA for AI/ML systems                          │
+│  2. Complete data inventory for all sources                 │
+│  3. Document SCCs for US transfers                          │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Executive Summary Report
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Executive Summary                               │
+│              Q1 2024                                         │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  KEY METRICS                                                 │
+│  ───────────                                                │
+│  Data Sources: 25 (+3 from Q4)                              │
+│  Records Scanned: 15.4M (+12%)                              │
+│  PII Records: 2.3M (15%)                                    │
+│  Compliance Score: 87% (+5%)                                │
+│                                                              │
+│  RISK SUMMARY                                                │
+│  ────────────                                               │
+│  Overall Risk: Medium (improving)                           │
+│  Critical Issues: 0                                         │
+│  High Issues: 3 (down from 8)                               │
+│  Open Remediations: 12                                      │
+│                                                              │
+│  ACHIEVEMENTS                                                │
+│  ────────────                                               │
+│  ✅ SOC 2 Type II certification renewed                     │
+│  ✅ DSAR response time reduced to 8 days                    │
+│  ✅ ROT cleanup saved $60K annually                         │
+│                                                              │
+│  UPCOMING                                                    │
+│  ────────                                                   │
+│  • GDPR audit scheduled (March)                             │
+│  • AI Gate rollout (February)                               │
+│  • New data sources: Salesforce, HubSpot                    │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Report Formats
+
+### Available Formats
+
+| Format | Use Case | Features |
+|--------|----------|----------|
+| **PDF** | Formal reports | Branded, printable |
+| **HTML** | Interactive | Clickable, searchable |
+| **CSV** | Data analysis | Raw data export |
+| **JSON** | API integration | Structured data |
+| **Excel** | Spreadsheets | Pivot tables |
+
+### Branding
+
+Customize report appearance:
+
+```yaml
+branding:
+  logo: /assets/company-logo.png
+  colors:
+    primary: "#1a73e8"
+    secondary: "#34a853"
+  footer: "Confidential - {{company_name}}"
+  watermark: "DRAFT"  # Optional
+```
+
+## Report Delivery
+
+### Delivery Options
+
+| Method | Configuration |
+|--------|---------------|
+| **Email** | Recipients, subject, body |
+| **Slack** | Channel, message |
+| **S3** | Bucket, path |
+| **SFTP** | Host, credentials |
+| **Webhook** | URL, headers |
+
+### Delivery Configuration
+
+```yaml
+delivery:
+  email:
+    to: [compliance@company.com]
+    cc: [ciso@company.com]
+    subject: "{{report_name}} - {{date}}"
+    body: |
+      Please find attached the {{report_name}}.
+      
+      Summary:
+      - Compliance Score: {{compliance_score}}%
+      - Open Issues: {{open_issues}}
+      
+    attachments: [report.pdf]
+    
+  s3:
+    bucket: compliance-reports
+    path: "{{year}}/{{month}}/{{report_name}}.pdf"
+    
+  slack:
+    channel: "#compliance"
+    message: "New report available: {{report_name}}"
+    upload: true
+```
+
+## Custom Reports
+
+### Report Builder
+
+Create custom reports with the visual builder:
+
+```yaml
+custom_report:
+  name: Monthly PII Summary
+  sections:
+    - type: METRIC_CARDS
+      metrics:
+        - total_records
+        - pii_records
+        - compliance_score
+        
+    - type: CHART
+      chart_type: BAR
+      data: pii_by_type
+      title: "PII by Category"
+      
+    - type: TABLE
+      data: top_pii_sources
+      columns: [source, pii_count, percentage]
+      title: "Top PII Sources"
+      
+    - type: TEXT
+      content: |
+        ## Recommendations
+        Based on this month's analysis...
+```
+
+### SQL Reports
+
+Write custom SQL queries:
+
+```sql
+-- Custom PII exposure report
+SELECT 
+  ds.name as data_source,
+  c.classification_type,
+  COUNT(*) as record_count,
+  AVG(c.confidence) as avg_confidence
+FROM classifications c
+JOIN data_sources ds ON c.data_source_id = ds.id
+WHERE c.created_at >= '{{start_date}}'
+  AND c.created_at < '{{end_date}}'
+GROUP BY ds.name, c.classification_type
+ORDER BY record_count DESC
+```
+
+## API Access
+
+### Generate Report
+
+```bash
+curl -X POST "https://api.securelens.ai/v1/reports/generate" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "type": "COMPLIANCE_SUMMARY",
+    "framework": "GDPR",
+    "format": "PDF"
+  }'
+```
+
+### Get Report Status
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/reports/rpt-123/status" \
+  -H "Authorization: Bearer $API_KEY"
+```
+
+### Download Report
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/reports/rpt-123/download" \
+  -H "Authorization: Bearer $API_KEY" \
+  -o report.pdf
+```
+
+## Next Steps
+
+- [Compliance](/introduction/compliance) — Framework details
+- [Audit](/features/audit) — Audit evidence
+- [Integrations](/features/integrations) — Report delivery

@@ -1,0 +1,191 @@
+# Compliance Frameworks
+
+SecureLens provides built-in support for major regulatory frameworks and industry standards.
+
+## Supported Frameworks
+
+### GDPR (General Data Protection Regulation)
+
+The EU's comprehensive data protection regulation.
+
+| Requirement | SecureLens Capability |
+|-------------|----------------------|
+| **Article 30**: Records of processing | Automated data mapping |
+| **Article 32**: Security of processing | Encryption, access controls |
+| **Article 33**: Breach notification | Real-time detection, alerts |
+| **Article 35**: DPIA | Risk assessment reports |
+| **Article 17**: Right to erasure | Data discovery, deletion tracking |
+
+**Key Features:**
+- Automated PII detection across all data sources
+- Consent management integration
+- Data subject request automation
+- Cross-border transfer monitoring
+
+### CCPA/CPRA (California Consumer Privacy Act)
+
+California's landmark privacy legislation.
+
+| Requirement | SecureLens Capability |
+|-------------|----------------------|
+| **Right to Know** | Data inventory, access logs |
+| **Right to Delete** | Data discovery, deletion verification |
+| **Right to Opt-Out** | Consent tracking, policy enforcement |
+| **Data Minimization** | ROT detection, retention policies |
+
+**Key Features:**
+- Consumer data inventory
+- Sale/sharing tracking
+- Automated opt-out enforcement
+- Annual reporting support
+
+### HIPAA (Health Insurance Portability and Accountability Act)
+
+US healthcare data protection standard.
+
+| Requirement | SecureLens Capability |
+|-------------|----------------------|
+| **Privacy Rule** | PHI detection, access controls |
+| **Security Rule** | Encryption, audit trails |
+| **Breach Notification** | Real-time detection, reporting |
+| **Minimum Necessary** | Policy-based data access |
+
+**Key Features:**
+- 18 HIPAA identifiers detection
+- BAA compliance tracking
+- ePHI access monitoring
+- Breach risk assessment
+
+### PCI-DSS (Payment Card Industry Data Security Standard)
+
+Credit card data protection requirements.
+
+| Requirement | SecureLens Capability |
+|-------------|----------------------|
+| **Req 3**: Protect stored data | PAN detection, encryption |
+| **Req 7**: Restrict access | RBAC, least privilege |
+| **Req 10**: Track access | Comprehensive audit logs |
+| **Req 12**: Security policies | Policy enforcement |
+
+**Key Features:**
+- Credit card number detection
+- Tokenization support
+- Access logging
+- Quarterly scan reports
+
+### SOX (Sarbanes-Oxley Act)
+
+Financial reporting and controls.
+
+| Requirement | SecureLens Capability |
+|-------------|----------------------|
+| **Section 302**: Disclosure controls | Data classification |
+| **Section 404**: Internal controls | Access controls, audit |
+| **Section 409**: Real-time disclosure | Anomaly detection |
+
+**Key Features:**
+- Financial data classification
+- Segregation of duties
+- Change tracking
+- Control testing reports
+
+### SOC 2 (Service Organization Control)
+
+Trust service criteria for service providers.
+
+| Trust Criteria | SecureLens Capability |
+|----------------|----------------------|
+| **Security** | Access controls, encryption |
+| **Availability** | Monitoring, alerting |
+| **Processing Integrity** | Data quality, validation |
+| **Confidentiality** | Classification, redaction |
+| **Privacy** | PII protection, consent |
+
+**Key Features:**
+- Continuous control monitoring
+- Evidence collection
+- Audit trail generation
+- Gap analysis reports
+
+## Industry-Specific Compliance
+
+### Financial Services
+
+- **GLBA**: Gramm-Leach-Bliley Act
+- **FFIEC**: Federal Financial Institutions Examination Council
+- **MiFID II**: Markets in Financial Instruments Directive
+- **Basel III**: Banking supervision framework
+
+### Healthcare
+
+- **HITECH**: Health Information Technology for Economic and Clinical Health
+- **21 CFR Part 11**: FDA electronic records
+- **HITRUST**: Health Information Trust Alliance
+
+### Government
+
+- **FedRAMP**: Federal Risk and Authorization Management Program
+- **FISMA**: Federal Information Security Management Act
+- **NIST 800-53**: Security and Privacy Controls
+
+## Compliance Dashboard
+
+SecureLens provides a unified compliance dashboard:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                  Compliance Overview                     │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  GDPR        ████████████████████░░░░  85%              │
+│  CCPA        ██████████████████████░░  92%              │
+│  HIPAA       ████████████████████████  100%             │
+│  PCI-DSS     ██████████████████░░░░░░  78%              │
+│  SOX         ████████████████████████  100%             │
+│                                                          │
+│  ⚠️ 3 controls need attention                           │
+│  ✅ 47 controls passing                                  │
+│  📋 Next audit: 30 days                                  │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Automated Reporting
+
+Generate compliance reports with one click:
+
+- **Data Inventory Report**: All data sources and classifications
+- **Access Audit Report**: Who accessed what, when
+- **Policy Compliance Report**: Policy violations and remediation
+- **Risk Assessment Report**: Data risk scores and trends
+- **Breach Readiness Report**: Incident response preparedness
+
+## Custom Frameworks
+
+Create custom compliance frameworks for:
+
+- Internal policies
+- Industry-specific requirements
+- Customer contractual obligations
+- Regional regulations
+
+```yaml
+# Example custom framework
+name: "Internal Data Policy"
+version: "2.0"
+controls:
+  - id: IDP-001
+    name: "PII Classification"
+    description: "All PII must be classified within 24 hours"
+    check: classification_sla < 24h
+  - id: IDP-002
+    name: "Access Review"
+    description: "Access must be reviewed quarterly"
+    check: last_access_review < 90d
+```
+
+## Next Steps
+
+- [Quick Start Guide](/getting-started/quickstart)
+- [Governance Policies](/features/governance-policies)
+- [Audit Trail](/features/audit-trail)

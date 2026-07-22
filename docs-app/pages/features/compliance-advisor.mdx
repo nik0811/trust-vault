@@ -1,0 +1,277 @@
+# Compliance Advisor
+
+AI-powered compliance guidance and gap analysis.
+
+## Overview
+
+![Compliance Advisor](/screenshots/compliance-advisor.png)
+
+Compliance Advisor provides:
+
+- **Gap Analysis**: Identify compliance gaps
+- **Recommendations**: Actionable remediation steps
+- **Progress Tracking**: Monitor compliance journey
+- **Reporting**: Generate audit-ready reports
+
+## Supported Frameworks
+
+### Privacy Regulations
+
+| Framework | Coverage |
+|-----------|----------|
+| **GDPR** | Full |
+| **CCPA/CPRA** | Full |
+| **HIPAA** | Full |
+| **LGPD** | Full |
+| **PDPA** | Full |
+| **POPIA** | Full |
+
+### Security Standards
+
+| Framework | Coverage |
+|-----------|----------|
+| **SOC 2** | Full |
+| **ISO 27001** | Full |
+| **NIST CSF** | Full |
+| **PCI-DSS** | Full |
+| **FedRAMP** | Partial |
+
+### Industry-Specific
+
+| Framework | Coverage |
+|-----------|----------|
+| **HITRUST** | Full |
+| **GLBA** | Full |
+| **SOX** | Partial |
+| **FFIEC** | Partial |
+
+## Gap Analysis
+
+### Run Assessment
+
+1. Navigate to **Compliance Advisor**
+2. Select framework(s)
+3. Click **Run Assessment**
+4. Review results
+
+### Assessment Results
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    GDPR Assessment                       │
+├─────────────────────────────────────────────────────────┤
+│                                                          │
+│  Overall Compliance: 78%                                 │
+│  ████████████████████░░░░░░                             │
+│                                                          │
+│  ✅ Passing: 42 controls                                │
+│  ⚠️ Partial: 8 controls                                 │
+│  ❌ Failing: 4 controls                                 │
+│  ⏭️ Not Applicable: 6 controls                          │
+│                                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Control Details
+
+View details for each control:
+
+| Control | Status | Evidence | Gap |
+|---------|--------|----------|-----|
+| Art. 30 - Records | ✅ Pass | Data map exists | - |
+| Art. 32 - Security | ⚠️ Partial | Encryption enabled | Missing MFA |
+| Art. 33 - Breach | ❌ Fail | No process | Need incident plan |
+
+## Recommendations
+
+### Prioritized Actions
+
+Recommendations sorted by impact:
+
+| Priority | Control | Action | Effort |
+|----------|---------|--------|--------|
+| 🔴 High | Art. 33 | Create breach notification process | 2 weeks |
+| 🟡 Medium | Art. 32 | Enable MFA for all users | 1 week |
+| 🟢 Low | Art. 35 | Document DPIA process | 3 days |
+
+### Action Details
+
+Each recommendation includes:
+
+- **Description**: What needs to be done
+- **Rationale**: Why it's required
+- **Steps**: How to implement
+- **Evidence**: What to collect
+- **Resources**: Helpful links
+
+### Implementation Tracking
+
+Track remediation progress:
+
+```
+Recommendation: Enable MFA for all users
+Status: In Progress
+Assigned: security-team
+Due Date: 2024-02-15
+Progress: 60%
+
+Tasks:
+  ✅ Configure MFA provider
+  ✅ Enable for admin users
+  🔄 Roll out to all users
+  ⬜ Update documentation
+```
+
+## Evidence Collection
+
+### Automatic Evidence
+
+SecureLens automatically collects:
+
+- Data inventory reports
+- Classification results
+- Policy configurations
+- Access logs
+- Encryption status
+
+### Manual Evidence
+
+Upload additional evidence:
+
+- Policies and procedures
+- Training records
+- Audit reports
+- Contracts
+
+### Evidence Mapping
+
+Map evidence to controls:
+
+| Control | Required Evidence | Status |
+|---------|-------------------|--------|
+| Art. 30 | Data inventory | ✅ Auto |
+| Art. 32 | Security policy | 📎 Uploaded |
+| Art. 33 | Incident plan | ❌ Missing |
+
+## Continuous Monitoring
+
+### Real-time Compliance
+
+Monitor compliance continuously:
+
+- Policy changes detected
+- New data sources scanned
+- Classification updates
+- Access pattern changes
+
+### Compliance Drift
+
+Alert on compliance changes:
+
+```yaml
+compliance_alerts:
+  - framework: GDPR
+    condition: "compliance_score < 80"
+    notify: ["compliance@company.com"]
+    
+  - framework: HIPAA
+    condition: "control_failed"
+    notify: ["compliance@company.com", "security@company.com"]
+```
+
+## Reporting
+
+### Compliance Dashboard
+
+Real-time compliance status:
+
+| Framework | Score | Trend | Next Audit |
+|-----------|-------|-------|------------|
+| GDPR | 85% | ↑ +3% | 2024-06-01 |
+| CCPA | 92% | → 0% | 2024-03-15 |
+| HIPAA | 78% | ↓ -2% | 2024-04-01 |
+
+### Audit Reports
+
+Generate audit-ready reports:
+
+1. Select framework
+2. Choose report type:
+   - Executive summary
+   - Detailed assessment
+   - Evidence package
+3. Export as PDF or ZIP
+
+### Scheduled Reports
+
+Automate report generation:
+
+```yaml
+scheduled_reports:
+  - name: "Monthly GDPR Report"
+    framework: GDPR
+    schedule: "0 9 1 * *"  # 1st of month
+    recipients: ["compliance@company.com"]
+    format: pdf
+```
+
+## Custom Frameworks
+
+### Create Custom Framework
+
+1. Navigate to **Compliance Advisor** → **Frameworks**
+2. Click **Create Framework**
+3. Define controls:
+
+```yaml
+name: "Internal Data Policy"
+version: "2.0"
+controls:
+  - id: IDP-001
+    name: "Data Classification"
+    description: "All data must be classified within 24 hours"
+    category: "Data Governance"
+    evidence_types:
+      - classification_report
+      - sla_metrics
+      
+  - id: IDP-002
+    name: "Access Review"
+    description: "Access must be reviewed quarterly"
+    category: "Access Control"
+    evidence_types:
+      - access_review_report
+```
+
+### Import Framework
+
+Import from common formats:
+
+- CSV
+- JSON
+- Excel
+
+## Integration
+
+### GRC Platforms
+
+Sync with GRC tools:
+
+- ServiceNow GRC
+- RSA Archer
+- OneTrust
+- LogicGate
+
+### Audit Tools
+
+Export to audit tools:
+
+- AuditBoard
+- Workiva
+- TeamMate
+
+## Next Steps
+
+- [Audit Trail](/features/audit-trail)
+- [Governance Policies](/features/governance-policies)
+- [Reports](/features/reports)

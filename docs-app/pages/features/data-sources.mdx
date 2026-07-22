@@ -1,0 +1,234 @@
+# Data Sources
+
+Connect and manage your data sources for classification and governance.
+
+## Overview
+
+![Data Sources](/screenshots/data-sources.png)
+
+SecureLens supports a wide variety of data sources:
+
+### Databases
+- PostgreSQL
+- MySQL / MariaDB
+- Microsoft SQL Server
+- Oracle
+- MongoDB
+- Redis
+
+### Cloud Data Warehouses
+- Snowflake
+- Google BigQuery
+- Amazon Redshift
+- Azure Synapse
+- Databricks
+
+### Cloud Storage
+- Amazon S3
+- Google Cloud Storage
+- Azure Blob Storage
+- MinIO
+
+### SaaS Applications
+- Salesforce
+- HubSpot
+- Zendesk
+- ServiceNow
+
+## Adding a Data Source
+
+### Step 1: Select Type
+
+1. Navigate to **Data Sources**
+2. Click **Add Data Source**
+3. Select the source type
+
+### Step 2: Configure Connection
+
+Enter connection details:
+
+```yaml
+# PostgreSQL Example
+host: db.company.com
+port: 5432
+database: production
+username: securelens_reader
+password: ********
+ssl_mode: require
+```
+
+### Step 3: Test Connection
+
+Click **Test Connection** to verify:
+
+- Network connectivity
+- Authentication
+- Required permissions
+
+### Step 4: Configure Scan
+
+Set scan options:
+
+| Option | Description |
+|--------|-------------|
+| **Scan Schedule** | How often to scan |
+| **Sample Size** | Records to sample per table |
+| **Include/Exclude** | Tables to include or exclude |
+| **Classification** | Enable auto-classification |
+
+### Step 5: Start Initial Scan
+
+Click **Save & Scan** to begin the initial discovery.
+
+## Connection Security
+
+### Credentials
+
+SecureLens supports multiple credential methods:
+
+- **Username/Password**: Basic authentication
+- **IAM Roles**: AWS IAM, GCP Service Account
+- **OAuth**: For SaaS applications
+- **Certificates**: mTLS for databases
+
+### Network Security
+
+- **VPC Peering**: Connect to private networks
+- **SSH Tunnels**: Secure database access
+- **Private Link**: AWS/Azure private endpoints
+
+### Encryption
+
+- TLS 1.2+ required for all connections
+- Credentials encrypted at rest
+- Secrets stored in configured secret manager
+
+## Scan Results
+
+After scanning, view discovered data:
+
+### Schema Discovery
+
+- Tables and columns
+- Data types
+- Row counts
+- Sample values (redacted)
+
+### Classification Results
+
+- Detected PII types
+- Confidence scores
+- Suggested labels
+
+### Data Quality
+
+- Completeness scores
+- Format validation
+- Anomaly detection
+
+## Managing Data Sources
+
+### Edit Configuration
+
+1. Click on a data source
+2. Click **Edit**
+3. Modify settings
+4. Click **Save**
+
+### Rescan
+
+Trigger a manual rescan:
+
+1. Click on a data source
+2. Click **Rescan**
+3. Select scan type:
+   - **Full**: Rescan everything
+   - **Incremental**: Only new/changed data
+   - **Schema Only**: Just structure
+
+### Disable/Enable
+
+Temporarily disable a data source:
+
+1. Click on a data source
+2. Toggle **Enabled** off
+3. Scans and policies pause
+
+### Delete
+
+Remove a data source:
+
+1. Click on a data source
+2. Click **Delete**
+3. Confirm deletion
+
+> **Warning:** Deleting a data source removes all associated classifications and audit history.
+
+## Permissions Required
+
+### PostgreSQL
+
+```sql
+-- Create read-only user
+CREATE USER securelens_reader WITH PASSWORD 'secure_password';
+
+-- Grant schema access
+GRANT USAGE ON SCHEMA public TO securelens_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO securelens_reader;
+
+-- For future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+  GRANT SELECT ON TABLES TO securelens_reader;
+```
+
+### MySQL
+
+```sql
+-- Create read-only user
+CREATE USER 'securelens'@'%' IDENTIFIED BY 'secure_password';
+
+-- Grant read access
+GRANT SELECT ON database_name.* TO 'securelens'@'%';
+```
+
+### Snowflake
+
+```sql
+-- Create role and user
+CREATE ROLE securelens_role;
+CREATE USER securelens_user PASSWORD = 'secure_password';
+GRANT ROLE securelens_role TO USER securelens_user;
+
+-- Grant warehouse and database access
+GRANT USAGE ON WAREHOUSE compute_wh TO ROLE securelens_role;
+GRANT USAGE ON DATABASE production TO ROLE securelens_role;
+GRANT SELECT ON ALL TABLES IN DATABASE production TO ROLE securelens_role;
+```
+
+## Troubleshooting
+
+### Connection Failed
+
+1. Verify network connectivity
+2. Check firewall rules
+3. Confirm credentials
+4. Test SSL/TLS settings
+
+### Scan Timeout
+
+1. Reduce sample size
+2. Exclude large tables
+3. Increase timeout setting
+4. Check database performance
+
+### Missing Tables
+
+1. Verify schema permissions
+2. Check include/exclude filters
+3. Refresh schema cache
+
+## Next Steps
+
+- [Classification](/features/classification)
+- [Data Map](/features/data-map)
+- [Governance Policies](/features/governance-policies)

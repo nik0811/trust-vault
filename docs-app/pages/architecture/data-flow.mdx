@@ -1,0 +1,141 @@
+# Data Flow
+
+How data flows through SecureLens.
+
+## Classification Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│ Data Source │────▶│   Scanner   │────▶│  Classifier │
+│ (DB/S3/etc) │     │  (Extract)  │     │  (GLiNER)   │
+└─────────────┘     └─────────────┘     └──────┬──────┘
+                                               │
+                    ┌──────────────────────────┘
+                    │
+                    ▼
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Store     │────▶│   Events    │────▶│  Handlers   │
+│  (Postgres) │     │   (Kafka)   │     │ (Audit/etc) │
+└─────────────┘     └─────────────┘     └─────────────┘
+```
+
+### Steps
+
+1. **Extract** — Scanner connects to data source, extracts sample data
+2. **Classify** — GLiNER model analyzes text for PII
+3. **Store** — Results saved to PostgreSQL
+4. **Publish** — Event published to Kafka
+5. **Handle** — Event handlers process (audit, notify, etc.)
+
+## AI Gate Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│    User     │────▶│   AI Gate   │────▶│     LLM     │
+│   (Prompt)  │     │   (Proxy)   │     │  (OpenAI)   │
+└─────────────┘     └──────┬──────┘     └──────┬──────┘
+                           │                   │
+                    ┌──────┴──────┐     ┌──────┴──────┐
+                    │    Scan     │     │   Filter    │
+                    │   Prompt    │     │  Response   │
+                    └─────────────┘     └─────────────┘
+```
+
+### Steps
+
+1. **Receive** — User sends prompt to AI Gate
+2. **Scan** — Classify prompt for PII
+3. **Redact** — Mask sensitive data
+4. **Forward** — Send clean prompt to LLM
+5. **Filter** — Scan response for leakage
+6. **Return** — Return filtered response
+7. **Audit** — Log entire interaction
+
+## Policy Evaluation Flow
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Request   │────▶│   Policy    │────▶│   Action    │
+│  (Access)   │     │   Engine    │     │ (Allow/Deny)│
+└─────────────┘     └──────┬──────┘     └─────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │   Match     │
+                    │  Policies   │
+                    └─────────────┘
+```
+
+### Steps
+
+1. **Request** — Data access request received
+2. **Context** — Gather user, resource, classification info
+3. **Match** — Find applicable policies
+4. **Evaluate** — Check conditions
+5. **Decide** — Determine action (allow/deny/redact)
+6. **Execute** — Apply action
+7. **Log** — Audit the decision
+
+## Event Processing
+
+### Event Types
+
+| Event | Trigger | Handlers |
+|-------|---------|----------|
+| `classification.created` | New classification | Audit, Label, Quality |
+| `policy.violated` | Policy breach | Alert, Ticket, Audit |
+| `scan.completed` | Scan finished | Report, Notify |
+| `dsar.received` | Privacy request | Workflow, Notify |
+
+### Event Schema
+
+```json
+{
+  "event_id": "evt-123",
+  "event_type": "classification.created",
+  "timestamp": "2024-01-20T10:30:00Z",
+  "tenant_id": "tenant-abc",
+  "data": {
+    "classification_id": "cls-456",
+    "data_source_id": "ds-789",
+    "type": "EMAIL",
+    "confidence": 0.98
+  }
+}
+```
+
+## Data Lineage
+
+SecureLens tracks data lineage using OpenLineage:
+
+```
+Source → Transform → Target
+   │         │          │
+   ▼         ▼          ▼
+DataHub  DataHub    DataHub
+(input)  (job)     (output)
+```
+
+### Lineage Events
+
+```json
+{
+  "eventType": "COMPLETE",
+  "job": {
+    "namespace": "securelens",
+    "name": "classification-scan"
+  },
+  "inputs": [{
+    "namespace": "prod-db",
+    "name": "users"
+  }],
+  "outputs": [{
+    "namespace": "securelens",
+    "name": "classifications"
+  }]
+}
+```
+
+## Next Steps
+
+- [Multi-Tenant Design](/architecture/multi-tenant)
+- [API Reference](/api-reference)

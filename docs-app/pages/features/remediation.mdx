@@ -1,0 +1,335 @@
+# Remediation
+
+Resolve data governance issues with automated workflows.
+
+![Remediation](/screenshots/remediation.png)
+
+## Overview
+
+SecureLens remediation helps you:
+
+- **Identify issues** from scans and policies
+- **Create remediation tasks** automatically
+- **Track resolution** through workflows
+- **Verify fixes** with re-scanning
+
+## Issue Types
+
+### Classification Issues
+
+| Issue | Description | Remediation |
+|-------|-------------|-------------|
+| **Unclassified PII** | Sensitive data not labeled | Apply classification |
+| **Misclassified** | Wrong classification | Correct classification |
+| **Low confidence** | Uncertain classification | Manual review |
+
+### Policy Violations
+
+| Issue | Description | Remediation |
+|-------|-------------|-------------|
+| **Access violation** | Unauthorized access | Revoke access |
+| **Retention violation** | Data past retention | Archive/delete |
+| **Residency violation** | Data in wrong region | Move data |
+
+### Data Quality Issues
+
+| Issue | Description | Remediation |
+|-------|-------------|-------------|
+| **Missing values** | High null rate | Data enrichment |
+| **Invalid format** | Format violations | Data cleansing |
+| **Duplicates** | Redundant records | Deduplication |
+
+### ROT Issues
+
+| Issue | Description | Remediation |
+|-------|-------------|-------------|
+| **Obsolete data** | Past retention | Archive/delete |
+| **Redundant data** | Duplicates | Consolidate |
+| **Trivial data** | Low value | Delete |
+
+## Remediation Workflow
+
+### Workflow Stages
+
+```
+IDENTIFIED → TRIAGED → ASSIGNED → IN PROGRESS → RESOLVED → VERIFIED
+     │          │          │           │            │          │
+     ▼          ▼          ▼           ▼            ▼          ▼
+  Detect    Prioritize  Assign to   Execute     Complete   Re-scan
+  issue     and plan    owner       fix         task       to verify
+```
+
+### Issue Lifecycle
+
+```yaml
+issue:
+  id: iss-123
+  type: POLICY_VIOLATION
+  status: IN_PROGRESS
+  
+  detection:
+    source: policy_evaluation
+    detected_at: "2024-01-20T10:00:00Z"
+    policy: PII Access Control
+    
+  triage:
+    severity: HIGH
+    priority: P1
+    triaged_by: admin@company.com
+    triaged_at: "2024-01-20T10:30:00Z"
+    
+  assignment:
+    assigned_to: analyst@company.com
+    assigned_at: "2024-01-20T11:00:00Z"
+    due_date: "2024-01-22T17:00:00Z"
+    
+  resolution:
+    action: REVOKE_ACCESS
+    resolved_by: analyst@company.com
+    resolved_at: "2024-01-21T14:00:00Z"
+    notes: "Removed user from PII access group"
+    
+  verification:
+    verified: true
+    verified_at: "2024-01-21T15:00:00Z"
+    re_scan_passed: true
+```
+
+## Remediation Dashboard
+
+### Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Remediation Dashboard                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Open Issues: 45                                             │
+│  ├─ Critical: 3                                             │
+│  ├─ High: 12                                                │
+│  ├─ Medium: 20                                              │
+│  └─ Low: 10                                                 │
+│                                                              │
+│  By Status:                                                  │
+│  ├─ New: 8                                                  │
+│  ├─ Triaged: 5                                              │
+│  ├─ In Progress: 22                                         │
+│  └─ Pending Verification: 10                                │
+│                                                              │
+│  Avg Resolution Time: 2.5 days                              │
+│  SLA Compliance: 94%                                         │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Issue List
+
+| ID | Type | Severity | Resource | Assigned | Due |
+|----|------|----------|----------|----------|-----|
+| ISS-123 | Policy | 🔴 Critical | users.ssn | analyst@ | Jan 22 |
+| ISS-124 | Quality | 🟡 Medium | orders.email | data-team | Jan 25 |
+| ISS-125 | ROT | 🟢 Low | logs.* | ops@ | Jan 30 |
+
+## Automated Remediation
+
+### Auto-Remediation Rules
+
+```yaml
+auto_remediation:
+  - name: Auto-Archive Obsolete Logs
+    trigger:
+      issue_type: ROT
+      sub_type: OBSOLETE
+      resource_pattern: "*_logs"
+    action:
+      type: ARCHIVE
+      destination: s3://archive/logs/
+    approval: false
+    
+  - name: Auto-Redact Exposed PII
+    trigger:
+      issue_type: POLICY_VIOLATION
+      policy: PII_EXPOSURE
+    action:
+      type: REDACT
+      method: MASK
+    approval: true
+    approvers: [data-steward@company.com]
+```
+
+### Remediation Actions
+
+| Action | Description | Risk |
+|--------|-------------|------|
+| **REDACT** | Mask sensitive data | Low |
+| **ENCRYPT** | Encrypt data at rest | Low |
+| **ARCHIVE** | Move to cold storage | Low |
+| **DELETE** | Permanently remove | High |
+| **MOVE** | Relocate data | Medium |
+| **REVOKE** | Remove access | Medium |
+| **NOTIFY** | Alert stakeholders | Low |
+
+## Manual Remediation
+
+### Creating a Remediation Task
+
+1. Navigate to **Remediation → Issues**
+2. Select an issue
+3. Click **Create Task**
+4. Configure:
+
+```yaml
+task:
+  title: Remediate SSN Exposure
+  description: Remove SSN column from analytics view
+  issue_id: iss-123
+  assigned_to: analyst@company.com
+  due_date: 2024-01-22
+  priority: P1
+  
+  steps:
+    - description: Identify affected views
+      status: PENDING
+    - description: Remove SSN from view definition
+      status: PENDING
+    - description: Verify removal
+      status: PENDING
+    - description: Update documentation
+      status: PENDING
+```
+
+### Task Tracking
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Task: Remediate SSN Exposure                    │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Status: In Progress (50%)                                   │
+│  Assigned: analyst@company.com                               │
+│  Due: Jan 22, 2024                                          │
+│                                                              │
+│  Steps:                                                      │
+│  ✅ Identify affected views (completed)                      │
+│  ✅ Remove SSN from view definition (completed)              │
+│  🔄 Verify removal (in progress)                            │
+│  ⬜ Update documentation (pending)                          │
+│                                                              │
+│  Activity:                                                   │
+│  - Jan 21, 14:00: View updated by analyst@                  │
+│  - Jan 21, 10:00: Task started                              │
+│  - Jan 20, 11:00: Task assigned                             │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Bulk Remediation
+
+### Bulk Actions
+
+```yaml
+bulk_remediation:
+  name: Q1 ROT Cleanup
+  filter:
+    issue_type: ROT
+    severity: [LOW, MEDIUM]
+    age: "> 30 days"
+  action:
+    type: ARCHIVE
+    destination: s3://archive/
+  schedule: "2024-01-25T02:00:00Z"
+  approval:
+    required: true
+    approvers: [data-governance@company.com]
+```
+
+### Bulk Progress
+
+```
+Bulk Remediation: Q1 ROT Cleanup
+Status: In Progress
+
+Progress: ████████████░░░░░░░░ 60%
+
+Issues: 150 total
+├─ Completed: 90
+├─ In Progress: 15
+├─ Pending: 45
+└─ Failed: 0
+
+Estimated Completion: 2h 30m
+```
+
+## Verification
+
+### Re-Scan Verification
+
+After remediation, SecureLens re-scans to verify:
+
+```yaml
+verification:
+  issue_id: iss-123
+  remediation_action: REDACT
+  
+  pre_remediation:
+    pii_detected: true
+    records_affected: 45230
+    
+  post_remediation:
+    pii_detected: false
+    records_affected: 0
+    
+  result: VERIFIED
+  verified_at: "2024-01-21T15:00:00Z"
+```
+
+### Verification Report
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Remediation Verification Report                 │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Issue: ISS-123 (SSN Exposure)                              │
+│  Action: REDACT                                              │
+│                                                              │
+│  Before:                                                     │
+│  - SSN detected in users.ssn                                │
+│  - 45,230 records affected                                  │
+│                                                              │
+│  After:                                                      │
+│  - No SSN detected                                          │
+│  - Column masked with XXX-XX-XXXX                           │
+│                                                              │
+│  Result: ✅ VERIFIED                                         │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## API Access
+
+### List Issues
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/remediation/issues" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d "status=OPEN&severity=HIGH"
+```
+
+### Create Task
+
+```bash
+curl -X POST "https://api.securelens.ai/v1/remediation/tasks" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "issue_id": "iss-123",
+    "assigned_to": "analyst@company.com",
+    "action": "REDACT"
+  }'
+```
+
+## Next Steps
+
+- [Reports](/features/reports) — Remediation reports
+- [Governance](/features/governance) — Prevention policies
+- [Audit](/features/audit) — Remediation audit trail

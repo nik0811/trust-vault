@@ -1,0 +1,104 @@
+# Feedback & Learning
+
+Improve classification accuracy through human feedback.
+
+![Feedback](/screenshots/feedback.png)
+
+## Overview
+
+SecureLens learns from your feedback to:
+
+- **Improve accuracy** of PII classification
+- **Adapt to your domain** specific patterns
+- **Reduce false positives** over time
+- **Handle edge cases** better
+
+## Feedback Types
+
+### Classification Feedback
+
+| Feedback | Description | Impact |
+|----------|-------------|--------|
+| **Correct** | Classification is accurate | Reinforces model |
+| **Incorrect** | Wrong classification | Corrects model |
+| **Missing** | PII not detected | Adds pattern |
+| **Over-detection** | False positive | Reduces sensitivity |
+
+### Providing Feedback
+
+1. Navigate to **Classification** results
+2. Click on a classification
+3. Select feedback type
+4. Add optional notes
+5. Click **Submit**
+
+## Feedback Dashboard
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 Feedback Dashboard                           │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Total Feedback: 1,234                                       │
+│  ├─ Correct: 1,100 (89%)                                    │
+│  ├─ Incorrect: 89 (7%)                                      │
+│  └─ Missing: 45 (4%)                                        │
+│                                                              │
+│  Model Accuracy: 94.2% (+2.1% from feedback)                │
+│                                                              │
+│  Recent Feedback:                                            │
+│  - EMAIL in orders.contact: Correct ✅                      │
+│  - SSN in notes.text: Incorrect (was PHONE) ❌              │
+│  - Missing PERSON_NAME in logs.message 🔍                   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Learning Pipeline
+
+### How Learning Works
+
+```
+Feedback → Validation → Training → Deployment
+    │          │           │           │
+    ▼          ▼           ▼           ▼
+ Collect   Review by    Update     Deploy
+ feedback  data team    model      improved
+                                   model
+```
+
+### Model Updates
+
+| Update Type | Frequency | Approval |
+|-------------|-----------|----------|
+| **Minor** | Weekly | Automatic |
+| **Major** | Monthly | Manual review |
+| **Emergency** | As needed | Fast-track |
+
+## Feedback API
+
+### Submit Feedback
+
+```bash
+curl -X POST "https://api.securelens.ai/v1/feedback" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "classification_id": "cls-123",
+    "feedback_type": "INCORRECT",
+    "correct_type": "PHONE_NUMBER",
+    "notes": "This is a phone number, not SSN"
+  }'
+```
+
+### Get Feedback Stats
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/feedback/stats" \
+  -H "Authorization: Bearer $API_KEY"
+```
+
+## Next Steps
+
+- [Classification](/features/classification) — PII detection
+- [Quality](/features/quality) — Data quality
+- [Reports](/features/reports) — Accuracy reports

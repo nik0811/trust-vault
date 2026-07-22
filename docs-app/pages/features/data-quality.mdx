@@ -1,0 +1,286 @@
+# Data Quality
+
+Automated data quality scoring and issue detection.
+
+## Overview
+
+![Data Quality](/screenshots/data-quality.png)
+
+SecureLens continuously monitors data quality across dimensions:
+
+- **Completeness**: Missing values
+- **Accuracy**: Correct formats and values
+- **Consistency**: Cross-field validation
+- **Timeliness**: Data freshness
+- **Uniqueness**: Duplicate detection
+
+## Quality Dimensions
+
+### Completeness
+
+Measures missing data:
+
+```
+Completeness = (Non-null values / Total values) * 100
+
+Example:
+  Column: email
+  Total rows: 1000
+  Non-null: 950
+  Completeness: 95%
+```
+
+### Accuracy
+
+Validates data formats:
+
+| Field Type | Validation |
+|------------|------------|
+| Email | RFC 5322 format |
+| Phone | E.164 format |
+| Date | ISO 8601 |
+| URL | Valid URI |
+| SSN | XXX-XX-XXXX |
+
+### Consistency
+
+Cross-field validation:
+
+```yaml
+consistency_rules:
+  - name: "State matches ZIP"
+    fields: [state, zip_code]
+    rule: "zip_to_state(zip_code) == state"
+    
+  - name: "Birth date before hire date"
+    fields: [birth_date, hire_date]
+    rule: "birth_date < hire_date"
+```
+
+### Timeliness
+
+Data freshness tracking:
+
+| Metric | Description |
+|--------|-------------|
+| **Last updated** | When data was last modified |
+| **Update frequency** | Expected update cadence |
+| **Staleness** | Time since last update |
+
+### Uniqueness
+
+Duplicate detection:
+
+- Primary key uniqueness
+- Business key uniqueness
+- Cross-source duplicates
+
+## Quality Score
+
+### Calculation
+
+Overall quality score (0-100):
+
+```
+Quality Score = Sum(Dimension Score * Weight) / Sum(Weights)
+
+Default weights:
+  Completeness: 25%
+  Accuracy: 25%
+  Consistency: 20%
+  Timeliness: 15%
+  Uniqueness: 15%
+```
+
+### Thresholds
+
+| Score | Rating | Action |
+|-------|--------|--------|
+| 90-100 | Excellent | Monitor |
+| 80-89 | Good | Review |
+| 70-79 | Fair | Investigate |
+| 60-69 | Poor | Remediate |
+| Below 60 | Critical | Urgent action |
+
+## Quality Rules
+
+### Built-in Rules
+
+SecureLens includes 50+ built-in rules:
+
+```yaml
+# Email validation
+- name: valid_email
+  type: format
+  pattern: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+
+# Phone validation
+- name: valid_phone
+  type: format
+  pattern: "^\\+?[1-9]\\d{1,14}$"
+
+# Date range
+- name: valid_date_range
+  type: range
+  min: "1900-01-01"
+  max: "today"
+```
+
+### Custom Rules
+
+Create custom quality rules:
+
+1. Navigate to **Data Quality** → **Rules**
+2. Click **Add Rule**
+3. Configure:
+
+```yaml
+name: "Valid Customer Status"
+description: "Customer status must be valid enum"
+applies_to:
+  tables: ["customers"]
+  columns: ["status"]
+rule_type: enum
+allowed_values:
+  - active
+  - inactive
+  - pending
+  - suspended
+severity: high
+```
+
+### Rule Categories
+
+| Category | Examples |
+|----------|----------|
+| **Format** | Email, phone, date patterns |
+| **Range** | Min/max values, date ranges |
+| **Enum** | Allowed value lists |
+| **Regex** | Custom patterns |
+| **SQL** | Complex business rules |
+| **Cross-field** | Multi-column validation |
+
+## Quality Dashboard
+
+### Overview Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Overall Score** | Weighted average across sources |
+| **Issues Found** | Total quality issues |
+| **Issues Fixed** | Remediated issues |
+| **Trend** | Score change over time |
+
+### By Data Source
+
+Quality breakdown per source:
+
+| Source | Score | Issues | Trend |
+|--------|-------|--------|-------|
+| prod-db | 92 | 45 | +3 |
+| analytics | 78 | 234 | -2 |
+| warehouse | 85 | 89 | 0 |
+
+### By Dimension
+
+Quality by dimension:
+
+| Dimension | Score | Issues |
+|-----------|-------|--------|
+| Completeness | 94% | 12 |
+| Accuracy | 88% | 45 |
+| Consistency | 82% | 78 |
+| Timeliness | 91% | 23 |
+| Uniqueness | 96% | 8 |
+
+## Issue Management
+
+### Issue Types
+
+| Type | Severity | Example |
+|------|----------|---------|
+| **Missing required** | High | NULL in required field |
+| **Invalid format** | Medium | Malformed email |
+| **Out of range** | Medium | Future birth date |
+| **Duplicate** | Low | Duplicate record |
+| **Stale data** | Low | Not updated in 90 days |
+
+### Issue Workflow
+
+```
+Detected -> Triaged -> Assigned -> Fixed -> Verified -> Closed
+              |
+          Dismissed (false positive)
+```
+
+### Remediation
+
+Fix issues directly or in bulk:
+
+1. Navigate to **Data Quality** → **Issues**
+2. Filter by severity, type, source
+3. Select issues
+4. Choose action:
+   - **Fix**: Apply correction
+   - **Dismiss**: Mark as false positive
+   - **Defer**: Review later
+
+## Automation
+
+### Scheduled Scans
+
+Configure quality scan schedule:
+
+```yaml
+quality_scans:
+  - name: "Daily production scan"
+    sources: ["prod-db"]
+    schedule: "0 2 * * *"  # 2 AM daily
+    
+  - name: "Weekly full scan"
+    sources: ["*"]
+    schedule: "0 3 * * 0"  # 3 AM Sunday
+```
+
+### Alerts
+
+Configure quality alerts:
+
+```yaml
+alerts:
+  - name: "Quality drop alert"
+    condition: "score_change < -5"
+    severity: warning
+    notify: ["data-team@company.com"]
+    
+  - name: "Critical quality"
+    condition: "score < 70"
+    severity: critical
+    notify: ["data-team@company.com", "slack:#data-alerts"]
+```
+
+## Reports
+
+### Quality Report
+
+Generate quality reports:
+
+- Executive summary
+- Dimension breakdown
+- Issue details
+- Trend analysis
+- Recommendations
+
+### Export
+
+Export quality data:
+
+- CSV: Issue list
+- PDF: Quality report
+- API: Programmatic access
+
+## Next Steps
+
+- [ROT Detection](/features/rot-detection)
+- [Remediation](/features/remediation)
+- [Observability](/features/observability)

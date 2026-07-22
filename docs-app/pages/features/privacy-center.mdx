@@ -1,0 +1,279 @@
+# Privacy Center
+
+Manage data subject requests and privacy compliance.
+
+## Overview
+
+![Privacy Center](/screenshots/privacy-center.png)
+
+The Privacy Center helps you comply with privacy regulations:
+
+- **GDPR**: Right to access, erasure, portability
+- **CCPA**: Right to know, delete, opt-out
+- **Other**: LGPD, PDPA, POPIA, etc.
+
+## Data Subject Requests
+
+### Request Types
+
+| Type | GDPR Article | CCPA Section |
+|------|--------------|--------------|
+| **Access** | Art. 15 | 1798.100 |
+| **Deletion** | Art. 17 | 1798.105 |
+| **Portability** | Art. 20 | 1798.100 |
+| **Rectification** | Art. 16 | - |
+| **Restriction** | Art. 18 | - |
+| **Opt-Out** | - | 1798.120 |
+
+### Request Workflow
+
+```
+Received → Verified → Processing → Review → Completed
+              ↓                       ↓
+          Rejected              Partially Fulfilled
+```
+
+## Handling Requests
+
+### Receive Request
+
+Requests can be submitted via:
+
+- Self-service portal
+- Email integration
+- API
+- Manual entry
+
+### Verify Identity
+
+Before processing, verify the requester:
+
+1. Email verification
+2. ID document upload
+3. Security questions
+4. Two-factor authentication
+
+### Process Request
+
+SecureLens automates request processing:
+
+1. **Discover**: Find all data for the subject
+2. **Collect**: Gather data from all sources
+3. **Review**: Human review if needed
+4. **Execute**: Perform the action
+5. **Confirm**: Notify the subject
+
+### Access Request
+
+Generate a data export:
+
+```json
+{
+  "subject": {
+    "email": "john@example.com",
+    "name": "John Smith"
+  },
+  "data_sources": [
+    {
+      "source": "customers_db",
+      "records": [
+        {
+          "table": "customers",
+          "data": {
+            "id": 12345,
+            "name": "John Smith",
+            "email": "john@example.com",
+            "created_at": "2023-01-15"
+          }
+        }
+      ]
+    }
+  ],
+  "generated_at": "2024-01-15T10:30:00Z"
+}
+```
+
+### Deletion Request
+
+Execute data deletion:
+
+1. Identify all data locations
+2. Check for legal holds
+3. Delete or anonymize
+4. Verify deletion
+5. Generate certificate
+
+### Portability Request
+
+Export data in portable format:
+
+- JSON (default)
+- CSV
+- XML
+
+## Self-Service Portal
+
+### Enable Portal
+
+```yaml
+privacy_portal:
+  enabled: true
+  url: https://privacy.company.com
+  branding:
+    logo: /assets/logo.png
+    primary_color: "#1a73e8"
+  features:
+    - access_request
+    - deletion_request
+    - portability_request
+    - consent_management
+```
+
+### Portal Features
+
+| Feature | Description |
+|---------|-------------|
+| **Submit Request** | Create new DSR |
+| **Track Status** | View request progress |
+| **Download Data** | Access exported data |
+| **Manage Consent** | Update preferences |
+
+## Consent Management
+
+### Consent Types
+
+| Type | Description |
+|------|-------------|
+| **Marketing** | Email, SMS marketing |
+| **Analytics** | Usage tracking |
+| **Third-party** | Data sharing |
+| **AI Processing** | AI/ML usage |
+
+### Consent Records
+
+Track consent history:
+
+```json
+{
+  "subject_id": "user_123",
+  "consents": [
+    {
+      "type": "marketing",
+      "granted": true,
+      "timestamp": "2024-01-15T10:30:00Z",
+      "source": "web_form",
+      "version": "privacy_policy_v2"
+    }
+  ]
+}
+```
+
+### Consent Enforcement
+
+Policies enforce consent:
+
+```yaml
+consent_policies:
+  - name: "Marketing consent required"
+    data_use: marketing
+    requires_consent: true
+    action_if_missing: block
+```
+
+## Automation
+
+### Auto-Discovery
+
+Automatically find subject data:
+
+1. Search by email
+2. Search by name
+3. Search by phone
+4. Search by custom identifiers
+
+### Auto-Execution
+
+Automate low-risk requests:
+
+```yaml
+automation:
+  access_requests:
+    auto_execute: true
+    conditions:
+      - identity_verified: true
+      - data_volume: < 1GB
+      
+  deletion_requests:
+    auto_execute: false  # Always require review
+```
+
+### SLA Management
+
+Track request SLAs:
+
+| Regulation | Deadline |
+|------------|----------|
+| GDPR | 30 days |
+| CCPA | 45 days |
+| LGPD | 15 days |
+
+Alerts when approaching deadline:
+
+```yaml
+sla_alerts:
+  - days_remaining: 7
+    notify: ["privacy-team@company.com"]
+    
+  - days_remaining: 3
+    notify: ["privacy-team@company.com", "legal@company.com"]
+```
+
+## Reporting
+
+### Request Metrics
+
+| Metric | Description |
+|--------|-------------|
+| **Total Requests** | All-time requests |
+| **Open Requests** | Currently processing |
+| **Avg. Completion** | Average days to complete |
+| **SLA Compliance** | % completed on time |
+
+### Compliance Reports
+
+Generate reports for:
+
+- GDPR Article 30 records
+- CCPA annual report
+- Internal audit
+
+## Integration
+
+### Email Integration
+
+Auto-create requests from email:
+
+```yaml
+email_integration:
+  enabled: true
+  inbox: privacy@company.com
+  auto_create: true
+  keywords:
+    - "data request"
+    - "delete my data"
+    - "GDPR request"
+```
+
+### Ticketing Integration
+
+Sync with ticketing systems:
+
+- Zendesk
+- ServiceNow
+- Jira Service Management
+
+## Next Steps
+
+- [Compliance Advisor](/features/compliance-advisor)
+- [Governance Policies](/features/governance-policies)
+- [Audit Trail](/features/audit-trail)

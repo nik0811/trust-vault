@@ -1,0 +1,313 @@
+# Scheduled Jobs
+
+Automate recurring tasks with scheduled jobs.
+
+## Overview
+
+![Scheduled Jobs](/screenshots/scheduled-jobs.png)
+
+Schedule automated tasks:
+
+- **Scans**: Regular data source scans
+- **Reports**: Automated report generation
+- **Cleanup**: ROT remediation
+- **Sync**: External system sync
+
+## Job Types
+
+### Scan Jobs
+
+Schedule data source scans:
+
+```yaml
+job:
+  name: "Daily Production Scan"
+  type: scan
+  schedule: "0 2 * * *"  # 2 AM daily
+  config:
+    data_sources: ["prod-db", "analytics-db"]
+    scan_type: incremental
+    classification: true
+    quality_check: true
+```
+
+### Report Jobs
+
+Generate reports automatically:
+
+```yaml
+job:
+  name: "Weekly Compliance Report"
+  type: report
+  schedule: "0 9 * * 1"  # Monday 9 AM
+  config:
+    report_type: compliance
+    frameworks: ["GDPR", "CCPA"]
+    format: pdf
+    recipients:
+      - compliance@company.com
+      - legal@company.com
+```
+
+### Cleanup Jobs
+
+Automated data cleanup:
+
+```yaml
+job:
+  name: "Monthly ROT Cleanup"
+  type: cleanup
+  schedule: "0 3 1 * *"  # 1st of month
+  config:
+    targets:
+      - type: obsolete
+        age_days: 365
+        action: archive
+      - type: redundant
+        action: merge
+```
+
+### Sync Jobs
+
+Sync with external systems:
+
+```yaml
+job:
+  name: "DataHub Sync"
+  type: sync
+  schedule: "*/15 * * * *"  # Every 15 min
+  config:
+    destination: datahub
+    sync_type: incremental
+    include:
+      - classifications
+      - lineage
+```
+
+## Creating Jobs
+
+### Via UI
+
+1. Navigate to **Settings** → **Scheduled Jobs**
+2. Click **Create Job**
+3. Select job type
+4. Configure schedule
+5. Set parameters
+6. Enable job
+
+### Via API
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Daily Scan",
+    "type": "scan",
+    "schedule": "0 2 * * *",
+    "config": {
+      "data_sources": ["prod-db"]
+    }
+  }' \
+  https://securelens.company.com/api/v1/jobs
+```
+
+## Schedule Syntax
+
+### Cron Format
+
+Standard cron syntax:
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6)
+│ │ │ │ │
+* * * * *
+```
+
+### Common Schedules
+
+| Schedule | Cron | Description |
+|----------|------|-------------|
+| Hourly | `0 * * * *` | Every hour |
+| Daily | `0 2 * * *` | 2 AM daily |
+| Weekly | `0 9 * * 1` | Monday 9 AM |
+| Monthly | `0 3 1 * *` | 1st of month |
+| Quarterly | `0 3 1 */3 *` | Every 3 months |
+
+### Timezone
+
+Specify timezone:
+
+```yaml
+job:
+  schedule: "0 9 * * 1"
+  timezone: "America/New_York"
+```
+
+## Job Management
+
+### View Jobs
+
+List all scheduled jobs:
+
+| Job | Type | Schedule | Last Run | Status |
+|-----|------|----------|----------|--------|
+| Daily Scan | scan | 0 2 * * * | 2h ago | ✅ Success |
+| Weekly Report | report | 0 9 * * 1 | 5d ago | ✅ Success |
+| ROT Cleanup | cleanup | 0 3 1 * * | 22d ago | ⚠️ Partial |
+
+### Job History
+
+View execution history:
+
+| Run ID | Started | Duration | Status | Records |
+|--------|---------|----------|--------|---------|
+| run_123 | 2024-01-15 02:00 | 45m | ✅ Success | 1.2M |
+| run_122 | 2024-01-14 02:00 | 42m | ✅ Success | 1.1M |
+| run_121 | 2024-01-13 02:00 | 1h 15m | ⚠️ Partial | 800K |
+
+### Manual Trigger
+
+Run a job immediately:
+
+1. Click on job
+2. Click **Run Now**
+3. Optionally override parameters
+
+### Pause/Resume
+
+Temporarily disable a job:
+
+1. Click on job
+2. Toggle **Enabled** off
+3. Job won't run until re-enabled
+
+## Job Configuration
+
+### Retry Policy
+
+Configure retry behavior:
+
+```yaml
+job:
+  retry:
+    max_attempts: 3
+    backoff: exponential
+    initial_delay: 60s
+    max_delay: 1h
+```
+
+### Timeout
+
+Set execution timeout:
+
+```yaml
+job:
+  timeout: 4h
+  on_timeout: cancel  # or: alert, continue
+```
+
+### Concurrency
+
+Control parallel execution:
+
+```yaml
+job:
+  concurrency:
+    max_concurrent: 1  # Only one instance
+    queue_overflow: wait  # or: drop, error
+```
+
+### Dependencies
+
+Chain jobs together:
+
+```yaml
+job:
+  name: "Generate Report"
+  depends_on:
+    - job: "Daily Scan"
+      status: success
+```
+
+## Notifications
+
+### Job Alerts
+
+Configure notifications:
+
+```yaml
+job:
+  notifications:
+    on_success:
+      - email: team@company.com
+    on_failure:
+      - email: team@company.com
+      - slack: "#alerts"
+    on_timeout:
+      - pagerduty: service_key
+```
+
+### Alert Templates
+
+Customize alert messages:
+
+```yaml
+notifications:
+  templates:
+    failure: |
+      Job Failed: {{job_name}}
+      Error: {{error_message}}
+      Duration: {{duration}}
+      View logs: {{logs_url}}
+```
+
+## Monitoring
+
+### Job Metrics
+
+| Metric | Description |
+|--------|-------------|
+| `job_executions_total` | Total runs |
+| `job_duration_seconds` | Execution time |
+| `job_failures_total` | Failed runs |
+| `job_queue_size` | Pending jobs |
+
+### Dashboard
+
+View job health:
+
+- Success rate
+- Average duration
+- Failure trends
+- Queue depth
+
+## Best Practices
+
+### Scheduling
+
+- Avoid peak hours for heavy jobs
+- Stagger jobs to prevent resource contention
+- Use appropriate intervals (don't over-scan)
+
+### Error Handling
+
+- Configure retries for transient failures
+- Set reasonable timeouts
+- Monitor failure rates
+
+### Resource Management
+
+- Limit concurrent jobs
+- Use incremental scans when possible
+- Archive old job logs
+
+## Next Steps
+
+- [Remediation](/features/remediation)
+- [Reports](/features/reports)
+- [Observability](/features/observability)

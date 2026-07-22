@@ -1,0 +1,200 @@
+# System Components
+
+Detailed overview of SecureLens system components.
+
+## Core Components
+
+### API Gateway
+
+The main entry point for all requests.
+
+```
+┌─────────────────────────────────────┐
+│           API Gateway               │
+├─────────────────────────────────────┤
+│  • Authentication (JWT, API Key)    │
+│  • Authorization (RBAC)             │
+│  • Rate limiting                    │
+│  • Request routing                  │
+│  • Tenant context injection         │
+└─────────────────────────────────────┘
+```
+
+**Technology**: Go with Chi router
+
+**Responsibilities**:
+- Authenticate requests
+- Authorize based on roles
+- Route to appropriate handlers
+- Inject tenant context
+- Log all requests
+
+### Classification Engine
+
+AI-powered PII detection.
+
+```
+┌─────────────────────────────────────┐
+│       Classification Engine         │
+├─────────────────────────────────────┤
+│  • GLiNER model (ONNX runtime)      │
+│  • 60+ PII types                    │
+│  • 4M chars/sec throughput          │
+│  • CPU-only inference               │
+└─────────────────────────────────────┘
+```
+
+**Technology**: GLiNER (INT8 quantized, 197MB)
+
+**Capabilities**:
+- Named entity recognition
+- Context-aware classification
+- Custom entity support
+- Batch processing
+
+### Event Bus
+
+Asynchronous event processing.
+
+```
+┌─────────────────────────────────────┐
+│            Event Bus                │
+├─────────────────────────────────────┤
+│  • Kafka (KRaft mode)               │
+│  • Topic per event type             │
+│  • Consumer groups for scaling      │
+│  • At-least-once delivery           │
+└─────────────────────────────────────┘
+```
+
+**Topics**:
+- `securelens.classifications`
+- `securelens.policy-evaluations`
+- `securelens.audit-events`
+- `securelens.notifications`
+
+### Worker Pool
+
+Background job processing.
+
+```
+┌─────────────────────────────────────┐
+│           Worker Pool               │
+├─────────────────────────────────────┤
+│  • Kafka consumers                  │
+│  • Scan workers                     │
+│  • Classification workers           │
+│  • Report generators                │
+└─────────────────────────────────────┘
+```
+
+**Worker Types**:
+- Scan workers — Process data source scans
+- Classification workers — Run PII detection
+- Notification workers — Send alerts
+- Report workers — Generate reports
+
+## Data Stores
+
+### PostgreSQL
+
+Primary relational database.
+
+**Schema Design**:
+```sql
+-- All tables have tenant_id
+CREATE TABLE classifications (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    data_source_id UUID NOT NULL,
+    column_name VARCHAR(255),
+    classification_type VARCHAR(50),
+    confidence DECIMAL(5,4),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_classifications_tenant 
+    ON classifications(tenant_id);
+```
+
+### Qdrant
+
+Vector database for embeddings.
+
+**Collections**:
+- `documents` — Document embeddings
+- `classifications` — Classification vectors
+- `search_index` — Full-text search
+
+### Kafka
+
+Event streaming platform.
+
+**Configuration**:
+```yaml
+kafka:
+  mode: kraft  # No ZooKeeper
+  partitions: 12
+  replication_factor: 3
+  retention: 7 days
+```
+
+## External Integrations
+
+### DataHub
+
+Metadata catalog integration.
+
+```
+SecureLens → DataHub
+    │
+    ├── Classifications
+    ├── Lineage (OpenLineage)
+    ├── Quality metrics
+    └── Schema metadata
+```
+
+### LLM Providers
+
+AI Gate proxies to LLM providers.
+
+```
+User → AI Gate → OpenAI/Anthropic/Azure
+           │
+           └── Scan, Redact, Audit
+```
+
+## Component Interactions
+
+### Request Flow
+
+```
+Client → API Gateway → Handler → Domain Service → Repository → Database
+              │                        │
+              └── Auth ────────────────┴── Events → Kafka → Workers
+```
+
+### Event Flow
+
+```
+Action → Event Published → Kafka → Consumer → Handler
+                                      │
+                            ┌─────────┼─────────┐
+                            ▼         ▼         ▼
+                         Audit    Notify    Update
+```
+
+## Scaling Considerations
+
+| Component | Scaling Strategy |
+|-----------|------------------|
+| API Gateway | Horizontal (stateless) |
+| Workers | Kafka consumer groups |
+| PostgreSQL | Read replicas, connection pooling |
+| Kafka | Partition increase |
+| Qdrant | Sharding |
+
+## Next Steps
+
+- [Data Flow](/architecture/data-flow)
+- [Multi-Tenant Design](/architecture/multi-tenant)

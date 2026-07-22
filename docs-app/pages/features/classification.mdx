@@ -1,0 +1,231 @@
+# Classification
+
+AI-powered sensitive data detection and classification.
+
+## Overview
+
+![Classification](/screenshots/classification.png)
+
+SecureLens uses GLiNER, a state-of-the-art named entity recognition model, to automatically detect and classify sensitive data.
+
+## How It Works
+
+### 1. Data Sampling
+
+When a data source is scanned:
+
+1. SecureLens samples records from each table
+2. Default: 1,000 records per table
+3. Configurable per data source
+
+### 2. AI Classification
+
+The GLiNER model analyzes text content:
+
+```
+Input: "Contact John Smith at john.smith@company.com or 555-123-4567"
+
+Output:
+  - "John Smith" → PERSON_NAME (0.95)
+  - "john.smith@company.com" → EMAIL_ADDRESS (0.99)
+  - "555-123-4567" → PHONE_NUMBER (0.97)
+```
+
+### 3. Aggregation
+
+Classifications are aggregated at the column level:
+
+| Column | PII Type | Confidence | Count |
+|--------|----------|------------|-------|
+| `customer_name` | PERSON_NAME | 98% | 950/1000 |
+| `email` | EMAIL_ADDRESS | 99% | 1000/1000 |
+| `phone` | PHONE_NUMBER | 95% | 875/1000 |
+
+### 4. Label Assignment
+
+Based on classifications, sensitivity labels are assigned:
+
+- **Highly Sensitive**: SSN, credit cards, health data
+- **Sensitive**: Names, emails, addresses
+- **Internal**: Business data, IDs
+- **Public**: Non-sensitive data
+
+## Supported PII Types
+
+### Personal Identifiers
+
+| Type | Examples |
+|------|----------|
+| `PERSON_NAME` | John Smith, María García |
+| `EMAIL_ADDRESS` | john@example.com |
+| `PHONE_NUMBER` | +1-555-123-4567 |
+| `PHYSICAL_ADDRESS` | 123 Main St, City, ST 12345 |
+| `DATE_OF_BIRTH` | 1990-01-15, January 15, 1990 |
+
+### Government IDs
+
+| Type | Examples |
+|------|----------|
+| `SSN` | 123-45-6789 |
+| `PASSPORT_NUMBER` | AB1234567 |
+| `DRIVERS_LICENSE` | D1234567 |
+| `NATIONAL_ID` | Various formats |
+
+### Financial Data
+
+| Type | Examples |
+|------|----------|
+| `CREDIT_CARD` | 4111-1111-1111-1111 |
+| `BANK_ACCOUNT` | Account numbers |
+| `IBAN` | DE89370400440532013000 |
+| `SWIFT_CODE` | DEUTDEFF |
+
+### Health Information
+
+| Type | Examples |
+|------|----------|
+| `MEDICAL_RECORD` | MRN-12345 |
+| `HEALTH_CONDITION` | Diabetes, hypertension |
+| `MEDICATION` | Metformin, Lisinopril |
+| `INSURANCE_ID` | Policy numbers |
+
+### Technical Identifiers
+
+| Type | Examples |
+|------|----------|
+| `IP_ADDRESS` | 192.168.1.1, 2001:db8::1 |
+| `MAC_ADDRESS` | 00:1A:2B:3C:4D:5E |
+| `API_KEY` | sk-... |
+| `PASSWORD` | Detected patterns |
+
+## Classification Views
+
+### By Data Source
+
+View classifications grouped by data source:
+
+1. Navigate to **Classification**
+2. Select **By Data Source**
+3. Expand to see tables and columns
+
+### By PII Type
+
+View all instances of a specific PII type:
+
+1. Navigate to **Classification**
+2. Select **By PII Type**
+3. Click on a type to see all occurrences
+
+### By Sensitivity
+
+View data by sensitivity level:
+
+1. Navigate to **Classification**
+2. Select **By Sensitivity**
+3. Filter by label
+
+## Manual Classification
+
+### Override AI Classification
+
+1. Click on a column
+2. Click **Edit Classification**
+3. Select the correct PII type
+4. Add notes (optional)
+5. Click **Save**
+
+### Add Custom Classification
+
+1. Click on a column
+2. Click **Add Classification**
+3. Select PII type
+4. Set confidence manually
+5. Click **Save**
+
+### Bulk Operations
+
+1. Select multiple columns
+2. Click **Bulk Edit**
+3. Apply classification to all
+4. Click **Save**
+
+## Custom Entity Types
+
+Define custom PII types for your domain:
+
+### Create Custom Type
+
+1. Navigate to **Settings** → **Classification**
+2. Click **Add Custom Type**
+3. Configure:
+
+```yaml
+name: EMPLOYEE_ID
+display_name: Employee ID
+description: Internal employee identifier
+patterns:
+  - "EMP-[0-9]{6}"
+  - "E[0-9]{8}"
+sensitivity: internal
+```
+
+### Train Custom Model
+
+For complex patterns:
+
+1. Provide training examples
+2. SecureLens fine-tunes the model
+3. Deploy to classification pipeline
+
+## Classification Rules
+
+Supplement AI with rule-based classification:
+
+### Pattern Rules
+
+```yaml
+rules:
+  - name: "Credit Card (Visa)"
+    pattern: "4[0-9]{15}"
+    type: CREDIT_CARD
+    confidence: 0.99
+    
+  - name: "Internal Project Code"
+    pattern: "PRJ-[A-Z]{3}-[0-9]{4}"
+    type: PROJECT_CODE
+    confidence: 0.95
+```
+
+### Column Name Rules
+
+```yaml
+rules:
+  - name: "SSN by column name"
+    column_pattern: ".*ssn.*|.*social_security.*"
+    type: SSN
+    confidence: 0.90
+```
+
+## Confidence Thresholds
+
+Configure minimum confidence for classifications:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Auto-label threshold** | 0.90 | Auto-apply labels above this |
+| **Review threshold** | 0.70 | Flag for human review |
+| **Ignore threshold** | 0.50 | Ignore below this |
+
+## Export Classifications
+
+Export classification data:
+
+- **CSV**: Full classification report
+- **JSON**: Machine-readable format
+- **API**: Programmatic access
+
+## Next Steps
+
+- [Sensitivity Labels](/features/sensitivity-labels)
+- [Data Map](/features/data-map)
+- [Feedback & Learning](/features/feedback)

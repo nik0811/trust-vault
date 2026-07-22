@@ -1,0 +1,296 @@
+# Observability
+
+Monitor, alert, and analyze SecureLens operations.
+
+![Observability](/screenshots/observability.png)
+
+## Overview
+
+SecureLens provides comprehensive observability:
+
+- **Metrics** — Prometheus-compatible metrics
+- **Logs** — Structured JSON logging
+- **Traces** — OpenTelemetry distributed tracing
+- **Dashboards** — Pre-built Grafana dashboards
+- **Alerts** — Configurable alerting rules
+
+## Metrics
+
+### Available Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `securelens_requests_total` | Counter | Total API requests |
+| `securelens_request_duration_seconds` | Histogram | Request latency |
+| `securelens_classifications_total` | Counter | Classifications performed |
+| `securelens_pii_detected_total` | Counter | PII entities detected |
+| `securelens_policy_evaluations_total` | Counter | Policy evaluations |
+| `securelens_policy_violations_total` | Counter | Policy violations |
+| `securelens_scan_duration_seconds` | Histogram | Scan duration |
+| `securelens_active_connections` | Gauge | Active DB connections |
+
+### Prometheus Endpoint
+
+```bash
+# Scrape metrics
+curl http://localhost:9090/metrics
+
+# Sample output
+securelens_requests_total{method="GET",path="/api/v1/classifications",status="200"} 12456
+securelens_request_duration_seconds_bucket{le="0.1"} 10234
+securelens_classifications_total{type="EMAIL"} 45230
+securelens_pii_detected_total{type="SSN"} 1234
+```
+
+### Prometheus Configuration
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'securelens'
+    static_configs:
+      - targets: ['securelens-api:9090']
+    metrics_path: /metrics
+    scrape_interval: 15s
+```
+
+## Logging
+
+### Log Format
+
+```json
+{
+  "timestamp": "2024-01-20T10:30:00.000Z",
+  "level": "INFO",
+  "message": "Classification completed",
+  "service": "securelens-api",
+  "trace_id": "abc123",
+  "span_id": "def456",
+  "data_source_id": "ds-123",
+  "records_classified": 1000,
+  "pii_found": 45,
+  "duration_ms": 1250
+}
+```
+
+### Log Levels
+
+| Level | Description | Use Case |
+|-------|-------------|----------|
+| `ERROR` | Errors requiring attention | Failures, exceptions |
+| `WARN` | Potential issues | Degraded performance |
+| `INFO` | Normal operations | Request completion |
+| `DEBUG` | Detailed debugging | Development |
+| `TRACE` | Very detailed | Deep debugging |
+
+### Log Configuration
+
+```yaml
+logging:
+  level: INFO
+  format: json
+  output:
+    - stdout
+    - file: /var/log/securelens/app.log
+  rotation:
+    max_size: 100MB
+    max_age: 7 days
+    max_backups: 5
+```
+
+## Distributed Tracing
+
+### OpenTelemetry Integration
+
+```yaml
+tracing:
+  enabled: true
+  exporter: otlp
+  endpoint: http://otel-collector:4317
+  service_name: securelens-api
+  sample_rate: 0.1  # 10% sampling
+```
+
+### Trace Example
+
+```
+Trace: abc123
+Duration: 1.25s
+
+├─ API Request (150ms)
+│   └─ Authentication (10ms)
+│   └─ Authorization (5ms)
+│
+├─ Classification (800ms)
+│   └─ Text Extraction (100ms)
+│   └─ GLiNER Inference (600ms)
+│   └─ Result Processing (100ms)
+│
+├─ Database (200ms)
+│   └─ Insert Classifications (150ms)
+│   └─ Update Statistics (50ms)
+│
+└─ Kafka Publish (100ms)
+    └─ Produce Event (100ms)
+```
+
+## Dashboards
+
+### Pre-built Dashboards
+
+SecureLens includes Grafana dashboards:
+
+| Dashboard | Description |
+|-----------|-------------|
+| **Overview** | High-level system health |
+| **API Performance** | Request rates, latency |
+| **Classification** | Classification metrics |
+| **Data Sources** | Source health, scan status |
+| **Policies** | Policy evaluations, violations |
+| **AI Gate** | LLM proxy metrics |
+
+### Overview Dashboard
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 SecureLens Overview                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  Requests/sec: 125    Error Rate: 0.1%    P99 Latency: 250ms│
+│                                                              │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │ Request Rate                                         │    │
+│  │ ▁▂▃▄▅▆▇█▇▆▅▄▃▂▁▂▃▄▅▆▇█▇▆▅▄▃▂▁                      │    │
+│  │ 00:00        06:00        12:00        18:00        │    │
+│  └─────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Classifications: 45K/hr    PII Detected: 2.3K/hr           │
+│  Policy Violations: 12      Active Scans: 3                 │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Alerting
+
+### Alert Rules
+
+```yaml
+# alerting-rules.yml
+groups:
+  - name: securelens
+    rules:
+      - alert: HighErrorRate
+        expr: rate(securelens_requests_total{status=~"5.."}[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: High error rate detected
+          
+      - alert: SlowClassification
+        expr: histogram_quantile(0.99, securelens_classification_duration_seconds) > 5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Classification latency is high
+          
+      - alert: PolicyViolationSpike
+        expr: rate(securelens_policy_violations_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Unusual policy violation rate
+```
+
+### Notification Channels
+
+| Channel | Configuration |
+|---------|---------------|
+| **Email** | SMTP settings |
+| **Slack** | Webhook URL |
+| **PagerDuty** | Integration key |
+| **Webhook** | Custom endpoint |
+
+### Alert Configuration
+
+```yaml
+notifications:
+  channels:
+    - name: slack-alerts
+      type: slack
+      webhook_url: https://hooks.slack.com/...
+      
+    - name: pagerduty
+      type: pagerduty
+      integration_key: abc123
+      
+  routing:
+    - match:
+        severity: critical
+      receivers: [pagerduty, slack-alerts]
+      
+    - match:
+        severity: warning
+      receivers: [slack-alerts]
+```
+
+## Health Checks
+
+### Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `/health` | Basic health check |
+| `/health/live` | Liveness probe |
+| `/health/ready` | Readiness probe |
+| `/health/detailed` | Detailed component status |
+
+### Health Response
+
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "uptime": "5d 12h 30m",
+  "components": {
+    "database": {
+      "status": "healthy",
+      "latency_ms": 5
+    },
+    "kafka": {
+      "status": "healthy",
+      "lag": 0
+    },
+    "classification_engine": {
+      "status": "healthy",
+      "model_loaded": true
+    },
+    "vector_db": {
+      "status": "healthy",
+      "collections": 5
+    }
+  }
+}
+```
+
+## API Access
+
+### Get Metrics
+
+```bash
+curl http://localhost:9090/metrics
+```
+
+### Get Health
+
+```bash
+curl http://localhost:8080/health/detailed
+```
+
+## Next Steps
+
+- [Integrations](/features/integrations) — Connect monitoring tools
+- [Audit Trail](/features/audit) — Operational logging
+- [Reports](/features/reports) — Operational reports

@@ -1,0 +1,277 @@
+# Governance Policies
+
+Define and enforce data governance rules across your organization.
+
+## Overview
+
+![Governance Policies](/screenshots/governance-policies.png)
+
+Governance policies automate data protection:
+
+- **Access Control**: Who can access what data
+- **Redaction**: Mask sensitive data
+- **Retention**: Data lifecycle management
+- **Residency**: Geographic restrictions
+- **AI Governance**: LLM usage rules
+
+## Policy Types
+
+### Access Policies
+
+Control data access by role:
+
+```yaml
+name: "PII Access Control"
+type: access
+conditions:
+  - sensitivity_label: "Highly Confidential"
+rules:
+  - action: allow
+    roles: ["admin", "compliance"]
+  - action: deny
+    roles: ["*"]
+    message: "Access to highly confidential data requires approval"
+```
+
+### Redaction Policies
+
+Automatically mask sensitive data:
+
+```yaml
+name: "SSN Redaction"
+type: redaction
+conditions:
+  - pii_type: SSN
+rules:
+  - action: redact
+    method: mask
+    pattern: "XXX-XX-{last4}"
+    applies_to:
+      - api_responses
+      - exports
+      - ai_prompts
+```
+
+### Retention Policies
+
+Enforce data lifecycle:
+
+```yaml
+name: "Customer Data Retention"
+type: retention
+conditions:
+  - data_source: "customers"
+rules:
+  - retention_period: 7y
+    action: archive
+    after_period: delete
+    exceptions:
+      - legal_hold: true
+```
+
+### Residency Policies
+
+Geographic data restrictions:
+
+```yaml
+name: "EU Data Residency"
+type: residency
+conditions:
+  - pii_type: EU_PERSONAL_DATA
+rules:
+  - allowed_regions: ["EU-*"]
+    prohibited_regions: ["US-*", "APAC-*"]
+    action: block_transfer
+    alert: true
+```
+
+### AI Policies
+
+Govern AI/LLM usage:
+
+```yaml
+name: "AI Data Protection"
+type: ai_governance
+conditions:
+  - destination: ai_gate
+rules:
+  - pii_types: [SSN, CREDIT_CARD]
+    action: redact_before_send
+  - pii_types: [PERSON_NAME, EMAIL]
+    action: allow_with_audit
+  - model_types: [external]
+    action: require_approval
+```
+
+## Creating Policies
+
+### Step 1: Define Scope
+
+1. Navigate to **Governance** → **Policies**
+2. Click **Create Policy**
+3. Select policy type
+4. Define conditions:
+   - Data sources
+   - PII types
+   - Sensitivity labels
+   - Regions
+
+### Step 2: Configure Rules
+
+Add rules with actions:
+
+| Action | Description |
+|--------|-------------|
+| `allow` | Permit access |
+| `deny` | Block access |
+| `redact` | Mask data |
+| `encrypt` | Apply encryption |
+| `audit` | Log access |
+| `alert` | Send notification |
+| `require_approval` | Workflow approval |
+
+### Step 3: Set Enforcement
+
+Choose enforcement mode:
+
+| Mode | Behavior |
+|------|----------|
+| **Monitor** | Log violations, don't block |
+| **Warn** | Alert user, allow override |
+| **Enforce** | Block violations |
+
+### Step 4: Activate
+
+1. Review policy summary
+2. Click **Activate**
+3. Policy takes effect immediately
+
+## Policy Management
+
+### Policy Lifecycle
+
+```
+Draft → Review → Active → Deprecated → Archived
+          ↓
+       Rejected
+```
+
+### Versioning
+
+Policies are versioned:
+
+- Each change creates new version
+- Previous versions retained
+- Rollback available
+
+### Testing
+
+Test policies before activation:
+
+1. Click **Test Policy**
+2. Select test data
+3. View simulated results
+4. Adjust if needed
+
+## Policy Evaluation
+
+### Evaluation Order
+
+Policies evaluated in order:
+
+1. Explicit deny rules
+2. Explicit allow rules
+3. Default action (deny)
+
+### Conflict Resolution
+
+When policies conflict:
+
+```yaml
+conflict_resolution:
+  mode: most_restrictive
+  # Options: most_restrictive, first_match, explicit_priority
+```
+
+### Exceptions
+
+Grant policy exceptions:
+
+```yaml
+exceptions:
+  - name: "Legal hold exception"
+    policy: "Customer Data Retention"
+    reason: "Active litigation"
+    expires: "2025-12-31"
+    approved_by: "legal@company.com"
+```
+
+## Policy Templates
+
+### Pre-built Templates
+
+SecureLens includes templates for:
+
+- GDPR compliance
+- CCPA compliance
+- HIPAA compliance
+- PCI-DSS compliance
+- SOX compliance
+
+### Using Templates
+
+1. Navigate to **Policies** → **Templates**
+2. Select template
+3. Customize for your environment
+4. Activate
+
+## Monitoring
+
+### Policy Dashboard
+
+View policy effectiveness:
+
+| Metric | Description |
+|--------|-------------|
+| **Evaluations** | Policy checks performed |
+| **Violations** | Rules triggered |
+| **Blocks** | Access denied |
+| **Overrides** | User overrides |
+
+### Violation Alerts
+
+Configure alerts for violations:
+
+```yaml
+alerts:
+  - policy: "PII Access Control"
+    condition: "violation_count > 10"
+    window: "1h"
+    notify: ["security@company.com"]
+```
+
+## Audit
+
+### Policy Audit Log
+
+All policy actions logged:
+
+- Policy changes
+- Evaluations
+- Violations
+- Exceptions granted
+
+### Compliance Reports
+
+Generate policy compliance reports:
+
+- Policy coverage
+- Violation trends
+- Exception usage
+- Remediation status
+
+## Next Steps
+
+- [AI Gate](/features/ai-gate)
+- [Privacy Center](/features/privacy-center)
+- [Audit Trail](/features/audit-trail)

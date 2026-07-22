@@ -1,0 +1,23 @@
+{
+  "index": "Overview",
+  "dashboard": "Dashboard & Analytics",
+  "data-sources": "Data Sources",
+  "classification": "PII Classification",
+  "labels": "Sensitivity Labels",
+  "data-residency": "Data Residency",
+  "quality": "Data Quality",
+  "rot": "ROT Detection",
+  "governance": "Governance Policies",
+  "ai-gate": "AI Gate",
+  "privacy": "Privacy Center",
+  "advisor": "Compliance Advisor",
+  "audit": "Audit Trail",
+  "observability": "Observability",
+  "integrations": "Integrations",
+  "jobs": "Scheduled Jobs",
+  "remediation": "Remediation",
+  "reports": "Reports",
+  "feedback": "Feedback & Learning",
+  "documents": "Document Processing",
+  "settings": "User Management"
+}

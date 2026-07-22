@@ -1,0 +1,270 @@
+# Sensitivity Labels
+
+Apply and manage data sensitivity labels across your organization.
+
+## Overview
+
+![Sensitivity Labels](/screenshots/sensitivity-labels.png)
+
+Sensitivity labels categorize data by its confidentiality requirements:
+
+- **Public**: No restrictions
+- **Internal**: Company-internal only
+- **Confidential**: Limited access
+- **Highly Confidential**: Strict controls
+- **Restricted**: Maximum protection
+
+## Default Labels
+
+### Public
+
+Data that can be freely shared:
+
+- Marketing materials
+- Public documentation
+- Open source code
+
+**Controls**: None required
+
+### Internal
+
+Data for internal use only:
+
+- Internal communications
+- Non-sensitive business data
+- General employee information
+
+**Controls**: Authentication required
+
+### Confidential
+
+Sensitive business data:
+
+- Customer lists
+- Financial reports
+- Strategic plans
+
+**Controls**: Role-based access, encryption at rest
+
+### Highly Confidential
+
+Regulated and sensitive PII:
+
+- Social Security Numbers
+- Health records
+- Credit card data
+
+**Controls**: Encryption, audit logging, MFA
+
+### Restricted
+
+Most sensitive data:
+
+- Trade secrets
+- M&A information
+- Security credentials
+
+**Controls**: All above + need-to-know access
+
+## Label Assignment
+
+### Automatic Assignment
+
+Based on classification results:
+
+| PII Type | Default Label |
+|----------|---------------|
+| SSN, PASSPORT | Highly Confidential |
+| CREDIT_CARD | Highly Confidential |
+| HEALTH_DATA | Highly Confidential |
+| EMAIL, PHONE | Confidential |
+| PERSON_NAME | Confidential |
+| IP_ADDRESS | Internal |
+
+### Manual Assignment
+
+Override automatic labels:
+
+1. Navigate to **Classification**
+2. Select column(s)
+3. Click **Change Label**
+4. Select new label
+5. Add justification
+6. Click **Save**
+
+### Bulk Assignment
+
+Apply labels in bulk:
+
+1. Filter data by criteria
+2. Select all matching
+3. Click **Bulk Label**
+4. Choose label
+5. Confirm
+
+## Custom Labels
+
+### Create Custom Label
+
+1. Navigate to **Settings** → **Labels**
+2. Click **Add Label**
+3. Configure:
+
+```yaml
+name: "PCI-Regulated"
+display_name: "PCI Regulated Data"
+description: "Data subject to PCI-DSS requirements"
+color: "#FF6B6B"
+priority: 85  # Higher = more sensitive
+controls:
+  - encryption_required: true
+  - audit_logging: true
+  - access_review: quarterly
+  - retention_max: 7y
+```
+
+### Label Hierarchy
+
+Labels can have parent-child relationships:
+
+```
+Confidential
+├── Customer Data
+│   ├── Customer PII
+│   └── Customer Financial
+├── Employee Data
+│   ├── Employee PII
+│   └── Employee Health
+└── Business Data
+    ├── Financial Reports
+    └── Strategic Plans
+```
+
+## Label Policies
+
+### Inheritance
+
+Child labels inherit parent controls:
+
+```yaml
+inheritance:
+  enabled: true
+  mode: additive  # Child adds to parent controls
+```
+
+### Conflicts
+
+When multiple labels apply:
+
+```yaml
+conflict_resolution:
+  mode: most_restrictive  # Apply strictest controls
+```
+
+### Downgrade Rules
+
+Prevent inappropriate label changes:
+
+```yaml
+downgrade_rules:
+  - from: "Highly Confidential"
+    to: ["Confidential", "Internal", "Public"]
+    requires: approval
+    approvers: ["data-governance-team"]
+```
+
+## Label-Based Controls
+
+### Access Control
+
+Labels drive access decisions:
+
+```yaml
+access_rules:
+  - label: "Highly Confidential"
+    allowed_roles: ["admin", "compliance"]
+    denied_roles: ["viewer", "analyst"]
+    
+  - label: "Confidential"
+    allowed_roles: ["admin", "compliance", "analyst"]
+    denied_roles: ["viewer"]
+```
+
+### Encryption
+
+Automatic encryption by label:
+
+| Label | At Rest | In Transit | Key Management |
+|-------|---------|------------|----------------|
+| Public | Optional | TLS | Shared |
+| Internal | AES-256 | TLS | Shared |
+| Confidential | AES-256 | TLS 1.3 | Per-tenant |
+| Highly Confidential | AES-256 | TLS 1.3 | Per-label |
+
+### Retention
+
+Label-based retention:
+
+| Label | Default Retention | Max Retention |
+|-------|-------------------|---------------|
+| Public | Unlimited | Unlimited |
+| Internal | 5 years | 10 years |
+| Confidential | 3 years | 7 years |
+| Highly Confidential | 1 year | 3 years |
+
+## Reporting
+
+### Label Distribution
+
+View label distribution across data:
+
+- By data source
+- By PII type
+- By region
+- Over time
+
+### Label Changes
+
+Audit label modifications:
+
+- Who changed the label
+- When it was changed
+- Previous vs. new label
+- Justification provided
+
+## Integration
+
+### Microsoft Information Protection
+
+Sync with Microsoft sensitivity labels:
+
+```yaml
+integrations:
+  microsoft_ip:
+    enabled: true
+    tenant_id: "your-tenant-id"
+    sync_direction: bidirectional
+    label_mapping:
+      "Highly Confidential": "Highly Confidential"
+      "Confidential": "Confidential"
+```
+
+### Google DLP
+
+Map to Google Cloud DLP:
+
+```yaml
+integrations:
+  google_dlp:
+    enabled: true
+    project_id: "your-project"
+    info_type_mapping:
+      SSN: "US_SOCIAL_SECURITY_NUMBER"
+      CREDIT_CARD: "CREDIT_CARD_NUMBER"
+```
+
+## Next Steps
+
+- [Governance Policies](/features/governance-policies)
+- [Classification](/features/classification)
+- [Compliance Advisor](/features/compliance-advisor)

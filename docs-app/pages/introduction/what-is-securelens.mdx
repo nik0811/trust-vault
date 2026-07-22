@@ -1,0 +1,101 @@
+# What is SecureLens?
+
+SecureLens is an **enterprise-grade Data & AI Trust Platform** that provides comprehensive governance, classification, and audit capabilities for organizations adopting AI and large language models (LLMs).
+
+## The Problem
+
+As enterprises rush to adopt AI, they face unprecedented data governance challenges:
+
+- **Sensitive data exposure**: PII, PHI, and confidential information can leak into AI training data or prompts
+- **Compliance violations**: GDPR, CCPA, HIPAA, and other regulations require strict data handling
+- **No visibility**: Organizations lack insight into what data flows to AI systems
+- **Data quality issues**: Poor data quality leads to poor AI outputs
+- **Audit gaps**: No trail of what data was used, when, and by whom
+
+## The Solution
+
+SecureLens acts as an **active governance gateway** between your data sources and AI systems:
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Data      │────▶│  SecureLens │────▶│    AI/LLM   │
+│   Sources   │     │   Gateway   │     │   Systems   │
+└─────────────┘     └─────────────┘     └─────────────┘
+                           │
+                    ┌──────┴──────┐
+                    │  Classify   │
+                    │  Govern     │
+                    │  Audit      │
+                    └─────────────┘
+```
+
+## Core Capabilities
+
+### 1. Automated Classification
+
+SecureLens uses **GLiNER**, a state-of-the-art named entity recognition model, to automatically detect and classify sensitive data:
+
+- **60+ PII types** out of the box (names, emails, SSN, credit cards, etc.)
+- **Custom entity types** for your domain
+- **4M characters/second** processing speed
+- **CPU-only inference** — no GPU required
+
+### 2. Policy Enforcement
+
+Define governance policies that are enforced in real-time:
+
+- **Access controls** — Who can access what data
+- **Redaction rules** — Automatically mask sensitive fields
+- **Data residency** — Ensure data stays in approved regions
+- **Retention policies** — Enforce data lifecycle rules
+
+### 3. AI Gate
+
+A transparent proxy for all LLM interactions:
+
+- **Prompt inspection** — Scan prompts for sensitive data
+- **Response filtering** — Redact sensitive data in responses
+- **Usage tracking** — Monitor token usage and costs
+- **Model governance** — Control which models can be used
+
+### 4. Complete Audit Trail
+
+Every data access and transformation is logged:
+
+- **OpenLineage integration** — Industry-standard lineage format
+- **DataHub backend** — Powerful metadata management
+- **Immutable logs** — Tamper-proof audit records
+- **Compliance reports** — Generate reports for auditors
+
+## Key Differentiators
+
+| Feature | SecureLens | Traditional DLP |
+|---------|------------|-----------------|
+| AI-native | ✅ Built for LLM workflows | ❌ Retrofitted |
+| Real-time | ✅ Inline processing | ⚠️ Batch scanning |
+| Classification | ✅ AI-powered (GLiNER) | ⚠️ Regex patterns |
+| Self-learning | ✅ Feedback loop | ❌ Static rules |
+| Multi-tenant | ✅ Native isolation | ⚠️ Bolt-on |
+
+## Use Cases
+
+### Enterprise AI Adoption
+Safely enable AI across your organization while maintaining compliance and control.
+
+### Data Privacy Compliance
+Automate GDPR, CCPA, and HIPAA compliance with continuous monitoring and enforcement.
+
+### AI Security
+Prevent prompt injection, data exfiltration, and model abuse.
+
+### Data Quality Management
+Ensure high-quality data feeds your AI systems with automated quality scoring.
+
+### Data Catalog & Discovery
+Understand what data you have, where it lives, and how sensitive it is.
+
+## Next Steps
+
+- [Why Enterprises Need SecureLens](/introduction/why-securelens)
+- [Key Benefits & ROI](/introduction/benefits)
+- [Supported Compliance Frameworks](/introduction/compliance)

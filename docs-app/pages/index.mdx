@@ -1,0 +1,64 @@
+# SecureLens Documentation
+
+Welcome to the **SecureLens** documentation — your comprehensive guide to the enterprise Data & AI Trust Platform.
+
+## What is SecureLens?
+
+SecureLens is an enterprise-grade platform that acts as an **active governance gateway** between your data sources and AI systems. It provides:
+
+- **Automated PII Classification** — Detect 60+ types of sensitive data using GLiNER AI
+- **Data Governance** — Enforce policies before data reaches AI systems
+- **AI Gate** — Proxy and audit all LLM interactions
+- **Compliance Automation** — GDPR, CCPA, HIPAA, and more
+- **Complete Audit Trail** — OpenLineage-powered data lineage
+
+## Quick Links
+
+- [Getting Started](/getting-started/quickstart) - Get up and running quickly
+- [Features Overview](/features) - Explore all capabilities
+- [Architecture](/architecture) - Understand the system design
+- [API Reference](/api-reference) - Integrate with the API
+
+## Why SecureLens?
+
+As enterprises adopt AI and LLMs, they face critical challenges:
+
+| Challenge | SecureLens Solution |
+|-----------|---------------------|
+| PII leaking to AI | Automatic detection and redaction |
+| Compliance violations | Policy enforcement at the gateway |
+| No visibility into AI usage | Complete audit trail |
+| Data quality issues | Automated quality scoring |
+| Stale/redundant data | ROT detection and remediation |
+
+## Key Capabilities
+
+### 🔍 Data Discovery & Classification
+Automatically scan and classify data across databases, files, and cloud storage. Identify PII, PHI, PCI, and custom sensitive data types.
+
+### 🛡️ Governance Policies
+Define and enforce access controls, redaction rules, and data handling policies. Ensure compliance before data reaches AI systems.
+
+### 🤖 AI Gate
+Proxy all LLM requests through SecureLens. Monitor prompts, redact sensitive data, and audit responses.
+
+### 📊 Observability
+Real-time dashboards, alerts, and metrics. Track data quality, classification accuracy, and policy violations.
+
+### 📋 Compliance
+Built-in support for GDPR, CCPA, HIPAA, SOX, PCI-DSS, and custom frameworks. Generate compliance reports automatically.
+
+## Getting Started
+
+```bash
+# Clone the repository
+git clone https://github.com/securelens/securelens.git
+
+# Start with Docker Compose
+docker-compose up -d
+
+# Access the UI
+open http://localhost:3000
+```
+
+Ready to dive in? Start with the [Quick Start Guide](/getting-started/quickstart).
