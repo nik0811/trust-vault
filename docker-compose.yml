@@ -200,6 +200,14 @@ services:
       retries: 3
       start_period: 60s
 
+  # Documentation App (static site)
+  securelens-docs:
+    build:
+      context: ./docs-app
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3002"
+
 volumes:
   postgres_data:
   kafka_data:
