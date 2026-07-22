@@ -6,11 +6,12 @@ import {
   CheckCircle, Clock, AlertCircle, Shield, AlertTriangle, X, Monitor, Copy
 } from 'lucide-react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
+import Cookies from 'js-cookie'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
 function authHeaders() {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : ''
+  const token = typeof window !== 'undefined' ? Cookies.get('accessToken') : ''
   return { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
 }
 
