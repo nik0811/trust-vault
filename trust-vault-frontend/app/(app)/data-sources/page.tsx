@@ -36,7 +36,7 @@ const columns: Column<DataSource>[] = [
     header: 'Status',
     cell: (row) => (
       <StatusIndicator
-        status={row.status === 'connected' ? 'success' : row.status === 'scanning' ? 'pending' : 'error'}
+        status={row.status === 'connected' || row.status === 'active' ? 'success' : row.status === 'scanning' ? 'pending' : row.status === 'inactive' ? 'warning' : 'error'}
         label={row.status}
       />
     ),
