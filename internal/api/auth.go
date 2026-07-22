@@ -118,28 +118,44 @@ func (s *Server) createAPIKey(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	expiresAt := now.AddDate(0, 0, expiresInDays)
 
-	type APIKeyResult struct {
-		ID        string    `db:"id" json:"id"`
-		Name      string    `db:"name" json:"name"`
-		UserID    string    `db:"user_id" json:"user_id"`
-		ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
-		CreatedAt time.Time `db:"created_at" json:"created_at"`
+	// Generate a secure API key: sl_<32 random hex chars>
+	keyBytes := make([]byte, 32)
+	if _, err := rand.Read(keyBytes); err != nil {
+		pkg.Error(w, fmt.Errorf("failed to generate key: %w", err))
+		return
+	}
+	plainKey := "sl_" + hex.EncodeToString(keyBytes)
+	prefix := plainKey[:10] // Store prefix for display (sl_XXXXXX)
+
+	// Hash the key for storage
+	keyHash, err := pkg.HashPassword(plainKey)
+	if err != nil {
+		pkg.Error(w, fmt.Errorf("failed to hash key: %w", err))
+		return
 	}
 
-	var result APIKeyResult
-	err := s.db.QueryRowContext(ctx,
-		`INSERT INTO api_keys (id, tenant_id, user_id, key_hash, name, permissions, expires_at, created_at)
-		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7) 
-		 RETURNING id, name, user_id, expires_at, created_at`,
-		tenantID, userID, "hash", req.Name, "{}", expiresAt, now,
-	).Scan(&result.ID, &result.Name, &result.UserID, &result.ExpiresAt, &result.CreatedAt)
+	var id string
+	err = s.db.QueryRowContext(ctx,
+		`INSERT INTO api_keys (id, tenant_id, user_id, key_hash, key_prefix, name, permissions, expires_at, created_at)
+		 VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8) 
+		 RETURNING id`,
+		tenantID, userID, keyHash, prefix, req.Name, "{}", expiresAt, now,
+	).Scan(&id)
 
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
-	pkg.JSON(w, result, http.StatusCreated)
+	// Return the plain key - this is the only time it will be visible
+	pkg.JSON(w, map[string]any{
+		"id":         id,
+		"key":        plainKey,
+		"name":       req.Name,
+		"prefix":     prefix,
+		"expires_at": expiresAt,
+		"created_at": now,
+	}, http.StatusCreated)
 }
 
 func (s *Server) revokeAPIKey(w http.ResponseWriter, r *http.Request) {
@@ -162,16 +178,18 @@ func (s *Server) listAPIKeys(w http.ResponseWriter, r *http.Request) {
 	limit, offset := pkg.ParseListOpts(r)
 
 	type APIKeyResponse struct {
-		ID        string    `db:"id" json:"id"`
-		Name      string    `db:"name" json:"name"`
-		UserID    string    `db:"user_id" json:"user_id"`
-		ExpiresAt time.Time `db:"expires_at" json:"expires_at"`
-		CreatedAt time.Time `db:"created_at" json:"created_at"`
+		ID        string     `db:"id" json:"id"`
+		Name      string     `db:"name" json:"name"`
+		Prefix    *string    `db:"key_prefix" json:"prefix"`
+		UserID    string     `db:"user_id" json:"user_id"`
+		ExpiresAt time.Time  `db:"expires_at" json:"expires_at"`
+		LastUsed  *time.Time `db:"last_used_at" json:"last_used"`
+		CreatedAt time.Time  `db:"created_at" json:"created_at"`
 	}
 
 	var keys []APIKeyResponse
 	err := s.db.SelectContext(ctx, &keys,
-		`SELECT id, name, user_id, expires_at, created_at 
+		`SELECT id, name, COALESCE(key_prefix, '') AS key_prefix, user_id, expires_at, last_used_at, created_at 
 		 FROM api_keys WHERE tenant_id = $1 
 		 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
 		tenantID, limit, offset)
