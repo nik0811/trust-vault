@@ -288,7 +288,7 @@ ORDER BY record_count DESC
 ### Generate Report
 
 ```bash
-curl -X POST "https://api.securelens.ai/v1/reports/generate" \
+curl -X POST "https://api.your-domain.com/v1/reports/generate" \
   -H "Authorization: Bearer $API_KEY" \
   -d '{
     "type": "COMPLIANCE_SUMMARY",
@@ -300,14 +300,14 @@ curl -X POST "https://api.securelens.ai/v1/reports/generate" \
 ### Get Report Status
 
 ```bash
-curl -X GET "https://api.securelens.ai/v1/reports/rpt-123/status" \
+curl -X GET "https://api.your-domain.com/v1/reports/rpt-123/status" \
   -H "Authorization: Bearer $API_KEY"
 ```
 
 ### Download Report
 
 ```bash
-curl -X GET "https://api.securelens.ai/v1/reports/rpt-123/download" \
+curl -X GET "https://api.your-domain.com/v1/reports/rpt-123/download" \
   -H "Authorization: Bearer $API_KEY" \
   -o report.pdf
 ```

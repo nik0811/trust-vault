@@ -76,7 +76,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - DATABASE_URL=postgres://securelens:securelens@postgres:5432/securelens
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/securelens
       - KAFKA_BROKERS=kafka:9092
       - QDRANT_URL=http://qdrant:6333
       - JWT_SECRET=${JWT_SECRET}
@@ -94,7 +94,7 @@ services:
     image: securelens/api:latest
     command: ["--mode=worker"]
     environment:
-      - DATABASE_URL=postgres://securelens:securelens@postgres:5432/securelens
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/securelens
       - KAFKA_BROKERS=kafka:9092
       - QDRANT_URL=http://qdrant:6333
     depends_on:
@@ -105,13 +105,13 @@ services:
   postgres:
     image: postgres:15-alpine
     environment:
-      - POSTGRES_USER=securelens
-      - POSTGRES_PASSWORD=securelens
+      - POSTGRES_USER=${POSTGRES_USER:-securelens}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=securelens
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U securelens"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-securelens}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -155,9 +155,10 @@ volumes:
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `JWT_SECRET` | Secret for JWT signing | `your-256-bit-secret` |
+| `JWT_SECRET` | Secret for JWT signing | `<your-256-bit-secret>` |
 | `ADMIN_EMAIL` | Initial admin email | `admin@company.com` |
-| `ADMIN_PASSWORD` | Initial admin password | `SecurePass123!` |
+| `ADMIN_PASSWORD` | Initial admin password | `<your-secure-password>` |
+| `POSTGRES_PASSWORD` | PostgreSQL password | `<your-db-password>` |
 
 ### Optional Variables
 
@@ -246,13 +247,13 @@ docker-compose logs --tail=100 api
 ### Backup PostgreSQL
 
 ```bash
-docker-compose exec postgres pg_dump -U securelens securelens > backup.sql
+docker-compose exec postgres pg_dump -U ${POSTGRES_USER:-securelens} securelens > backup.sql
 ```
 
 ### Restore PostgreSQL
 
 ```bash
-cat backup.sql | docker-compose exec -T postgres psql -U securelens securelens
+cat backup.sql | docker-compose exec -T postgres psql -U ${POSTGRES_USER:-securelens} securelens
 ```
 
 ### Backup Volumes
@@ -299,7 +300,7 @@ docker system prune -a
 
 ```bash
 # Test connection
-docker-compose exec api pg_isready -h postgres -U securelens
+docker-compose exec api pg_isready -h postgres -U ${POSTGRES_USER:-securelens}
 
 # Check PostgreSQL logs
 docker-compose logs postgres

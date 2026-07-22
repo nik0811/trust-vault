@@ -106,7 +106,7 @@ Replace your LLM provider URL with AI Gate:
 curl https://api.openai.com/v1/chat/completions
 
 # After (through AI Gate)
-curl https://ai-gate.securelens.ai/v1/chat/completions
+curl https://your-domain.com/ai-gate/v1/chat/completions
 ```
 
 ### SDK Integration
@@ -117,7 +117,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="your-api-key",
-    base_url="https://ai-gate.securelens.ai/v1"
+    base_url="https://your-domain.com/ai-gate/v1"
 )
 
 response = client.chat.completions.create(
@@ -132,7 +132,7 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: 'your-api-key',
-  baseURL: 'https://ai-gate.securelens.ai/v1'
+  baseURL: 'https://your-domain.com/ai-gate/v1'
 });
 ```
 
@@ -324,7 +324,7 @@ Generate AI usage reports:
 ### Proxy Request
 
 ```bash
-curl -X POST "https://ai-gate.securelens.ai/v1/chat/completions" \
+curl -X POST "https://your-domain.com/ai-gate/v1/chat/completions" \
   -H "Authorization: Bearer $API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -336,7 +336,7 @@ curl -X POST "https://ai-gate.securelens.ai/v1/chat/completions" \
 ### Get Usage Stats
 
 ```bash
-curl -X GET "https://api.securelens.ai/v1/ai-gate/usage" \
+curl -X GET "https://api.your-domain.com/v1/ai-gate/usage" \
   -H "Authorization: Bearer $API_KEY" \
   -d "period=today"
 ```

@@ -34,8 +34,8 @@ Response:
 Include in Authorization header:
 
 ```bash
-curl -X GET "https://api.securelens.ai/v1/classifications" \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..."
+curl -X GET "https://api.your-domain.com/v1/classifications" \
+  -H "Authorization: Bearer <your-jwt-token>"
 ```
 
 ### Refresh Token
@@ -63,14 +63,14 @@ Content-Type: application/json
 Include in header:
 
 ```bash
-curl -X GET "https://api.securelens.ai/v1/classifications" \
-  -H "X-API-Key: sl_live_abc123..."
+curl -X GET "https://api.your-domain.com/v1/classifications" \
+  -H "X-API-Key: <your-api-key>"
 ```
 
 Or as query parameter:
 
 ```bash
-curl "https://api.securelens.ai/v1/classifications?api_key=sl_live_abc123..."
+curl "https://api.your-domain.com/v1/classifications?api_key=<your-api-key>"
 ```
 
 ### API Key Scopes
@@ -112,9 +112,9 @@ redirect_uri=https://your-app.com/callback
 Specify tenant in requests:
 
 ```bash
-curl -X GET "https://api.securelens.ai/v1/classifications" \
+curl -X GET "https://api.your-domain.com/v1/classifications" \
   -H "Authorization: Bearer $TOKEN" \
-  -H "X-Tenant-ID: tenant-abc"
+  -H "X-Tenant-ID: <your-tenant-id>"
 ```
 
 ### Tenant from Token
@@ -125,7 +125,7 @@ JWT includes tenant claim:
 {
   "sub": "user-123",
   "email": "user@company.com",
-  "tenant_id": "tenant-abc",
+  "tenant_id": "<your-tenant-id>",
   "roles": ["analyst"],
   "exp": 1705750800
 }
