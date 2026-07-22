@@ -426,7 +426,7 @@ func (w *WeaviateAdapter) Search(ctx context.Context, tenantID string, vector []
 				tenant_id
 			}
 		}
-	}`, w.className, vector, topK, mustJSON(whereFilter))
+	}`, w.className, vector, topK, vectorDBMustJSON(whereFilter))
 
 	var resp struct {
 		Data struct {
@@ -706,7 +706,7 @@ func (c *CustomHTTPAdapter) IsHealthy(ctx context.Context) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-func mustJSON(v any) string {
+func vectorDBMustJSON(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
 }

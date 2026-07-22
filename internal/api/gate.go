@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"sort"
@@ -19,29 +20,69 @@ import (
 )
 
 type GateQueryRequest struct {
-	Query       string         `json:"query" validate:"required"`
-	Context     map[string]any `json:"context,omitempty"`
-	MaxChunks   int            `json:"max_chunks,omitempty"`
-	LLMEndpoint string         `json:"llm_endpoint,omitempty"`
-	Model       string         `json:"model,omitempty"`
-	Stream      bool           `json:"stream,omitempty"`
+	Query         string         `json:"query" validate:"required"`
+	Context       map[string]any `json:"context,omitempty"`
+	MaxChunks     int            `json:"max_chunks,omitempty"`
+	LLMEndpoint   string         `json:"llm_endpoint,omitempty"`
+	LLMProvider   string         `json:"llm_provider,omitempty"`
+	Model         string         `json:"model,omitempty"`
+	Stream        bool           `json:"stream,omitempty"`
+	VectorDBType  string         `json:"vector_db_type,omitempty"`
+	Filters       map[string]any `json:"filters,omitempty"`
+	IntegrationID string         `json:"integration_id,omitempty"`
+}
+
+// GateEmbedRequest for embedding documents into vector DB
+type GateEmbedRequest struct {
+	Documents     []GateDocument `json:"documents" validate:"required,min=1"`
+	IntegrationID string         `json:"integration_id,omitempty"`
+	VectorDBType  string         `json:"vector_db_type,omitempty"`
+}
+
+// GateDocument represents a document to embed
+type GateDocument struct {
+	ID          string         `json:"id,omitempty"`
+	Content     string         `json:"content" validate:"required"`
+	Source      string         `json:"source,omitempty"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+}
+
+// GateEmbedResponse for embed endpoint
+type GateEmbedResponse struct {
+	Embedded        int              `json:"embedded"`
+	Classified      int              `json:"classified"`
+	Blocked         int              `json:"blocked"`
+	Documents       []EmbedResult    `json:"documents"`
+	LatencyMs       int              `json:"latency_ms"`
+}
+
+// EmbedResult for individual document embedding result
+type EmbedResult struct {
+	ID              string   `json:"id"`
+	Status          string   `json:"status"`
+	Sensitivity     string   `json:"sensitivity,omitempty"`
+	Classifications []string `json:"classifications,omitempty"`
+	Error           string   `json:"error,omitempty"`
 }
 
 type GateQueryResponse struct {
-	ID         string         `json:"id"`
-	Response   string         `json:"response"`
-	Context    []ChunkResult  `json:"context"`
-	Decision   string         `json:"decision"`
-	Redactions []Redaction    `json:"redactions,omitempty"`
-	LatencyMs  int            `json:"latency_ms"`
+	ID           string         `json:"id"`
+	Response     string         `json:"response"`
+	Context      []ChunkResult  `json:"context"`
+	Decision     string         `json:"decision"`
+	Redactions   []Redaction    `json:"redactions,omitempty"`
+	LatencyMs    int            `json:"latency_ms"`
+	TokensUsed   int            `json:"tokens_used,omitempty"`
+	LLMProvider  string         `json:"llm_provider,omitempty"`
 }
 
 type ChunkResult struct {
-	ID       string         `json:"id"`
-	Content  string         `json:"content"`
-	Source   string         `json:"source"`
-	Score    float32        `json:"score"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	ID          string         `json:"id"`
+	Content     string         `json:"content"`
+	Source      string         `json:"source"`
+	Score       float32        `json:"score"`
+	Metadata    map[string]any `json:"metadata,omitempty"`
+	Sensitivity string         `json:"sensitivity,omitempty"`
 }
 
 // redactionMasks maps entity types to their redaction placeholders
@@ -584,4 +625,228 @@ func (s *Server) getGateQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pkg.JSON(w, query)
+}
+
+// gateEmbed embeds documents into the vector DB with PII classification
+func (s *Server) gateEmbed(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	tenantID := pkg.TenantFromCtx(ctx)
+	start := time.Now()
+
+	var req GateEmbedRequest
+	if err := pkg.Bind(r, &req); err != nil {
+		pkg.Error(w, err, http.StatusBadRequest)
+		return
+	}
+
+	// Get policies for sensitivity labeling
+	policies, _ := s.policies.List(ctx, tenantID, store.ListOpts{Limit: 100})
+
+	var embedded, classified, blocked int
+	results := make([]EmbedResult, 0, len(req.Documents))
+
+	for _, doc := range req.Documents {
+		result := EmbedResult{ID: doc.ID, Status: "pending"}
+
+		// Classify the document content
+		classification, err := domain.ClassifyText(ctx, doc.Content, nil)
+		if err != nil {
+			result.Status = "error"
+			result.Error = "classification failed: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+		classified++
+
+		// Extract entity types found
+		var entityTypes []string
+		for _, e := range classification.Entities {
+			entityTypes = append(entityTypes, e.Type)
+		}
+		result.Classifications = entityTypes
+
+		// Determine sensitivity label based on classifications
+		sensitivity := determineSensitivity(entityTypes, policies)
+		result.Sensitivity = sensitivity
+
+		// Check if document should be blocked based on policies
+		evalCtx := domain.EvaluationContext{
+			TenantID:        tenantID,
+			DestinationType: "vectordb",
+			Classifications: entityTypes,
+		}
+		evalResult := domain.EvaluatePolicies(policies, evalCtx)
+
+		if evalResult.Decision == "deny" {
+			result.Status = "blocked"
+			blocked++
+			results = append(results, result)
+			continue
+		}
+
+		// Generate embedding and upsert to vector DB
+		embedding, err := s.qdrant.Embedder().Embed(ctx, doc.Content)
+		if err != nil {
+			result.Status = "error"
+			result.Error = "embedding failed: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		// Prepare metadata
+		metadata := doc.Metadata
+		if metadata == nil {
+			metadata = make(map[string]any)
+		}
+		metadata["source"] = doc.Source
+		metadata["sensitivity"] = sensitivity
+		metadata["classifications"] = entityTypes
+		metadata["embedded_at"] = time.Now().UTC().Format(time.RFC3339)
+
+		// Upsert to Qdrant
+		point := external.Point{
+			ID:      doc.ID,
+			Vector:  embedding,
+			Payload: metadata,
+		}
+		point.Payload["content"] = doc.Content
+
+		if err := s.qdrant.Upsert(ctx, tenantID, []external.Point{point}); err != nil {
+			result.Status = "error"
+			result.Error = "upsert failed: " + err.Error()
+			results = append(results, result)
+			continue
+		}
+
+		result.Status = "embedded"
+		embedded++
+		results = append(results, result)
+
+		// Emit event for audit
+		events.Emit("gate.document.embedded", map[string]any{
+			"tenant_id":       tenantID,
+			"document_id":     doc.ID,
+			"source":          doc.Source,
+			"sensitivity":     sensitivity,
+			"classifications": entityTypes,
+		})
+	}
+
+	latency := int(time.Since(start).Milliseconds())
+
+	pkg.JSON(w, GateEmbedResponse{
+		Embedded:   embedded,
+		Classified: classified,
+		Blocked:    blocked,
+		Documents:  results,
+		LatencyMs:  latency,
+	})
+}
+
+// determineSensitivity determines the sensitivity label based on classifications
+func determineSensitivity(classifications []string, policies []store.Policy) string {
+	// Check for highly sensitive types
+	for _, c := range classifications {
+		if sensitiveTypes[c] {
+			return "HIGHLY_CONFIDENTIAL"
+		}
+	}
+
+	// Check label rules from policies
+	for _, policy := range policies {
+		if policy.Type != "ai" && policy.Type != "redaction" {
+			continue
+		}
+		var conditions domain.PolicyConditions
+		if err := json.Unmarshal(policy.Conditions, &conditions); err != nil {
+			continue
+		}
+		for _, dc := range conditions.DataClassification {
+			for _, c := range classifications {
+				if dc == c || dc == "*" {
+					return "CONFIDENTIAL"
+				}
+			}
+		}
+	}
+
+	if len(classifications) > 0 {
+		return "INTERNAL"
+	}
+
+	return "PUBLIC"
+}
+
+// gateAudit returns audit trail for gate queries
+func (s *Server) gateAudit(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	limit, offset := pkg.ParseListOpts(r)
+
+	// Get query parameters for filtering
+	decision := r.URL.Query().Get("decision")
+	userID := r.URL.Query().Get("user_id")
+	fromDate := r.URL.Query().Get("from")
+	toDate := r.URL.Query().Get("to")
+
+	query := `
+		SELECT id, user_id, query, response, decision, redactions, 
+		       latency_ms, llm_endpoint, created_at
+		FROM gate_queries
+		WHERE tenant_id = $1`
+	args := []any{tenantID}
+	argIdx := 2
+
+	if decision != "" {
+		query += fmt.Sprintf(" AND decision = $%d", argIdx)
+		args = append(args, decision)
+		argIdx++
+	}
+	if userID != "" {
+		query += fmt.Sprintf(" AND user_id = $%d", argIdx)
+		args = append(args, userID)
+		argIdx++
+	}
+	if fromDate != "" {
+		query += fmt.Sprintf(" AND created_at >= $%d", argIdx)
+		args = append(args, fromDate)
+		argIdx++
+	}
+	if toDate != "" {
+		query += fmt.Sprintf(" AND created_at <= $%d", argIdx)
+		args = append(args, toDate)
+		argIdx++
+	}
+
+	query += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	type AuditEntry struct {
+		ID          string    `db:"id" json:"id"`
+		UserID      string    `db:"user_id" json:"user_id"`
+		Query       string    `db:"query" json:"query"`
+		Response    string    `db:"response" json:"response"`
+		Decision    string    `db:"decision" json:"decision"`
+		Redactions  store.JSON `db:"redactions" json:"redactions"`
+		LatencyMs   int       `db:"latency_ms" json:"latency_ms"`
+		LLMEndpoint string    `db:"llm_endpoint" json:"llm_endpoint"`
+		CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	}
+
+	var entries []AuditEntry
+	if err := s.db.SelectContext(ctx, &entries, query, args...); err != nil {
+		pkg.Error(w, err)
+		return
+	}
+
+	if entries == nil {
+		entries = []AuditEntry{}
+	}
+
+	pkg.JSON(w, map[string]any{
+		"entries": entries,
+		"total":   len(entries),
+	})
 }

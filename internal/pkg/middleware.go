@@ -198,6 +198,31 @@ func RateLimitByTenant(requestsPerMinute int) func(http.Handler) http.Handler {
 	})
 }
 
+// RateLimitByAPIKey returns a middleware that rate limits by API key
+func RateLimitByAPIKey(requestsPerMinute int) func(http.Handler) http.Handler {
+	rl := NewRateLimiter(requestsPerMinute, requestsPerMinute)
+	return rl.Middleware(func(r *http.Request) string {
+		// Check for API key in header
+		apiKey := r.Header.Get("X-API-Key")
+		if apiKey == "" {
+			// Fallback to Authorization header
+			auth := r.Header.Get("Authorization")
+			if strings.HasPrefix(auth, "Bearer sk-") {
+				apiKey = strings.TrimPrefix(auth, "Bearer ")
+			}
+		}
+		if apiKey != "" {
+			return "apikey:" + apiKey
+		}
+		// Fallback to tenant+IP
+		tenantID := TenantFromCtx(r.Context())
+		if tenantID != "" {
+			return tenantID + ":" + getClientIP(r)
+		}
+		return getClientIP(r)
+	})
+}
+
 // ErrorWithRequestID returns an error response with request ID
 func ErrorWithRequestID(w http.ResponseWriter, r *http.Request, err error, status ...int) {
 	code := http.StatusInternalServerError
