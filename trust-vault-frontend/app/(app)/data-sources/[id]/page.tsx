@@ -739,3 +739,92 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
     </div>
   )
 }
+
+// Classification Overview Card - Shows classification stats for this datasource
+function ClassificationOverviewCard({ dataSourceId }: { dataSourceId: string }) {
+  const { data: stats, isLoading } = useDataSourceClassificationStats(dataSourceId)
+
+  if (isLoading) {
+    return (
+      <div className="rounded-lg border border-border bg-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+        <div className="space-y-4">
+          <Skeleton className="h-10 w-32" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      </div>
+    )
+  }
+
+  const hasClassifications = stats && stats.total_classifications > 0
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Tag className="h-5 w-5 text-primary" />
+          <h3 className="text-lg font-semibold text-foreground">Classification Overview</h3>
+        </div>
+        <Link href={`/classification?source=${dataSourceId}`} className="text-sm text-primary hover:underline">
+          View Details
+        </Link>
+      </div>
+
+      {!hasClassifications ? (
+        <div className="text-center py-8">
+          <Tag className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+          <p className="text-muted-foreground">No classifications yet</p>
+          <p className="text-sm text-muted-foreground mt-1">Run a scan to classify data in this source</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="flex items-baseline gap-2">
+            <span className="text-3xl font-bold text-foreground">{stats.columns_classified.toLocaleString()}</span>
+            <span className="text-sm text-muted-foreground">columns classified</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="p-3 rounded-lg bg-muted/50">
+              <p className="text-2xl font-bold text-foreground">{stats.total_classifications.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">Total Findings</p>
+            </div>
+            <div className="p-3 rounded-lg bg-red-500/10">
+              <p className="text-2xl font-bold text-red-600">{stats.pii_detected.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">PII Detected</p>
+            </div>
+            <div className="p-3 rounded-lg bg-orange-500/10">
+              <p className="text-2xl font-bold text-orange-600">{stats.high_risk.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">High Risk</p>
+            </div>
+          </div>
+
+          {stats.top_entities && stats.top_entities.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-medium">Top Entity Types</p>
+              <div className="flex flex-wrap gap-2">
+                {stats.top_entities.slice(0, 6).map((entity) => (
+                  <span key={entity.type} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-xs font-medium text-primary">
+                    {entity.type}
+                    <span className="text-muted-foreground">({entity.count})</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="pt-2 border-t border-border">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Avg Confidence</span>
+              <span className="font-medium text-foreground">
+                {stats.avg_confidence ? `${Math.round(stats.avg_confidence * 100)}%` : '-'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
