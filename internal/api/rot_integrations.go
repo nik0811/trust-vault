@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -19,6 +20,11 @@ import (
 	"github.com/securelens/securelens/internal/events"
 	"github.com/securelens/securelens/internal/pkg"
 	"github.com/securelens/securelens/internal/store"
+)
+
+var (
+	slackWebhookPattern = regexp.MustCompile(`^https://hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[a-zA-Z0-9]+$`)
+	teamsWebhookPattern = regexp.MustCompile(`^https://[a-zA-Z0-9-]+\.webhook\.office\.com/`)
 )
 
 func (s *Server) getROTSummary(w http.ResponseWriter, r *http.Request) {
@@ -404,7 +410,7 @@ func (s *Server) testIntegration(w http.ResponseWriter, r *http.Request) {
 	case "slack":
 		status, errorMsg, details = testSlackIntegration(ctx, config)
 	case "teams":
-		status, errorMsg, details = testWebhookIntegration(ctx, config) // MS Teams also uses incoming webhooks
+		status, errorMsg, details = testTeamsIntegration(ctx, config)
 	case "jira":
 		status, errorMsg, details = testJiraIntegration(ctx, config)
 	case "servicenow":
@@ -494,16 +500,30 @@ func testWebhookIntegration(ctx context.Context, config map[string]any) (string,
 		return "error", "Missing webhook URL", nil
 	}
 
+	testPayload := map[string]any{
+		"test":      true,
+		"source":    "securelens",
+		"timestamp": time.Now().UTC().Format(time.RFC3339),
+		"message":   "SecureLens integration test - please ignore",
+	}
+	payloadBytes, _ := json.Marshal(testPayload)
+
 	client := &http.Client{Timeout: 10 * time.Second}
-	req, err := http.NewRequestWithContext(ctx, "POST", url, strings.NewReader(`{"test": true}`))
+	req, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return "error", "Failed to create request: " + err.Error(), nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Add auth headers if configured
 	if token, ok := config["token"].(string); ok && token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
+		authType, _ := config["auth_type"].(string)
+		switch authType {
+		case "basic":
+			user, _ := config["username"].(string)
+			req.SetBasicAuth(user, token)
+		default:
+			req.Header.Set("Authorization", "Bearer "+token)
+		}
 	}
 
 	resp, err := client.Do(req)
@@ -512,8 +532,17 @@ func testWebhookIntegration(ctx context.Context, config map[string]any) (string,
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	if len(bodyStr) > 500 {
+		bodyStr = bodyStr[:500] + "..."
+	}
+
 	if resp.StatusCode >= 400 {
-		return "error", fmt.Sprintf("HTTP %d response", resp.StatusCode), map[string]any{"status_code": resp.StatusCode}
+		return "error", fmt.Sprintf("HTTP %d: %s", resp.StatusCode, bodyStr), map[string]any{
+			"status_code": resp.StatusCode,
+			"response":    bodyStr,
+		}
 	}
 
 	return "connected", "", map[string]any{"status_code": resp.StatusCode}
@@ -523,6 +552,13 @@ func testSlackIntegration(ctx context.Context, config map[string]any) (string, s
 	webhookURL := getIntegrationURL(config)
 	if webhookURL == "" {
 		return "error", "Missing Slack webhook URL", nil
+	}
+
+	if !slackWebhookPattern.MatchString(webhookURL) {
+		return "error", "Invalid Slack webhook URL format. Expected: https://hooks.slack.com/services/T.../B.../...", map[string]any{
+			"provided_url": webhookURL,
+			"expected_format": "https://hooks.slack.com/services/T<WORKSPACE>/B<BOT>/<TOKEN>",
+		}
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -539,11 +575,91 @@ func testSlackIntegration(ctx context.Context, config map[string]any) (string, s
 	}
 	defer resp.Body.Close()
 
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+
 	if resp.StatusCode != 200 {
-		return "error", fmt.Sprintf("Slack returned HTTP %d", resp.StatusCode), nil
+		return "error", fmt.Sprintf("Slack returned HTTP %d: %s", resp.StatusCode, bodyStr), map[string]any{
+			"status_code": resp.StatusCode,
+			"response": bodyStr,
+		}
+	}
+
+	if bodyStr != "ok" {
+		return "error", fmt.Sprintf("Slack webhook validation failed: %s", bodyStr), map[string]any{
+			"response": bodyStr,
+		}
 	}
 
 	return "connected", "", map[string]any{"channel": config["channel"]}
+}
+
+func testTeamsIntegration(ctx context.Context, config map[string]any) (string, string, map[string]any) {
+	webhookURL := getIntegrationURL(config)
+	if webhookURL == "" {
+		return "error", "Missing Teams webhook URL", nil
+	}
+
+	if !teamsWebhookPattern.MatchString(webhookURL) {
+		return "error", "Invalid Teams webhook URL format. Expected: https://<tenant>.webhook.office.com/...", map[string]any{
+			"provided_url": webhookURL,
+			"expected_format": "https://<tenant>.webhook.office.com/webhookb2/...",
+		}
+	}
+
+	adaptiveCard := map[string]any{
+		"type": "message",
+		"attachments": []map[string]any{
+			{
+				"contentType": "application/vnd.microsoft.card.adaptive",
+				"contentUrl":  nil,
+				"content": map[string]any{
+					"$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+					"type":    "AdaptiveCard",
+					"version": "1.2",
+					"body": []map[string]any{
+						{
+							"type": "TextBlock",
+							"text": "SecureLens Integration Test",
+							"weight": "bolder",
+							"size": "medium",
+						},
+						{
+							"type": "TextBlock",
+							"text": "This is a test message from SecureLens. Please ignore.",
+							"wrap": true,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	payloadBytes, _ := json.Marshal(adaptiveCard)
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "POST", webhookURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return "error", "Failed to create request: " + err.Error(), nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return "error", "Connection failed: " + err.Error(), nil
+	}
+	defer resp.Body.Close()
+
+	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+
+	if resp.StatusCode != 200 && resp.StatusCode != 202 {
+		return "error", fmt.Sprintf("Teams returned HTTP %d: %s", resp.StatusCode, bodyStr), map[string]any{
+			"status_code": resp.StatusCode,
+			"response": bodyStr,
+		}
+	}
+
+	return "connected", "", nil
 }
 
 func testJiraIntegration(ctx context.Context, config map[string]any) (string, string, map[string]any) {
@@ -742,14 +858,42 @@ func testEmailIntegration(ctx context.Context, config map[string]any) (string, s
 		return "error", "Missing SMTP host", nil
 	}
 
-	// Test TCP connection to SMTP server
-	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 10*time.Second)
+	addr := fmt.Sprintf("%s:%d", host, port)
+	conn, err := net.DialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
 		return "error", "Connection failed: " + err.Error(), nil
 	}
-	conn.Close()
+	defer conn.Close()
 
-	return "connected", "", map[string]any{"host": host, "port": port}
+	conn.SetDeadline(time.Now().Add(10 * time.Second))
+
+	buf := make([]byte, 512)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return "error", "Failed to read SMTP greeting: " + err.Error(), nil
+	}
+	greeting := string(buf[:n])
+	if !strings.HasPrefix(greeting, "220") {
+		return "error", fmt.Sprintf("Invalid SMTP greeting: %s", strings.TrimSpace(greeting)), nil
+	}
+
+	_, err = conn.Write([]byte("EHLO securelens.local\r\n"))
+	if err != nil {
+		return "error", "Failed to send EHLO: " + err.Error(), nil
+	}
+
+	n, err = conn.Read(buf)
+	if err != nil {
+		return "error", "Failed to read EHLO response: " + err.Error(), nil
+	}
+	ehloResp := string(buf[:n])
+	if !strings.HasPrefix(ehloResp, "250") {
+		return "error", fmt.Sprintf("SMTP EHLO failed: %s", strings.TrimSpace(ehloResp)), nil
+	}
+
+	conn.Write([]byte("QUIT\r\n"))
+
+	return "connected", "", map[string]any{"host": host, "port": port, "greeting": strings.TrimSpace(greeting)}
 }
 
 func testGenericURLIntegration(ctx context.Context, url string, config map[string]any) (string, string, map[string]any) {

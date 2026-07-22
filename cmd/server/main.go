@@ -14,6 +14,7 @@ import (
 	"github.com/securelens/securelens/internal/events"
 	"github.com/securelens/securelens/internal/external"
 	"github.com/securelens/securelens/internal/pkg"
+	"github.com/securelens/securelens/internal/scheduler"
 	"github.com/securelens/securelens/internal/store"
 )
 

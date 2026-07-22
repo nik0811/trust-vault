@@ -269,7 +269,9 @@ export default function IntegrationDetailPage() {
           <div className="grid grid-cols-2 gap-6">
             <div>
               <p className="text-sm text-muted-foreground">Provider</p>
-              <p className="text-sm font-medium text-foreground">{integration.provider}</p>
+              <p className="text-sm font-medium text-foreground capitalize">
+                {integration.provider || integration.type?.replace('_', ' ') || 'Unknown'}
+              </p>
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Sync Frequency</p>

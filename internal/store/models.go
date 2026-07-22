@@ -227,17 +227,21 @@ type DSAR struct {
 
 // Job represents a scheduled task
 type Job struct {
-	ID        string     `db:"id" json:"id"`
-	TenantID  string     `db:"tenant_id" json:"-"`
-	Name      string     `db:"name" json:"name"`
-	Type      string     `db:"type" json:"type"`
-	Schedule  string     `db:"schedule" json:"schedule"`
-	Config    JSON       `db:"config" json:"config"`
-	Status    string     `db:"status" json:"status"`
-	LastRun   *time.Time `db:"last_run" json:"last_run,omitempty"`
-	NextRun   *time.Time `db:"next_run" json:"next_run,omitempty"`
-	CreatedAt time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt time.Time  `db:"updated_at" json:"updated_at"`
+	ID             string     `db:"id" json:"id"`
+	TenantID       string     `db:"tenant_id" json:"-"`
+	Name           string     `db:"name" json:"name"`
+	Type           string     `db:"type" json:"type"`
+	Schedule       string     `db:"schedule" json:"schedule"`
+	Config         JSON       `db:"config" json:"config"`
+	Status         string     `db:"status" json:"status"`
+	LastRun        *time.Time `db:"last_run" json:"last_run,omitempty"`
+	NextRun        *time.Time `db:"next_run" json:"next_run,omitempty"`
+	MaxRetries     int        `db:"max_retries" json:"max_retries"`
+	TimeoutSeconds int        `db:"timeout_seconds" json:"timeout_seconds"`
+	LockedBy       *string    `db:"locked_by" json:"-"`
+	LockedAt       *time.Time `db:"locked_at" json:"-"`
+	CreatedAt      time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt      time.Time  `db:"updated_at" json:"updated_at"`
 }
 
 // JobExecution tracks individual job runs
@@ -251,6 +255,8 @@ type JobExecution struct {
 	Duration    *int       `db:"duration_ms" json:"duration_ms,omitempty"`
 	Result      JSON       `db:"result" json:"result,omitempty"`
 	Error       *string    `db:"error" json:"error,omitempty"`
+	Attempt     int        `db:"attempt" json:"attempt"`
+	WorkerID    *string    `db:"worker_id" json:"worker_id,omitempty"`
 	CreatedAt   time.Time  `db:"created_at" json:"created_at"`
 	UpdatedAt   time.Time  `db:"updated_at" json:"updated_at"`
 }
