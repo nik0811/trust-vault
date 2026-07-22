@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/securelens/securelens-agent/config"
@@ -29,7 +30,7 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	AgentID string `json:"agent_id"`
+	AgentID string `json:"id"` // Backend returns "id" not "agent_id"
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
 }
@@ -57,8 +58,14 @@ type StatusResponse struct {
 }
 
 func NewClient(cfg *config.Config) *Client {
+	// Normalize API URL to include /api/v1
+	apiURL := strings.TrimSuffix(cfg.APIURL, "/")
+	if !strings.HasSuffix(apiURL, "/api/v1") {
+		apiURL = apiURL + "/api/v1"
+	}
+	
 	return &Client{
-		apiURL:  cfg.APIURL,
+		apiURL:  apiURL,
 		apiKey:  cfg.APIKey,
 		agentID: cfg.AgentID,
 		httpClient: &http.Client{
