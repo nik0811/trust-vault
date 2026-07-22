@@ -155,3 +155,24 @@ export function useScanLogs(datasourceId: string) {
     enabled: !!datasourceId,
   })
 }
+
+export interface DataSourceClassificationStats {
+  datasource_id: string
+  columns_classified: number
+  total_classifications: number
+  avg_confidence: number
+  top_entities: Array<{ type: string; count: number }>
+  pii_detected: number
+  high_risk: number
+}
+
+export function useDataSourceClassificationStats(datasourceId: string) {
+  return useQuery({
+    queryKey: ['datasources', datasourceId, 'classification-stats'],
+    queryFn: async () => {
+      const response = await api.get<DataSourceClassificationStats>(`/datasources/${datasourceId}/classification-stats`)
+      return response.data
+    },
+    enabled: !!datasourceId,
+  })
+}

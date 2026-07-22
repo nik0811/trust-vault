@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import { StatusIndicator } from '@/components/base/status-badge'
-import { ArrowLeft, RefreshCw, Trash2, Play, Settings, Loader2, History, ChevronDown, ChevronRight, Clock, CheckCircle2, XCircle, Database } from 'lucide-react'
-import { useDataSource, useDeleteDataSource, useTriggerScan, useScanLogs, ScanLog, ScanLogEntry } from '@/hooks/use-datasources'
+import { ArrowLeft, RefreshCw, Trash2, Play, Settings, Loader2, History, ChevronDown, ChevronRight, Clock, CheckCircle2, XCircle, Database, Tag } from 'lucide-react'
+import { useDataSource, useDeleteDataSource, useTriggerScan, useScanLogs, useDataSourceClassificationStats, ScanLog, ScanLogEntry } from '@/hooks/use-datasources'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import {
@@ -268,6 +268,9 @@ export default function DataSourceDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Classification Overview Card */}
+        <ClassificationOverviewCard dataSourceId={id} />
 
         {/* Configuration Card */}
         {dataSource.config && Object.keys(dataSource.config).length > 0 && (

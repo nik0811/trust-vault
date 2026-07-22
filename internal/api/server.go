@@ -226,6 +226,7 @@ func (s *Server) setupRoutes() {
 				r.Post("/{id}/scan", s.triggerScan)
 				r.Get("/{id}/status", s.getScanStatus)
 				r.Get("/{id}/logs", s.listScanLogs)
+				r.Get("/{id}/classification-stats", s.getDataSourceClassificationStats)
 			})
 
 			// Policies (alias to governance/policies)

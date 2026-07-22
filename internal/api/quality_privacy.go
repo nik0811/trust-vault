@@ -887,7 +887,7 @@ func (s *Server) calcConsistencyScore(ctx context.Context, tenantID string) floa
 		return 0
 	}
 	s.db.GetContext(ctx, &scanned,
-		"SELECT COUNT(*) FROM datasources WHERE tenant_id = $1 AND status IN ('active','completed')", tenantID)
+		"SELECT COUNT(*) FROM datasources WHERE tenant_id = $1 AND status IN ('active','completed','connected')", tenantID)
 	score := float64(scanned) / float64(total)
 	return roundScore(score)
 }

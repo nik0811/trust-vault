@@ -26,12 +26,46 @@ export function useQualityScore(datasetId: string) {
   })
 }
 
+export interface QualityTrends {
+  overall: number
+  completeness: number
+  accuracy: number
+  consistency: number
+  timeliness: number
+  uniqueness: number
+  total_datasets: number
+  issues_found: number
+}
+
 export function useQualityTrends() {
   return useQuery({
     queryKey: ['quality-trends'],
     queryFn: async () => {
-      const response = await api.get('/quality/trends')
-      return response.data
+      // Use /quality/summary which computes metrics from classification data
+      // even when no explicit quality assessments have been run
+      const response = await api.get<{
+        overall_score: number
+        completeness: number
+        accuracy: number
+        consistency: number
+        timeliness: number
+        uniqueness: number
+        total_datasets: number
+        issues_found: number
+      }>('/quality/summary')
+      
+      // Transform to expected format (overall_score -> overall)
+      const data = response.data
+      return {
+        overall: data.overall_score,
+        completeness: data.completeness,
+        accuracy: data.accuracy,
+        consistency: data.consistency,
+        timeliness: data.timeliness,
+        uniqueness: data.uniqueness,
+        total_datasets: data.total_datasets,
+        issues_found: data.issues_found,
+      } as QualityTrends
     },
   })
 }

@@ -658,6 +658,77 @@ func (s *Server) scanProgress(w http.ResponseWriter, r *http.Request) {
 	pkg.JSON(w, map[string]string{"status": "ok"})
 }
 
+// getDataSourceClassificationStats returns classification statistics for a specific datasource
+func (s *Server) getDataSourceClassificationStats(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tenantID := pkg.TenantFromCtx(ctx)
+	datasourceID := chi.URLParam(r, "id")
+
+	// Verify datasource exists and belongs to tenant
+	ds, err := s.datasources.FindByID(ctx, tenantID, datasourceID)
+	if err != nil || ds == nil {
+		pkg.Error(w, pkg.ErrNotFound, http.StatusNotFound)
+		return
+	}
+
+	// Get columns classified count (distinct column_name for this datasource)
+	var columnsClassified int
+	s.db.GetContext(ctx, &columnsClassified,
+		`SELECT COUNT(DISTINCT COALESCE(NULLIF(context->>'column_name', ''), dataset_id)) 
+		 FROM classifications 
+		 WHERE tenant_id = $1 AND source_id = $2`, tenantID, datasourceID)
+
+	// Get total classifications count
+	var totalClassifications int
+	s.db.GetContext(ctx, &totalClassifications,
+		`SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND source_id = $2`, tenantID, datasourceID)
+
+	// Get average confidence
+	var avgConfidence float64
+	s.db.GetContext(ctx, &avgConfidence,
+		`SELECT COALESCE(AVG(confidence), 0) FROM classifications WHERE tenant_id = $1 AND source_id = $2`, tenantID, datasourceID)
+
+	// Get top entity types for this datasource
+	type EntityCount struct {
+		Type  string `db:"entity_type" json:"type"`
+		Count int    `db:"count" json:"count"`
+	}
+	var topEntities []EntityCount
+	s.db.SelectContext(ctx, &topEntities,
+		`SELECT entity_type, COUNT(*) as count 
+		 FROM classifications WHERE tenant_id = $1 AND source_id = $2 
+		 GROUP BY entity_type ORDER BY count DESC LIMIT 10`, tenantID, datasourceID)
+	if topEntities == nil {
+		topEntities = []EntityCount{}
+	}
+
+	// Get PII detected count for this datasource
+	var piiDetected int
+	s.db.GetContext(ctx, &piiDetected,
+		`SELECT COUNT(*) FROM classifications 
+		 WHERE tenant_id = $1 AND source_id = $2 
+		 AND entity_type IN ('PII', 'SSN', 'EMAIL', 'PHONE', 'CREDIT_CARD', 'ADDRESS', 'NAME', 'DOB', 'PHI', 'PERSON_NAME', 'IP_ADDRESS')`,
+		tenantID, datasourceID)
+
+	// Get high risk count
+	var highRisk int
+	s.db.GetContext(ctx, &highRisk,
+		`SELECT COUNT(*) FROM classifications 
+		 WHERE tenant_id = $1 AND source_id = $2 
+		 AND entity_type IN ('SSN', 'CREDIT_CARD', 'PASSPORT', 'DRIVER_LICENSE', 'BANK_ACCOUNT', 'IBAN')`,
+		tenantID, datasourceID)
+
+	pkg.JSON(w, map[string]any{
+		"datasource_id":        datasourceID,
+		"columns_classified":   columnsClassified,
+		"total_classifications": totalClassifications,
+		"avg_confidence":       avgConfidence,
+		"top_entities":         topEntities,
+		"pii_detected":         piiDetected,
+		"high_risk":            highRisk,
+	})
+}
+
 // listScanLogs returns scan history for a datasource
 func (s *Server) listScanLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
