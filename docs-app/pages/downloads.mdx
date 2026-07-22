@@ -1,0 +1,132 @@
+# Downloads
+
+Download SecureLens tools and agents for your platform.
+
+## SecureLens Device Agent
+
+The Device Agent scans servers and workstations for PII, credentials, and sensitive data.
+
+**Current Version:** 1.0.0
+
+### Download Links
+
+| Platform | Architecture | Filename | SHA256 Checksum |
+|----------|--------------|----------|-----------------|
+| Linux | x86_64 (Intel/AMD) | [securelens-agent-linux-amd64](/api/v1/downloads/agent/linux-amd64) | `854265223d5dc68bac17da924f2ccde0029f92cb861ddd662d7fd0de137aea58` |
+| Linux | ARM64 | [securelens-agent-linux-arm64](/api/v1/downloads/agent/linux-arm64) | `080e8d5d2891fab0e60098445f0e52517cd54e322330896d1cfa3fbd56b9ddd5` |
+| macOS | Intel (x86_64) | [securelens-agent-darwin-amd64](/api/v1/downloads/agent/darwin-amd64) | `3835cc8e6d62d8b0c2a25eeda321e3e305d8d0f39c4eef3915671a5eff6c39e9` |
+| macOS | Apple Silicon (ARM64) | [securelens-agent-darwin-arm64](/api/v1/downloads/agent/darwin-arm64) | `fa577b55936a5bc540a77e5036c1392a2f61bbf91ccb23aa5343e09c84285ed7` |
+| Windows | x86_64 | [securelens-agent-windows-amd64.exe](/api/v1/downloads/agent/windows-amd64) | `aaa4b56855dfe86a30cb9e130f26b32983c84ea0e2e00d074fcc182fb3e7235d` |
+
+### System Requirements
+
+| Platform | Minimum Requirements |
+|----------|---------------------|
+| Linux | Kernel 3.10+, glibc 2.17+ |
+| macOS | macOS 10.15 (Catalina) or later |
+| Windows | Windows 10 or later, Windows Server 2016+ |
+
+### Verify Download
+
+Always verify the checksum after downloading:
+
+**Linux / macOS:**
+```bash
+# Download
+curl -L -o securelens-agent https://api.securelens.ai/api/v1/downloads/agent/linux-amd64
+
+# Verify checksum
+echo "854265223d5dc68bac17da924f2ccde0029f92cb861ddd662d7fd0de137aea58  securelens-agent" | shasum -a 256 -c
+```
+
+**Windows (PowerShell):**
+```powershell
+# Download
+Invoke-WebRequest -Uri "https://api.securelens.ai/api/v1/downloads/agent/windows-amd64" -OutFile "securelens-agent.exe"
+
+# Verify checksum
+(Get-FileHash securelens-agent.exe -Algorithm SHA256).Hash -eq "aaa4b56855dfe86a30cb9e130f26b32983c84ea0e2e00d074fcc182fb3e7235d"
+```
+
+### Quick Install
+
+**Linux (x86_64):**
+```bash
+curl -L -o securelens-agent https://api.securelens.ai/api/v1/downloads/agent/linux-amd64
+chmod +x securelens-agent
+sudo mv securelens-agent /usr/local/bin/
+securelens-agent init --api-key YOUR_API_KEY
+```
+
+**Linux (ARM64):**
+```bash
+curl -L -o securelens-agent https://api.securelens.ai/api/v1/downloads/agent/linux-arm64
+chmod +x securelens-agent
+sudo mv securelens-agent /usr/local/bin/
+securelens-agent init --api-key YOUR_API_KEY
+```
+
+**macOS (Apple Silicon):**
+```bash
+curl -L -o securelens-agent https://api.securelens.ai/api/v1/downloads/agent/darwin-arm64
+chmod +x securelens-agent
+sudo mv securelens-agent /usr/local/bin/
+securelens-agent init --api-key YOUR_API_KEY
+```
+
+**macOS (Intel):**
+```bash
+curl -L -o securelens-agent https://api.securelens.ai/api/v1/downloads/agent/darwin-amd64
+chmod +x securelens-agent
+sudo mv securelens-agent /usr/local/bin/
+securelens-agent init --api-key YOUR_API_KEY
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+Invoke-WebRequest -Uri "https://api.securelens.ai/api/v1/downloads/agent/windows-amd64" -OutFile "securelens-agent.exe"
+New-Item -ItemType Directory -Force -Path "C:\Program Files\SecureLens"
+Move-Item securelens-agent.exe "C:\Program Files\SecureLens\"
+& "C:\Program Files\SecureLens\securelens-agent.exe" init --api-key YOUR_API_KEY
+```
+
+## API Access
+
+You can also list available downloads programmatically:
+
+```bash
+curl https://api.securelens.ai/api/v1/downloads/agent
+```
+
+Response:
+```json
+{
+  "version": "1.0.0",
+  "downloads": [
+    {
+      "platform": "linux-amd64",
+      "os": "Linux",
+      "architecture": "x86_64 (Intel/AMD)",
+      "filename": "securelens-agent-linux-amd64",
+      "download_url": "https://api.securelens.ai/api/v1/downloads/agent/linux-amd64",
+      "checksum": "854265223d5dc68bac17da924f2ccde0029f92cb861ddd662d7fd0de137aea58"
+    }
+  ]
+}
+```
+
+## Version History
+
+### v1.0.0 (Current)
+
+- Initial release
+- 60+ PII detection patterns
+- Daemon mode with scheduled scans
+- File exclusion patterns
+- Secure API reporting
+
+## Next Steps
+
+- [Device Agent Documentation](/features/device-agent) — Full installation and usage guide
+- [Getting Started](/getting-started) — Set up your SecureLens account
+- [API Reference](/api-reference) — Integrate with the SecureLens API

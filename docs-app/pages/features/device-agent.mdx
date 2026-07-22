@@ -1,0 +1,340 @@
+# Device Agent
+
+The SecureLens Device Agent is a lightweight binary that scans servers, workstations, and cloud instances for PII, credentials, and sensitive data in files.
+
+## Overview
+
+The agent runs directly on your infrastructure to scan:
+
+- **Log files** — Application logs, system logs, audit trails
+- **Configuration files** — Environment files, config directories
+- **User directories** — Home folders, documents, downloads
+- **Application data** — Database dumps, exports, backups
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **60+ PII Types** | Detects emails, SSNs, credit cards, API keys, and more |
+| **4M chars/sec** | High-performance scanning with minimal resource usage |
+| **~9MB Binary** | Single static binary, no dependencies |
+| **Daemon Mode** | Run continuously with scheduled scans |
+| **Exclusion Patterns** | Skip files by extension, path, or pattern |
+| **Secure Reporting** | Results sent encrypted to SecureLens API |
+
+## Download
+
+Download the agent for your platform:
+
+| Platform | Architecture | Download |
+|----------|--------------|----------|
+| Linux | x86_64 (Intel/AMD) | [securelens-agent-linux-amd64](/api/v1/downloads/agent/linux-amd64) |
+| Linux | ARM64 | [securelens-agent-linux-arm64](/api/v1/downloads/agent/linux-arm64) |
+| macOS | Intel | [securelens-agent-darwin-amd64](/api/v1/downloads/agent/darwin-amd64) |
+| macOS | Apple Silicon | [securelens-agent-darwin-arm64](/api/v1/downloads/agent/darwin-arm64) |
+| Windows | x86_64 | [securelens-agent-windows-amd64.exe](/api/v1/downloads/agent/windows-amd64) |
+
+See the [Downloads](/downloads) page for checksums and version history.
+
+## Installation
+
+### Linux / macOS
+
+```bash
+# Download (replace PLATFORM with your platform)
+curl -L -o securelens-agent https://api.securelens.ai/api/v1/downloads/agent/linux-amd64
+
+# Make executable
+chmod +x securelens-agent
+
+# Move to PATH
+sudo mv securelens-agent /usr/local/bin/
+
+# Verify installation
+securelens-agent --version
+```
+
+### Windows (PowerShell)
+
+```powershell
+# Download
+Invoke-WebRequest -Uri "https://api.securelens.ai/api/v1/downloads/agent/windows-amd64" -OutFile "securelens-agent.exe"
+
+# Move to Program Files (run as Administrator)
+New-Item -ItemType Directory -Force -Path "C:\Program Files\SecureLens"
+Move-Item securelens-agent.exe "C:\Program Files\SecureLens\"
+
+# Add to PATH (optional)
+$env:Path += ";C:\Program Files\SecureLens"
+
+# Verify installation
+securelens-agent.exe --version
+```
+
+## Configuration
+
+### Initialize the Agent
+
+Before scanning, initialize the agent with your API credentials:
+
+```bash
+securelens-agent init --api-key sl_your_api_key --api-url https://api.securelens.ai
+```
+
+This creates a configuration file at:
+- Linux/macOS: `~/.securelens/config.yaml`
+- Windows: `%APPDATA%\SecureLens\config.yaml`
+
+### Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--api-key` | Your SecureLens API key | Required |
+| `--api-url` | API endpoint URL | `https://api.securelens.ai` |
+| `--config` | Custom config file path | Platform default |
+
+## Usage
+
+### One-Time Scan
+
+Scan specific directories:
+
+```bash
+# Scan multiple paths
+securelens-agent scan /var/log /etc /home
+
+# Scan with exclusions
+securelens-agent scan /var/log --exclude "*.gz,*.zip,*.tar"
+
+# Scan with custom output
+securelens-agent scan /var/log --output results.json
+```
+
+### Scan Options
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--exclude` | Skip files matching patterns | `--exclude "*.log.gz,node_modules"` |
+| `--max-file-size` | Skip files larger than size | `--max-file-size 100MB` |
+| `--max-depth` | Limit directory recursion | `--max-depth 5` |
+| `--output` | Save results to file | `--output scan.json` |
+| `--quiet` | Suppress progress output | `--quiet` |
+| `--verbose` | Show detailed progress | `--verbose` |
+
+### Daemon Mode
+
+Run the agent as a background service with scheduled scans:
+
+```bash
+# Start daemon with hourly scans
+securelens-agent daemon --interval 1h
+
+# Start daemon with custom paths
+securelens-agent daemon --interval 6h --paths /var/log,/etc,/home
+
+# Start daemon with exclusions
+securelens-agent daemon --interval 1h --exclude "*.gz,*.zip"
+```
+
+### Daemon Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--interval` | Time between scans | `1h` |
+| `--paths` | Directories to scan | `/var/log,/etc,/home` |
+| `--exclude` | File patterns to skip | None |
+| `--pid-file` | PID file location | `/var/run/securelens-agent.pid` |
+
+### Check Status
+
+View the agent's current status:
+
+```bash
+securelens-agent status
+```
+
+Output:
+```
+SecureLens Agent v1.0.0
+Status: Running (daemon mode)
+Last Scan: 2024-01-15 14:30:00 UTC
+Next Scan: 2024-01-15 15:30:00 UTC
+Files Scanned: 12,456
+Findings: 23
+API Connection: Connected
+```
+
+## Detected PII Types
+
+The agent detects 60+ types of sensitive data:
+
+### Personal Identifiers
+- Email addresses
+- Phone numbers
+- Social Security Numbers (SSN)
+- National ID numbers
+- Passport numbers
+- Driver's license numbers
+
+### Financial Data
+- Credit card numbers
+- Bank account numbers (IBAN, routing)
+- Tax IDs
+
+### Credentials & Secrets
+- API keys (AWS, GCP, Azure, Stripe, etc.)
+- Private keys (RSA, SSH, PGP)
+- JWT tokens
+- Database connection strings
+- OAuth tokens
+- Passwords in config files
+
+### Network & Technical
+- IP addresses
+- MAC addresses
+- URLs with credentials
+
+### Healthcare
+- Medical record numbers
+- Health insurance IDs
+
+## Running as a System Service
+
+### Linux (systemd)
+
+Create `/etc/systemd/system/securelens-agent.service`:
+
+```ini
+[Unit]
+Description=SecureLens Device Agent
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/securelens-agent daemon --interval 1h --paths /var/log,/etc,/home
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable securelens-agent
+sudo systemctl start securelens-agent
+```
+
+### macOS (launchd)
+
+Create `~/Library/LaunchAgents/ai.securelens.agent.plist`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.securelens.agent</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/securelens-agent</string>
+        <string>daemon</string>
+        <string>--interval</string>
+        <string>1h</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+</dict>
+</plist>
+```
+
+Load the service:
+
+```bash
+launchctl load ~/Library/LaunchAgents/ai.securelens.agent.plist
+```
+
+### Windows (Service)
+
+Use NSSM (Non-Sucking Service Manager) or create a scheduled task:
+
+```powershell
+# Using Task Scheduler
+$action = New-ScheduledTaskAction -Execute "C:\Program Files\SecureLens\securelens-agent.exe" -Argument "daemon --interval 1h"
+$trigger = New-ScheduledTaskTrigger -AtStartup
+Register-ScheduledTask -TaskName "SecureLens Agent" -Action $action -Trigger $trigger -RunLevel Highest
+```
+
+## Viewing Results
+
+Scan results are automatically sent to SecureLens and visible in:
+
+1. **Endpoints → Device Agents** — View all registered agents and their findings
+2. **Dashboard** — See aggregate statistics
+3. **Audit Trail** — Review scan history
+
+## Troubleshooting
+
+### Agent Not Connecting
+
+```bash
+# Check configuration
+securelens-agent status
+
+# Test API connection
+curl -H "Authorization: Bearer sl_your_api_key" https://api.securelens.ai/health
+```
+
+### Permission Denied
+
+The agent needs read access to scan directories:
+
+```bash
+# Run with sudo for system directories
+sudo securelens-agent scan /var/log /etc
+
+# Or run daemon as root
+sudo securelens-agent daemon --interval 1h
+```
+
+### High CPU Usage
+
+Reduce scan intensity:
+
+```bash
+# Limit concurrent file processing
+securelens-agent scan /var/log --workers 2
+
+# Exclude large files
+securelens-agent scan /var/log --max-file-size 10MB
+```
+
+### Scan Taking Too Long
+
+```bash
+# Exclude unnecessary files
+securelens-agent scan /var/log --exclude "*.gz,*.zip,*.tar,*.bak"
+
+# Limit directory depth
+securelens-agent scan /home --max-depth 3
+```
+
+## Security Considerations
+
+- **API Key Security** — Store API keys securely; use environment variables in production
+- **Minimal Permissions** — Run with least privilege necessary
+- **Network Security** — Agent communicates over HTTPS only
+- **Data Handling** — Only metadata and masked findings are sent; raw data stays local
+
+## Next Steps
+
+- [Downloads](/downloads) — Get the latest version with checksums
+- [Endpoints](/features/endpoints) — Manage API endpoint scanning
+- [Classification](/features/classification) — Review classification results
+- [Audit Trail](/features/audit-trail) — View scan history

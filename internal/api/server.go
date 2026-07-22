@@ -166,6 +166,10 @@ func (s *Server) setupRoutes() {
 	r.Get("/api/docs", s.swaggerUI)
 	r.Get("/api/openapi.json", s.openAPISpec)
 
+	// Agent downloads (public, no auth required)
+	r.Get("/api/v1/downloads/agent", s.listAgentDownloads)
+	r.Get("/api/v1/downloads/agent/{platform}", s.downloadAgent)
+
 	r.Route("/api/v1", func(r chi.Router) {
 		// Auth endpoints - rate limiting (60/min per IP for login attempts)
 		r.Group(func(r chi.Router) {

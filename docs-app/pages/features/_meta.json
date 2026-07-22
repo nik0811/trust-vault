@@ -2,6 +2,7 @@
   "index": "Overview",
   "dashboard": "Dashboard",
   "data-sources": "Data Sources",
+  "device-agent": "Device Agent",
   "classification": "Classification",
   "sensitivity-labels": "Sensitivity Labels",
   "data-map": "Data Map",
