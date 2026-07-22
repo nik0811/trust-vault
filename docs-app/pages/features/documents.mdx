@@ -30,25 +30,8 @@ SecureLens document processing provides:
 Document → Extract → OCR (if needed) → Classify → Store
     │         │           │              │          │
     ▼         ▼           ▼              ▼          ▼
- Upload   Parse      PaddleOCR      GLiNER     Results
-          format     for images     for PII    in DB
-```
-
-## Configuration
-
-```yaml
-document_processing:
-  enabled: true
-  ocr:
-    engine: paddleocr
-    languages: [en, es, fr, de]
-    confidence_threshold: 0.8
-  extraction:
-    max_file_size: 100MB
-    timeout: 300s
-  classification:
-    enabled: true
-    batch_size: 10
+ Upload   Parse      SecureLens     SecureLens   Results
+          format     OCR Engine     AI Model     in DB
 ```
 
 ## Processing Documents
