@@ -123,15 +123,18 @@ AlertDialogAction.displayName = 'AlertDialogAction'
 const AlertDialogCancel = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, ...props }, ref) => (
-  <button
-    ref={ref}
-    className={cn(
-      'inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:mt-0 mt-2',
-      className
-    )}
-    {...props}
-  />
+>(({ className, onClick, ...props }, ref) => (
+  <Dialog.Close asChild>
+    <button
+      ref={ref}
+      className={cn(
+        'inline-flex h-10 items-center justify-center rounded-lg border border-border bg-background px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 sm:mt-0 mt-2',
+        className
+      )}
+      onClick={onClick}
+      {...props}
+    />
+  </Dialog.Close>
 ))
 AlertDialogCancel.displayName = 'AlertDialogCancel'
 
