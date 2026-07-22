@@ -20,11 +20,16 @@ FROM nginx:alpine
 # Copy the static export to nginx (with basePath, files are in /out directly but reference /docs/...)
 COPY --from=builder /app/out /usr/share/nginx/html/docs
 
-# Custom nginx config - serve /docs prefix
+# Custom nginx config - serve /docs prefix with proper redirects
 RUN echo 'server { \
     listen 3002; \
     root /usr/share/nginx/html; \
     index index.html; \
+    absolute_redirect off; \
+    \
+    location = /docs { \
+        return 301 /docs/; \
+    } \
     \
     location /docs/ { \
         try_files $uri $uri/ $uri.html /docs/index.html; \
