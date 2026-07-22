@@ -30,7 +30,7 @@ type RegisterRequest struct {
 }
 
 type RegisterResponse struct {
-	AgentID string `json:"id"` // Backend returns "id" not "agent_id"
+	AgentID string `json:"agent_id"`
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
 }
