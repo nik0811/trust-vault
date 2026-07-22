@@ -510,7 +510,7 @@
                 <td><span class="badge badge-warning">Regex patterns</span></td>
                 <td><span class="badge badge-warning">Basic ML</span></td>
                 <td><span class="badge badge-danger">Human error</span></td>
-                <td><span class="badge badge-success">GLiNER AI (60+ types)</span></td>
+                <td><span class="badge badge-success">SecureLens AI (60+ types)</span></td>
             </tr>
             <tr>
                 <td><strong>Self-Learning</strong></td>
@@ -594,38 +594,216 @@
         <span class="slide-number">05 / 15</span>
         <h1>⚙️ Architecture & Workflow</h1>
         
-        <div class="diagram">┌─────────────────────────────────────────────────────────────────────┐
-│                         DATA SOURCES                                │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│  │PostgreSQL│  │  MySQL   │  │Snowflake │  │ S3/Docs  │            │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘            │
-└───────┼─────────────┼─────────────┼─────────────┼──────────────────┘
-        │             │             │             │
-        └─────────────┴──────┬──────┴─────────────┘
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      SECURELENS PLATFORM                            │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    CLASSIFICATION ENGINE                     │   │
-│  │  • GLiNER ONNX (60+ PII types, 4M chars/sec)               │   │
-│  │  • Custom Rules & Patterns • Document Intelligence (OCR)    │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                             │                                       │
-│  ┌──────────────┐  ┌───────┴───────┐  ┌──────────────┐            │
-│  │  GOVERNANCE  │  │   AI GATE     │  │    AUDIT     │            │
-│  │  • Policies  │  │  • Intercept  │  │  • Lineage   │            │
-│  │  • Labels    │  │  • Redact     │  │  • Reports   │            │
-│  │  • Access    │  │  • Monitor    │  │  • Alerts    │            │
-│  └──────────────┘  └───────┬───────┘  └──────────────┘            │
-└─────────────────────────────┼───────────────────────────────────────┘
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         AI SYSTEMS                                  │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
-│  │  OpenAI  │  │ Anthropic│  │  Azure   │  │  Custom  │            │
-│  │  GPT-4   │  │  Claude  │  │  OpenAI  │  │   LLMs   │            │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
-└─────────────────────────────────────────────────────────────────────┘</div>
+        <!-- CSS Architecture Diagram -->
+        <div class="arch-diagram">
+            <!-- Data Sources Layer -->
+            <div class="arch-layer" style="background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);">
+                <div class="arch-layer-title">DATA SOURCES</div>
+                <div class="arch-boxes">
+                    <div class="arch-box">
+                        <div class="arch-box-icon">🐘</div>
+                        <div class="arch-box-label">PostgreSQL</div>
+                    </div>
+                    <div class="arch-box">
+                        <div class="arch-box-icon">🐬</div>
+                        <div class="arch-box-label">MySQL</div>
+                    </div>
+                    <div class="arch-box">
+                        <div class="arch-box-icon">❄️</div>
+                        <div class="arch-box-label">Snowflake</div>
+                    </div>
+                    <div class="arch-box">
+                        <div class="arch-box-icon">📁</div>
+                        <div class="arch-box-label">S3/Docs</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arch-arrow">▼</div>
+            
+            <!-- SecureLens Platform Layer -->
+            <div class="arch-layer arch-platform" style="background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);">
+                <div class="arch-layer-title">SECURELENS PLATFORM</div>
+                
+                <!-- Classification Engine -->
+                <div class="arch-sublayer">
+                    <div class="arch-sublayer-title">🧠 CLASSIFICATION ENGINE</div>
+                    <div class="arch-features">
+                        <span class="arch-feature">SecureLens AI (60+ PII types)</span>
+                        <span class="arch-feature">4M chars/sec</span>
+                        <span class="arch-feature">Custom Rules</span>
+                        <span class="arch-feature">Document OCR</span>
+                    </div>
+                </div>
+                
+                <!-- Three Pillars -->
+                <div class="arch-pillars">
+                    <div class="arch-pillar">
+                        <div class="arch-pillar-title">🛡️ GOVERNANCE</div>
+                        <ul>
+                            <li>Policies</li>
+                            <li>Labels</li>
+                            <li>Access Control</li>
+                        </ul>
+                    </div>
+                    <div class="arch-pillar highlight">
+                        <div class="arch-pillar-title">🤖 AI GATE</div>
+                        <ul>
+                            <li>Intercept</li>
+                            <li>Redact</li>
+                            <li>Monitor</li>
+                        </ul>
+                    </div>
+                    <div class="arch-pillar">
+                        <div class="arch-pillar-title">📊 AUDIT</div>
+                        <ul>
+                            <li>Lineage</li>
+                            <li>Reports</li>
+                            <li>Alerts</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="arch-arrow">▼</div>
+            
+            <!-- AI Systems Layer -->
+            <div class="arch-layer" style="background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);">
+                <div class="arch-layer-title">AI SYSTEMS</div>
+                <div class="arch-boxes">
+                    <div class="arch-box">
+                        <div class="arch-box-icon">🟢</div>
+                        <div class="arch-box-label">OpenAI</div>
+                        <div class="arch-box-sub">GPT-4</div>
+                    </div>
+                    <div class="arch-box">
+                        <div class="arch-box-icon">🟠</div>
+                        <div class="arch-box-label">Anthropic</div>
+                        <div class="arch-box-sub">Claude</div>
+                    </div>
+                    <div class="arch-box">
+                        <div class="arch-box-icon">🔵</div>
+                        <div class="arch-box-label">Azure</div>
+                        <div class="arch-box-sub">OpenAI</div>
+                    </div>
+                    <div class="arch-box">
+                        <div class="arch-box-icon">⚙️</div>
+                        <div class="arch-box-label">Custom</div>
+                        <div class="arch-box-sub">LLMs</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <style>
+            .arch-diagram {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 0;
+                margin: 2rem 0;
+            }
+            .arch-layer {
+                width: 100%;
+                max-width: 900px;
+                padding: 1.5rem;
+                border-radius: 12px;
+                text-align: center;
+            }
+            .arch-layer-title {
+                font-size: 1rem;
+                font-weight: 700;
+                letter-spacing: 2px;
+                margin-bottom: 1rem;
+                color: rgba(255,255,255,0.9);
+            }
+            .arch-boxes {
+                display: flex;
+                justify-content: center;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            .arch-box {
+                background: rgba(255,255,255,0.15);
+                border: 1px solid rgba(255,255,255,0.3);
+                border-radius: 8px;
+                padding: 1rem 1.5rem;
+                min-width: 120px;
+                backdrop-filter: blur(10px);
+            }
+            .arch-box-icon {
+                font-size: 1.5rem;
+                margin-bottom: 0.3rem;
+            }
+            .arch-box-label {
+                font-weight: 600;
+                font-size: 0.9rem;
+            }
+            .arch-box-sub {
+                font-size: 0.75rem;
+                opacity: 0.8;
+            }
+            .arch-arrow {
+                font-size: 2rem;
+                color: #14b8a6;
+                margin: 0.5rem 0;
+            }
+            .arch-platform {
+                padding: 2rem;
+            }
+            .arch-sublayer {
+                background: rgba(0,0,0,0.2);
+                border-radius: 8px;
+                padding: 1rem;
+                margin-bottom: 1.5rem;
+            }
+            .arch-sublayer-title {
+                font-weight: 700;
+                margin-bottom: 0.75rem;
+            }
+            .arch-features {
+                display: flex;
+                justify-content: center;
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            .arch-feature {
+                background: rgba(255,255,255,0.2);
+                padding: 0.4rem 0.8rem;
+                border-radius: 20px;
+                font-size: 0.8rem;
+            }
+            .arch-pillars {
+                display: flex;
+                justify-content: center;
+                gap: 1.5rem;
+            }
+            .arch-pillar {
+                background: rgba(0,0,0,0.2);
+                border-radius: 8px;
+                padding: 1rem 1.5rem;
+                min-width: 150px;
+            }
+            .arch-pillar.highlight {
+                background: rgba(255,255,255,0.15);
+                border: 2px solid rgba(255,255,255,0.4);
+            }
+            .arch-pillar-title {
+                font-weight: 700;
+                font-size: 0.9rem;
+                margin-bottom: 0.5rem;
+            }
+            .arch-pillar ul {
+                list-style: none;
+                padding: 0;
+                margin: 0;
+                font-size: 0.8rem;
+            }
+            .arch-pillar li {
+                padding: 0.2rem 0;
+                opacity: 0.9;
+            }
+        </style>
         
         <h3>Workflow Steps</h3>
         <div class="stats-grid" style="grid-template-columns: repeat(6, 1fr);">
@@ -877,7 +1055,7 @@
                 <div class="feature-desc">
                     Built from the ground up for AI data flows, not retrofitted from legacy DLP.
                     <ul>
-                        <li><strong>GLiNER ONNX</strong> — State-of-the-art NER model, 60+ entity types</li>
+                        <li><strong>SecureLens AI Engine</strong> — State-of-the-art NER model, 60+ entity types</li>
                         <li><strong>4M chars/sec</strong> — Process billions of records without bottlenecks</li>
                         <li><strong>Context-aware</strong> — Understands meaning, not just patterns</li>
                     </ul>
@@ -1178,7 +1356,7 @@
                 <h3>Classification Model</h3>
                 <table>
                     <tr><th>Attribute</th><th>Value</th></tr>
-                    <tr><td>Model</td><td>GLiNER ONNX (INT8)</td></tr>
+                    <tr><td>Model</td><td>SecureLens AI Engine</td></tr>
                     <tr><td>Size</td><td>197 MB</td></tr>
                     <tr><td>Entity Types</td><td>60+</td></tr>
                     <tr><td>Throughput</td><td>4M+ chars/sec</td></tr>
