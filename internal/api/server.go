@@ -737,6 +737,57 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Check if this is an API key (starts with sl_)
+		if strings.HasPrefix(tokenStr, "sl_") {
+			// Validate API key
+			ctx := r.Context()
+			var apiKey struct {
+				ID        string  `db:"id"`
+				TenantID  string  `db:"tenant_id"`
+				UserID    string  `db:"user_id"`
+				KeyHash   string  `db:"key_hash"`
+				ExpiresAt *time.Time `db:"expires_at"`
+			}
+			
+			// Find API key by prefix (first 10 chars)
+			prefix := tokenStr[:10]
+			err := s.db.GetContext(ctx, &apiKey,
+				`SELECT id, tenant_id, user_id, key_hash, expires_at 
+				 FROM api_keys WHERE key_prefix = $1`, prefix)
+			
+			if err != nil {
+				pkg.Error(w, pkg.ErrUnauthorized, http.StatusUnauthorized)
+				return
+			}
+			
+			// Verify the full key hash
+			if !pkg.CheckPassword(tokenStr, apiKey.KeyHash) {
+				pkg.Error(w, pkg.ErrUnauthorized, http.StatusUnauthorized)
+				return
+			}
+			
+			// Check expiration
+			if apiKey.ExpiresAt != nil && apiKey.ExpiresAt.Before(time.Now()) {
+				pkg.Error(w, pkg.ErrUnauthorized, http.StatusUnauthorized)
+				return
+			}
+			
+			// Update last_used_at
+			go func() {
+				s.db.ExecContext(context.Background(),
+					`UPDATE api_keys SET last_used_at = NOW() WHERE id = $1`, apiKey.ID)
+			}()
+			
+			// Set context values
+			ctx = context.WithValue(ctx, pkg.CtxUserID, apiKey.UserID)
+			ctx = context.WithValue(ctx, pkg.CtxTenantID, apiKey.TenantID)
+			ctx = context.WithValue(ctx, pkg.CtxPermissions, []string{"*"}) // API keys have full access
+			ctx = context.WithValue(ctx, pkg.CtxIsSuperAdmin, false)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// Otherwise validate as JWT
 		claims, err := pkg.ValidateToken(tokenStr)
 		if err != nil {
 			pkg.Error(w, pkg.ErrUnauthorized, http.StatusUnauthorized)
