@@ -151,7 +151,7 @@ export class SecureLensCallbackHandler implements LangChainCallbackHandlerMethod
    * Handle chain start - intercept the query.
    */
   async handleChainStart(
-    chain: { name: string },
+    _chain: { name: string },
     inputs: Record<string, unknown>,
     runId: string,
     _parentRunId?: string
@@ -311,15 +311,11 @@ export class SecureLensCallbackHandler implements LangChainCallbackHandlerMethod
    */
   async handleLLMStart(
     _llm: { name: string },
-    prompts: string[],
-    runId: string,
-    parentRunId?: string,
+    _prompts: string[],
+    _runId: string,
+    _parentRunId?: string,
     _extraParams?: Record<string, unknown>
   ): Promise<void> {
-    // Optionally classify prompts
-    const context = this.runContexts.get(parentRunId ?? runId);
-    if (!context) return;
-
     // The prompt has already been intercepted at chain level
   }
 

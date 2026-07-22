@@ -103,7 +103,7 @@ export function secureLensMiddleware(options: SecureLensMiddlewareOptions): Requ
     }
   };
 
-  const defaultOnBlocked = (result: GateInterceptResponse, _req: Request, res: Response): void => {
+  const defaultOnBlocked = (result: GateInterceptResponse, _req: SecureLensRequest, res: Response): void => {
     res.status(403).json({
       error: 'POLICY_BLOCKED',
       message: result.blockReason ?? 'Request blocked by policy',
@@ -176,7 +176,7 @@ export function secureLensMiddleware(options: SecureLensMiddlewareOptions): Requ
  */
 async function auditResponse(
   gate: AIGate,
-  req: SecureLensRequest,
+  _req: SecureLensRequest,
   body: unknown
 ): Promise<void> {
   try {

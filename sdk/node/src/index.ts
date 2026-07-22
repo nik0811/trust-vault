@@ -7,6 +7,9 @@
  */
 
 // Core exports
+import { SecureLensClient as _SecureLensClient } from './client.js';
+import { AIGate as _AIGate } from './gate.js';
+
 export { SecureLensClient } from './client.js';
 export { AIGate } from './gate.js';
 
@@ -97,8 +100,10 @@ export const VERSION = '1.0.0';
  * });
  * ```
  */
-export function createClient(config: import('./types.js').SecureLensConfig): SecureLensClient {
-  return new SecureLensClient(config);
+export function createClient(
+  config: import('./types.js').SecureLensConfig
+): _SecureLensClient {
+  return new _SecureLensClient(config);
 }
 
 /**
@@ -114,6 +119,6 @@ export function createClient(config: import('./types.js').SecureLensConfig): Sec
  * const result = await gate.intercept({ query: 'Hello' });
  * ```
  */
-export function createGate(client: SecureLensClient): AIGate {
-  return new AIGate(client);
+export function createGate(client: _SecureLensClient): _AIGate {
+  return new _AIGate(client);
 }

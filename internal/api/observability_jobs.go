@@ -656,8 +656,8 @@ func (s *Server) runJobNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if job is already running
-	if job.Status == "running" {
+	// Check if job is already running or locked
+	if job.Status == "running" || job.LockedBy != nil {
 		pkg.JSON(w, map[string]string{
 			"status":  "already_running",
 			"message": "This job is already running",
@@ -665,29 +665,37 @@ func (s *Server) runJobNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create execution record
+	// Create execution record with attempt tracking
 	executionID := pkg.GenerateID()
 	now := time.Now()
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO job_executions (id, tenant_id, job_id, status, started_at, created_at, updated_at)
-		 VALUES ($1, $2, $3, 'running', $4, $4, $4)`,
+		`INSERT INTO job_executions (id, tenant_id, job_id, status, started_at, attempt, created_at, updated_at)
+		 VALUES ($1, $2, $3, 'pending', $4, 1, $4, $4)`,
 		executionID, tenantID, id, now)
 	if err != nil {
 		pkg.Error(w, err)
 		return
 	}
 
-	// Update status to running
-	job.Status = "running"
+	// Update status to pending (not running - the worker will set it to running)
+	job.Status = "pending"
 	s.jobs.Update(ctx, job)
 
-	// Queue job for immediate execution
+	// Get timeout from job config or use default
+	timeoutSeconds := job.TimeoutSeconds
+	if timeoutSeconds == 0 {
+		timeoutSeconds = 3600 // Default 1 hour
+	}
+
+	// Queue job for immediate execution with full metadata
 	err = s.kafka.Produce(ctx, "job-executions", tenantID, map[string]any{
-		"job_id":       id,
-		"execution_id": executionID,
-		"tenant_id":    tenantID,
-		"type":         job.Type,
-		"config":       job.Config,
+		"job_id":          id,
+		"execution_id":    executionID,
+		"tenant_id":       tenantID,
+		"type":            job.Type,
+		"config":          job.Config,
+		"attempt":         1,
+		"timeout_seconds": timeoutSeconds,
 	})
 	if err != nil {
 		job.Status = "scheduled"
@@ -709,10 +717,10 @@ func (s *Server) runJobNow(w http.ResponseWriter, r *http.Request) {
 	})
 
 	pkg.JSON(w, map[string]any{
-		"status":       "running",
+		"status":       "pending",
 		"job_id":       id,
 		"execution_id": executionID,
-		"message":      "Job started",
+		"message":      "Job queued for execution",
 	})
 }
 

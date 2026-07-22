@@ -12,6 +12,8 @@ export interface Job {
   status: string
   last_run: string
   next_run: string
+  max_retries: number
+  timeout_seconds: number
   created_at: string
   updated_at: string
 }
@@ -25,6 +27,8 @@ export interface JobExecution {
   duration_ms: number | null
   result: any
   error: string | null
+  attempt: number
+  worker_id: string | null
   created_at: string
   updated_at: string
 }

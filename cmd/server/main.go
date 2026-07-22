@@ -176,14 +176,18 @@ func runWorker(ctx context.Context, db *store.DB, kafka *external.Kafka) {
 	go kafka.ConsumeScanJobs(workerCtx, db)
 	go kafka.ConsumeJobExecutions(workerCtx, db)
 
-	// Start job scheduler
-	go runJobScheduler(workerCtx, db, kafka)
+	// Start production-grade job scheduler with distributed locking
+	jobScheduler := scheduler.New(db, kafka)
+	go jobScheduler.Start(workerCtx)
 
 	log.Info().Msg("Worker started - consuming from: raw-data-chunks, scan-jobs, job-executions")
 
 	sig := <-quit
 	log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
 	log.Info().Msg("Worker shutting down gracefully...")
+
+	// Stop the job scheduler first
+	jobScheduler.Stop()
 
 	// Cancel worker context to stop consuming
 	workerCancel()
@@ -199,95 +203,6 @@ func runWorker(ctx context.Context, db *store.DB, kafka *external.Kafka) {
 	kafka.Close()
 
 	log.Info().Msg("Worker shutdown complete")
-}
-
-// runJobScheduler checks for scheduled jobs and triggers them
-func runJobScheduler(ctx context.Context, db *store.DB, kafka *external.Kafka) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	log.Info().Msg("Job scheduler started - checking every 30 seconds")
-
-	for {
-		select {
-		case <-ctx.Done():
-			log.Info().Msg("Job scheduler shutting down")
-			return
-		case <-ticker.C:
-			processScheduledJobs(ctx, db, kafka)
-		}
-	}
-}
-
-// processScheduledJobs finds and triggers jobs that are due to run
-func processScheduledJobs(ctx context.Context, db *store.DB, kafka *external.Kafka) {
-	// Find jobs that are scheduled and due to run
-	var jobs []store.Job
-	err := db.SelectContext(ctx, &jobs,
-		`SELECT * FROM jobs 
-		 WHERE status = 'scheduled' 
-		 AND (next_run IS NULL OR next_run <= NOW())
-		 LIMIT 10`)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch scheduled jobs")
-		return
-	}
-
-	for _, job := range jobs {
-		log.Info().
-			Str("job_id", job.ID).
-			Str("job_name", job.Name).
-			Str("job_type", job.Type).
-			Msg("Triggering scheduled job")
-
-		// Queue job for execution
-		err := kafka.Produce(ctx, "job-executions", job.TenantID, map[string]any{
-			"job_id":    job.ID,
-			"tenant_id": job.TenantID,
-			"type":      job.Type,
-			"config":    job.Config,
-		})
-		if err != nil {
-			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to queue job execution")
-			continue
-		}
-
-		// Calculate next run time based on schedule (cron)
-		nextRun := calculateNextRun(job.Schedule)
-
-		// Update job status to pending and set next_run
-		_, err = db.ExecContext(ctx,
-			`UPDATE jobs SET status = 'pending', next_run = $1, updated_at = NOW() WHERE id = $2`,
-			nextRun, job.ID)
-		if err != nil {
-			log.Error().Err(err).Str("job_id", job.ID).Msg("Failed to update job next_run")
-		}
-	}
-}
-
-// calculateNextRun calculates the next run time based on a simple schedule
-// Supports: @hourly, @daily, @weekly, or interval like "1h", "30m", "24h"
-func calculateNextRun(schedule string) time.Time {
-	now := time.Now()
-
-	switch schedule {
-	case "@hourly":
-		return now.Add(time.Hour)
-	case "@daily":
-		return now.Add(24 * time.Hour)
-	case "@weekly":
-		return now.Add(7 * 24 * time.Hour)
-	case "":
-		// One-time job, no next run
-		return time.Time{}
-	default:
-		// Try to parse as duration
-		if d, err := time.ParseDuration(schedule); err == nil {
-			return now.Add(d)
-		}
-		// Default to daily if unparseable
-		return now.Add(24 * time.Hour)
-	}
 }
 
 // runScanWatchdog periodically marks scans stuck in 'running' for over 30 minutes as failed.

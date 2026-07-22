@@ -255,6 +255,11 @@ function JobHistoryModal({ isOpen, onClose, job }: { isOpen: boolean; onClose: (
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-sm capitalize">{execution.status}</span>
+                  {execution.attempt > 1 && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-600">
+                      Attempt {execution.attempt}
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground">
                     {execution.started_at ? new Date(execution.started_at).toLocaleString() : '—'}
                   </span>

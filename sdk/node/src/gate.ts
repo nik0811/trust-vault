@@ -142,8 +142,8 @@ export class AIGate {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new SecureLensValidationError(error.message ?? 'Stream request failed');
+      const errorBody = await response.json() as { message?: string };
+      throw new SecureLensValidationError(errorBody.message ?? 'Stream request failed');
     }
 
     const reader = response.body?.getReader();

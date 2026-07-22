@@ -1830,10 +1830,14 @@ type ScanJobMessage struct {
 
 // JobExecutionMessage represents a job execution from Kafka
 type JobExecutionMessage struct {
-	JobID    string     `json:"job_id"`
-	TenantID string     `json:"tenant_id"`
-	Type     string     `json:"type"`
-	Config   store.JSON `json:"config"`
+	JobID          string     `json:"job_id"`
+	ExecutionID    string     `json:"execution_id"`
+	TenantID       string     `json:"tenant_id"`
+	Type           string     `json:"type"`
+	Config         store.JSON `json:"config"`
+	Attempt        int        `json:"attempt"`
+	TimeoutSeconds int        `json:"timeout_seconds"`
+	WorkerID       string     `json:"worker_id"`
 }
 
 // ConsumeScanJobs is deprecated - scans now go through the ingestion sidecar
@@ -1995,7 +1999,18 @@ func (k *Kafka) ConsumeJobExecutions(ctx context.Context, db *store.DB) {
 
 // processJobExecution handles a single job execution with real logic
 func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobExecutionMessage) {
-	// Update job status to running (only if job_id is a valid non-empty UUID)
+	// Set up timeout context if timeout is specified
+	var execCtx context.Context
+	var cancel context.CancelFunc
+	if job.TimeoutSeconds > 0 {
+		execCtx, cancel = context.WithTimeout(ctx, time.Duration(job.TimeoutSeconds)*time.Second)
+	} else {
+		// Default 1 hour timeout
+		execCtx, cancel = context.WithTimeout(ctx, time.Hour)
+	}
+	defer cancel()
+
+	// Update job status to running
 	if job.JobID != "" {
 		_, err := db.ExecContext(ctx,
 			`UPDATE jobs SET status = 'running', updated_at = NOW() WHERE id = $1 AND tenant_id = $2`,
@@ -2005,43 +2020,77 @@ func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobEx
 		}
 	}
 
+	// Update execution record to running
+	if job.ExecutionID != "" {
+		_, err := db.ExecContext(ctx,
+			`UPDATE job_executions SET status = 'running', started_at = NOW(), updated_at = NOW() WHERE id = $1`,
+			job.ExecutionID)
+		if err != nil {
+			log.Error().Err(err).Str("execution_id", job.ExecutionID).Msg("Failed to update execution status to running")
+		}
+	}
+
 	// Emit job started event
 	events.Emit("job.started", map[string]any{
-		"job_id":    job.JobID,
-		"tenant_id": job.TenantID,
-		"type":      job.Type,
+		"job_id":       job.JobID,
+		"execution_id": job.ExecutionID,
+		"tenant_id":    job.TenantID,
+		"type":         job.Type,
+		"attempt":      job.Attempt,
 	})
 
 	start := time.Now()
 	var status, errorMsg string
 	var result map[string]any
 
-	// Execute job based on type
-	switch job.Type {
-	case "classification":
-		status, errorMsg, result = k.executeClassificationJob(ctx, db, job)
-	case "quality_assessment":
-		status, errorMsg, result = k.executeQualityJob(ctx, db, job)
-	case "rot_scan":
-		status, errorMsg, result = k.executeROTScanJob(ctx, db, job)
-	case "compliance_check":
-		status, errorMsg, result = k.executeComplianceJob(ctx, db, job)
-	case "data_sync":
-		status, errorMsg, result = k.executeDataSyncJob(ctx, db, job)
-	case "report_generation":
-		status, errorMsg, result = k.executeReportJob(ctx, db, job)
-	case "retention_check":
-		status, errorMsg, result = k.executeRetentionJob(ctx, db, job)
-	case "lineage_update":
-		status, errorMsg, result = k.executeLineageJob(ctx, db, job)
-	default:
-		status = "completed"
-		errorMsg = ""
-		result = map[string]any{"message": "Job type not implemented, marked as completed"}
-		log.Warn().Str("type", job.Type).Msg("Unknown job type")
+	// Execute job based on type with timeout context
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		switch job.Type {
+		case "classification":
+			status, errorMsg, result = k.executeClassificationJob(execCtx, db, job)
+		case "quality_assessment":
+			status, errorMsg, result = k.executeQualityJob(execCtx, db, job)
+		case "rot_scan":
+			status, errorMsg, result = k.executeROTScanJob(execCtx, db, job)
+		case "compliance_check":
+			status, errorMsg, result = k.executeComplianceJob(execCtx, db, job)
+		case "data_sync":
+			status, errorMsg, result = k.executeDataSyncJob(execCtx, db, job)
+		case "report_generation":
+			status, errorMsg, result = k.executeReportJob(execCtx, db, job)
+		case "retention_check":
+			status, errorMsg, result = k.executeRetentionJob(execCtx, db, job)
+		case "lineage_update":
+			status, errorMsg, result = k.executeLineageJob(execCtx, db, job)
+		default:
+			status = "completed"
+			errorMsg = ""
+			result = map[string]any{"message": "Job type not implemented, marked as completed"}
+			log.Warn().Str("type", job.Type).Msg("Unknown job type")
+		}
+	}()
+
+	// Wait for completion or timeout
+	select {
+	case <-done:
+		// Job completed normally
+	case <-execCtx.Done():
+		if execCtx.Err() == context.DeadlineExceeded {
+			status = "failed"
+			errorMsg = fmt.Sprintf("Job timed out after %d seconds", job.TimeoutSeconds)
+			result = map[string]any{"error": "timeout"}
+			log.Warn().
+				Str("job_id", job.JobID).
+				Str("type", job.Type).
+				Int("timeout_seconds", job.TimeoutSeconds).
+				Msg("Job execution timed out")
+		}
 	}
 
 	execDuration := time.Since(start)
+	durationMs := int(execDuration.Milliseconds())
 
 	if status == "completed" {
 		log.Info().
@@ -2055,22 +2104,67 @@ func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobEx
 			Str("job_id", job.JobID).
 			Str("type", job.Type).
 			Str("error", errorMsg).
+			Int("attempt", job.Attempt).
 			Msg("Job failed")
 	}
 
-	// Update job status in database (only if job_id is a valid non-empty UUID)
+	// Update execution record
+	if job.ExecutionID != "" {
+		resultJSON, _ := json.Marshal(result)
+		var errPtr *string
+		if errorMsg != "" {
+			errPtr = &errorMsg
+		}
+		_, err := db.ExecContext(ctx,
+			`UPDATE job_executions 
+			 SET status = $1, 
+			     completed_at = NOW(), 
+			     duration_ms = $2, 
+			     result = $3, 
+			     error = $4,
+			     updated_at = NOW()
+			 WHERE id = $5`,
+			status, durationMs, resultJSON, errPtr, job.ExecutionID)
+		if err != nil {
+			log.Error().Err(err).Str("execution_id", job.ExecutionID).Msg("Failed to update execution record")
+		}
+	}
+
+	// Update job status and calculate next run
 	if job.JobID != "" {
+		var schedule string
+		db.GetContext(ctx, &schedule, `SELECT COALESCE(schedule, '') FROM jobs WHERE id = $1`, job.JobID)
+
+		finalStatus := "scheduled"
+		var nextRun *time.Time
+
+		if status == "failed" {
+			// Check if we've exceeded max retries
+			var maxRetries int
+			db.GetContext(ctx, &maxRetries, `SELECT COALESCE(max_retries, 3) FROM jobs WHERE id = $1`, job.JobID)
+			if job.Attempt >= maxRetries {
+				finalStatus = "failed"
+			} else {
+				finalStatus = "failed" // Will be retried by scheduler
+			}
+		} else if schedule == "" {
+			// One-time job completed
+			finalStatus = "completed"
+		} else {
+			// Calculate next run for recurring job
+			nextRun = calculateNextRunTime(schedule)
+		}
+
 		_, err := db.ExecContext(ctx, `
-			UPDATE jobs SET
-				status = $1,
-				last_run = NOW(),
-				next_run = CASE
-					WHEN schedule IS NOT NULL AND schedule <> '' THEN NOW() + INTERVAL '1 day'
-					ELSE next_run
-				END,
-				updated_at = NOW()
-			WHERE id = $2 AND tenant_id = $3`,
-			status, job.JobID, job.TenantID)
+			UPDATE jobs 
+			SET status = $1,
+			    last_run = NOW(),
+			    next_run = $2,
+			    locked_by = NULL,
+			    locked_at = NULL,
+			    updated_at = NOW()
+			WHERE id = $3 AND tenant_id = $4`,
+			finalStatus, nextRun, job.JobID, job.TenantID)
 		if err != nil {
 			log.Error().Err(err).Str("job_id", job.JobID).Msg("Failed to update job status")
 		}
@@ -2083,14 +2177,46 @@ func (k *Kafka) processJobExecution(ctx context.Context, db *store.DB, job JobEx
 	}
 
 	events.Emit(eventName, map[string]any{
-		"job_id":      job.JobID,
-		"tenant_id":   job.TenantID,
-		"status":      status,
-		"error":       errorMsg,
-		"type":        job.Type,
-		"duration_ms": execDuration.Milliseconds(),
-		"result":      result,
+		"job_id":       job.JobID,
+		"execution_id": job.ExecutionID,
+		"tenant_id":    job.TenantID,
+		"status":       status,
+		"error":        errorMsg,
+		"type":         job.Type,
+		"duration_ms":  durationMs,
+		"attempt":      job.Attempt,
+		"result":       result,
 	})
+}
+
+// calculateNextRunTime calculates the next run time based on schedule
+func calculateNextRunTime(schedule string) *time.Time {
+	if schedule == "" {
+		return nil
+	}
+
+	now := time.Now()
+	var next time.Time
+
+	switch schedule {
+	case "@hourly":
+		next = now.Add(time.Hour)
+	case "@daily":
+		next = now.Add(24 * time.Hour)
+	case "@weekly":
+		next = now.Add(7 * 24 * time.Hour)
+	case "@monthly":
+		next = now.AddDate(0, 1, 0)
+	default:
+		if d, err := time.ParseDuration(schedule); err == nil {
+			next = now.Add(d)
+		} else {
+			// Default to daily
+			next = now.Add(24 * time.Hour)
+		}
+	}
+
+	return &next
 }
 
 // executeClassificationJob runs classification on datasets
