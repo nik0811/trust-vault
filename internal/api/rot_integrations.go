@@ -860,6 +860,43 @@ func (s *Server) getDataMapSources(w http.ResponseWriter, r *http.Request) {
 
 	sources, _ := s.datasources.List(ctx, tenantID, store.ListOpts{Limit: 100})
 
+	// Query dataset counts per datasource (distinct dataset_id from classifications)
+	type datasetCount struct {
+		SourceID     string `db:"source_id"`
+		DatasetCount int    `db:"dataset_count"`
+		RecordCount  int    `db:"record_count"`
+	}
+	var counts []datasetCount
+	s.db.SelectContext(ctx, &counts, `
+		SELECT source_id, 
+		       COUNT(DISTINCT dataset_id) as dataset_count,
+		       COUNT(*) as record_count
+		FROM classifications 
+		WHERE tenant_id = $1 AND source_id IS NOT NULL
+		GROUP BY source_id`, tenantID)
+
+	countMap := make(map[string]datasetCount)
+	for _, c := range counts {
+		countMap[c.SourceID] = c
+	}
+
+	// Also check scan_logs for datasets_discovered (fallback if no classifications yet)
+	type scanCount struct {
+		DatasourceID       string `db:"datasource_id"`
+		DatasetsDiscovered int    `db:"datasets_discovered"`
+	}
+	var scanCounts []scanCount
+	s.db.SelectContext(ctx, &scanCounts, `
+		SELECT DISTINCT ON (datasource_id) datasource_id, datasets_discovered
+		FROM scan_logs
+		WHERE tenant_id = $1 AND status IN ('success', 'completed')
+		ORDER BY datasource_id, completed_at DESC NULLS LAST`, tenantID)
+
+	scanCountMap := make(map[string]int)
+	for _, sc := range scanCounts {
+		scanCountMap[sc.DatasourceID] = sc.DatasetsDiscovered
+	}
+
 	// Mask sensitive fields in config (password, secret, api_key, etc.)
 	type SafeDataSource struct {
 		ID               string     `json:"id"`
@@ -868,15 +905,50 @@ func (s *Server) getDataMapSources(w http.ResponseWriter, r *http.Request) {
 		Status           string     `json:"status"`
 		LastScan         *time.Time `json:"last_scan,omitempty"`
 		SensitivityLabel *string    `json:"sensitivity_label,omitempty"`
+		Sensitivity      string     `json:"sensitivity"`
 		Region           *string    `json:"region,omitempty"`
 		Country          *string    `json:"country,omitempty"`
 		CreatedAt        time.Time  `json:"created_at"`
 		UpdatedAt        time.Time  `json:"updated_at"`
 		Config           any        `json:"config,omitempty"`
+		DatasetCount     int        `json:"dataset_count"`
+		RecordCount      string     `json:"record_count"`
 	}
 
 	safeSources := make([]SafeDataSource, 0, len(sources))
 	for _, src := range sources {
+		// Get counts from classifications or scan logs
+		dsCount := 0
+		recCount := 0
+		if c, ok := countMap[src.ID]; ok {
+			dsCount = c.DatasetCount
+			recCount = c.RecordCount
+		}
+		// Fallback to scan_logs datasets_discovered if no classifications
+		if dsCount == 0 {
+			if sc, ok := scanCountMap[src.ID]; ok {
+				dsCount = sc
+			}
+		}
+
+		// Format record count for display
+		recordStr := "0"
+		if recCount > 0 {
+			if recCount >= 1000000 {
+				recordStr = fmt.Sprintf("%.1fM", float64(recCount)/1000000)
+			} else if recCount >= 1000 {
+				recordStr = fmt.Sprintf("%.1fK", float64(recCount)/1000)
+			} else {
+				recordStr = fmt.Sprintf("%d", recCount)
+			}
+		}
+
+		// Determine sensitivity from label
+		sensitivity := "internal"
+		if src.SensitivityLabel != nil && *src.SensitivityLabel != "" {
+			sensitivity = *src.SensitivityLabel
+		}
+
 		safe := SafeDataSource{
 			ID:               src.ID,
 			Name:             src.Name,
@@ -884,10 +956,13 @@ func (s *Server) getDataMapSources(w http.ResponseWriter, r *http.Request) {
 			Status:           src.Status,
 			LastScan:         src.LastScan,
 			SensitivityLabel: src.SensitivityLabel,
+			Sensitivity:      sensitivity,
 			Region:           src.Region,
 			Country:          src.Country,
 			CreatedAt:        src.CreatedAt,
 			UpdatedAt:        src.UpdatedAt,
+			DatasetCount:     dsCount,
+			RecordCount:      recordStr,
 		}
 
 		// Parse and mask sensitive config fields

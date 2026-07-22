@@ -39,6 +39,22 @@ export interface DataMapGeography {
   regions: DataMapRegion[]
 }
 
+export interface DataMapSource {
+  id: string
+  name: string
+  type: string
+  status: string
+  last_scan?: string
+  sensitivity_label?: string
+  sensitivity: string
+  region?: string
+  country?: string
+  created_at: string
+  updated_at: string
+  dataset_count: number
+  record_count: string
+}
+
 export function useDataMap() {
   return useQuery({
     queryKey: ['datamap'],
@@ -53,7 +69,7 @@ export function useDataMapSources() {
   return useQuery({
     queryKey: ['datamap-sources'],
     queryFn: async () => {
-      const response = await api.get('/datamap/sources')
+      const response = await api.get<DataMapSource[]>('/datamap/sources')
       return response.data
     },
   })
