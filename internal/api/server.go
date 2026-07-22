@@ -527,9 +527,12 @@ func (s *Server) setupRoutes() {
 			r.Route("/endpoints/agents", func(r chi.Router) {
 				r.Post("/register", s.registerEndpoint)
 				r.Get("/", s.listEndpoints)
+				r.Post("/report", s.reportAgentScan)
 				r.Post("/{id}/scan", s.triggerEndpointScan)
 				r.Post("/{id}/scan-results", s.receiveEndpointScanResults)
 				r.Get("/{id}/results", s.getEndpointResults)
+				r.Get("/{id}/status", s.getAgentStatus)
+				r.Post("/{id}/heartbeat", s.agentHeartbeat)
 			})
 
 			// Endpoint URL scanning (API endpoint PII scanning)
