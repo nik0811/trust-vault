@@ -17,20 +17,20 @@ RUN npm run build
 # Production stage - use nginx to serve static files
 FROM nginx:alpine
 
-# Copy the static export to nginx
-COPY --from=builder /app/out /usr/share/nginx/html
+# Copy the static export to nginx (with basePath, files are in /out directly but reference /docs/...)
+COPY --from=builder /app/out /usr/share/nginx/html/docs
 
-# Copy custom nginx config for SPA routing
+# Custom nginx config - serve /docs prefix
 RUN echo 'server { \
     listen 3002; \
     root /usr/share/nginx/html; \
     index index.html; \
     \
-    location / { \
-        try_files $uri $uri/ $uri.html /index.html; \
+    location /docs/ { \
+        try_files $uri $uri/ $uri.html /docs/index.html; \
     } \
     \
-    location /_next/static/ { \
+    location /docs/_next/static/ { \
         expires 1y; \
         add_header Cache-Control "public, immutable"; \
     } \
