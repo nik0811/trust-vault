@@ -1,0 +1,170 @@
+# Running Your First Scan
+
+After connecting a data source, SecureLens automatically starts scanning and classifying your data. This guide explains what happens during a scan and how to review the results.
+
+## What Happens During a Scan
+
+When you add a data source or trigger a scan, SecureLens performs these steps:
+
+### 1. Schema Discovery
+
+SecureLens connects to your data source and discovers:
+
+- All tables and views
+- Column names and data types
+- Row counts and table sizes
+- Relationships between tables
+
+### 2. Data Sampling
+
+For each table, SecureLens samples records to analyze:
+
+- Default: 1,000 records per table
+- Configurable per data source
+- Samples are processed securely and not stored
+
+### 3. AI Classification
+
+The classification engine analyzes sampled data to detect:
+
+- **Personal identifiers** — Names, emails, phone numbers
+- **Government IDs** — SSN, passport numbers, driver's licenses
+- **Financial data** — Credit cards, bank accounts
+- **Health information** — Medical records, conditions
+- **Technical identifiers** — IP addresses, API keys
+
+### 4. Confidence Scoring
+
+Each classification includes a confidence score:
+
+| Confidence | Meaning |
+|------------|---------|
+| **90-100%** | High confidence, auto-labeled |
+| **70-89%** | Medium confidence, flagged for review |
+| **Below 70%** | Low confidence, not labeled |
+
+### 5. Label Assignment
+
+Based on classifications, sensitivity labels are assigned:
+
+- **Highly Sensitive** — SSN, credit cards, health data
+- **Sensitive** — Names, emails, addresses
+- **Internal** — Business data, internal IDs
+- **Public** — Non-sensitive data
+
+## Monitoring Scan Progress
+
+### From the Dashboard
+
+The dashboard shows active scans with:
+
+- Data source name
+- Progress percentage
+- Tables scanned / total
+- Estimated time remaining
+
+### From Data Sources
+
+1. Go to **Data Sources**
+2. Click on the source being scanned
+3. View the **Scan History** tab
+
+## Reviewing Results
+
+Once the scan completes, review the results:
+
+### Classification Summary
+
+Navigate to **Classification** to see:
+
+- Total columns classified
+- Breakdown by PII type
+- Breakdown by sensitivity level
+
+### By Data Source
+
+1. Go to **Classification**
+2. Select **By Data Source**
+3. Expand a source to see tables and columns
+4. Click a column to see classification details
+
+### By PII Type
+
+1. Go to **Classification**
+2. Select **By PII Type**
+3. Click a type (e.g., EMAIL) to see all occurrences
+
+## Verifying Classifications
+
+SecureLens's AI is highly accurate, but you should verify important classifications:
+
+### Confirm a Classification
+
+1. Click on a classified column
+2. Review the detected PII type and confidence
+3. Click **Confirm** to verify it's correct
+
+### Correct a Classification
+
+1. Click on a classified column
+2. Click **Edit Classification**
+3. Select the correct PII type
+4. Add a note explaining the correction
+5. Click **Save**
+
+Your feedback helps improve future classifications.
+
+### Bulk Review
+
+For efficient review of many classifications:
+
+1. Go to **Classification**
+2. Filter by confidence (e.g., 70-89%)
+3. Select multiple items
+4. Click **Bulk Confirm** or **Bulk Edit**
+
+## Understanding the Data Map
+
+The **Data Map** provides a visual overview:
+
+- See all data sources and their sensitivity levels
+- Identify where sensitive data is concentrated
+- Track data flows between systems
+
+### Accessing the Data Map
+
+1. Click **Data Map** in the sidebar
+2. Use filters to focus on specific data types
+3. Click on any element for details
+
+## Setting Up Alerts
+
+Get notified when scans find issues:
+
+1. Go to **Settings** → **Notifications**
+2. Enable alerts for:
+   - New highly sensitive data discovered
+   - Classification confidence below threshold
+   - Scan failures or errors
+3. Choose notification method (email, Slack, webhook)
+
+## Scheduling Regular Scans
+
+Keep your classifications up to date:
+
+1. Go to **Data Sources**
+2. Click on a data source
+3. Go to **Settings** tab
+4. Set **Scan Schedule**:
+   - **Daily** — Recommended for active databases
+   - **Weekly** — For less frequently changing data
+   - **Monthly** — For stable, archival data
+
+## Next Steps
+
+Now that you've completed your first scan:
+
+- [Explore Classification features](/features/classification) — Learn about custom types and rules
+- [Set up Governance Policies](/features/governance-policies) — Define access controls
+- [Configure AI Gate](/features/ai-gate) — Protect your LLM interactions
+- [Generate Reports](/features/reports) — Create compliance documentation

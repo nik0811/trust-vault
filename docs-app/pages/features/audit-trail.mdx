@@ -2,100 +2,70 @@
 
 Complete logging of all data access and governance actions.
 
-## Overview
+## What the Audit Trail Captures
 
-![Audit Trail](/screenshots/audit-trail.png)
+SecureLens maintains a comprehensive audit trail of:
 
-SecureLens maintains a comprehensive audit trail:
-
-- **Data Access**: Who accessed what data
-- **Policy Actions**: Governance decisions
-- **Configuration Changes**: System modifications
-- **User Actions**: Administrative activities
-
-## Audit Events
-
-### Event Categories
-
-| Category | Examples |
-|----------|----------|
-| **Data Access** | Query, export, view |
-| **Classification** | Label assigned, changed |
-| **Policy** | Evaluated, violated, enforced |
-| **AI Gate** | Prompt sent, response filtered |
-| **User** | Login, logout, permission change |
-| **System** | Config change, scan completed |
-
-### Event Structure
-
-```json
-{
-  "event_id": "evt_abc123",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "tenant_id": "tenant_xyz",
-  "category": "data_access",
-  "action": "query",
-  "actor": {
-    "type": "user",
-    "id": "user_123",
-    "email": "analyst@company.com",
-    "ip_address": "192.168.1.100"
-  },
-  "resource": {
-    "type": "table",
-    "source": "prod-db",
-    "name": "customers",
-    "columns": ["email", "phone"]
-  },
-  "context": {
-    "application": "analytics-dashboard",
-    "session_id": "sess_456"
-  },
-  "result": {
-    "status": "allowed",
-    "policy_applied": "pii-access-policy",
-    "rows_returned": 150
-  }
-}
-```
+- **Data Access** — Who accessed what data, when
+- **Policy Actions** — Governance decisions made
+- **Classification Changes** — Labels assigned or modified
+- **AI Gate Activity** — All LLM interactions
+- **User Actions** — Logins, configuration changes
 
 ## Viewing Audit Logs
 
-### Search & Filter
+### Navigate to Audit Trail
 
-Filter audit events by:
+1. Click **Audit Trail** in the sidebar
+2. View the list of recent events
+3. Use filters to find specific events
 
-- **Time range**: Last hour, day, week, custom
-- **Category**: Data access, policy, user, etc.
-- **Actor**: User, service, system
-- **Resource**: Data source, table, column
-- **Result**: Allowed, denied, error
+### Filter Options
 
-### Query Examples
+| Filter | Description |
+|--------|-------------|
+| **Time Range** | Last hour, day, week, or custom |
+| **Category** | Data access, policy, user, etc. |
+| **User** | Specific user or service |
+| **Resource** | Data source, table, column |
+| **Result** | Allowed, denied, error |
 
-Find all PII access:
+### Search Examples
 
-```
-category:data_access AND resource.pii_types:*
-```
+Find all PII access in the last week:
+- Category: Data Access
+- Time: Last 7 days
+- Filter: PII types
 
 Find policy violations:
+- Category: Policy
+- Result: Denied
 
-```
-category:policy AND result.status:denied
-```
+## Event Categories
 
-Find user activity:
+| Category | What It Logs |
+|----------|--------------|
+| **Data Access** | Queries, exports, views |
+| **Classification** | Labels assigned, changed |
+| **Policy** | Evaluations, violations |
+| **AI Gate** | Prompts, responses, redactions |
+| **User** | Login, logout, permission changes |
+| **System** | Config changes, scans completed |
 
-```
-actor.email:analyst@company.com AND timestamp:[now-7d TO now]
-```
+## Event Details
+
+Each audit event includes:
+
+- **Timestamp** — When it happened
+- **User** — Who performed the action
+- **Action** — What was done
+- **Resource** — What was accessed
+- **Result** — Success, denied, or error
+- **Context** — Additional details
 
 ## Data Access Auditing
 
-### Query Logging
-
-Every data query is logged:
+Every data query is logged with:
 
 | Field | Description |
 |-------|-------------|
@@ -103,188 +73,70 @@ Every data query is logged:
 | **Source** | Data source accessed |
 | **Tables** | Tables queried |
 | **Columns** | Columns accessed |
-| **Filters** | WHERE conditions |
 | **Rows** | Records returned |
 | **Duration** | Query time |
 
-### Sensitive Data Access
-
-Enhanced logging for sensitive data:
-
+For sensitive data, additional details include:
 - PII types accessed
 - Sensitivity labels
-- Policy evaluation
-- Redaction applied
+- Policy evaluation results
+- Any redaction applied
 
-## Policy Audit
+## Exporting Audit Logs
 
-### Policy Evaluation
-
-Every policy check is logged:
-
-```json
-{
-  "event_id": "evt_policy_123",
-  "category": "policy",
-  "action": "evaluate",
-  "policy": {
-    "id": "pol_abc",
-    "name": "PII Access Control",
-    "version": 3
-  },
-  "evaluation": {
-    "conditions_matched": true,
-    "rules_evaluated": 3,
-    "decision": "deny",
-    "reason": "User lacks required role"
-  }
-}
-```
-
-### Policy Changes
-
-Track policy modifications:
-
-- Created, updated, deleted
-- Version history
-- Who made changes
-- Before/after comparison
-
-## OpenLineage Integration
-
-### Lineage Events
-
-SecureLens emits OpenLineage events:
-
-```json
-{
-  "eventType": "COMPLETE",
-  "eventTime": "2024-01-15T10:30:00Z",
-  "producer": "securelens",
-  "run": {
-    "runId": "run_abc123",
-    "facets": {
-      "securelens_classification": {
-        "pii_detected": ["EMAIL", "PHONE"],
-        "sensitivity_label": "Confidential"
-      }
-    }
-  },
-  "job": {
-    "namespace": "securelens",
-    "name": "classification-scan"
-  },
-  "inputs": [{
-    "namespace": "postgres://prod-db",
-    "name": "customers"
-  }],
-  "outputs": [{
-    "namespace": "securelens",
-    "name": "classification_results"
-  }]
-}
-```
-
-### DataHub Integration
-
-Lineage flows to DataHub:
-
-- Data source → Classification → Policy → AI Gate
-- Complete data journey visibility
-
-## Retention & Storage
-
-### Retention Policy
-
-Configure audit retention:
-
-```yaml
-audit:
-  retention:
-    default: 90d
-    sensitive_access: 365d
-    policy_violations: 730d
-    
-  archive:
-    enabled: true
-    destination: s3://audit-archive/
-    after: 30d
-```
-
-### Storage Options
-
-| Option | Use Case |
-|--------|----------|
-| **PostgreSQL** | Default, small-medium |
-| **Elasticsearch** | Large scale, fast search |
-| **S3 + Athena** | Long-term archive |
-| **Splunk** | Enterprise SIEM |
-
-## Export & Integration
+Export logs for compliance or analysis:
 
 ### Export Formats
 
-Export audit logs:
+- **CSV** — For spreadsheet analysis
+- **JSON** — For programmatic processing
+- **PDF** — For compliance documentation
 
-- JSON (default)
-- CSV
-- CEF (Common Event Format)
-- LEEF (Log Event Extended Format)
+### How to Export
 
-### SIEM Integration
+1. Go to **Audit Trail**
+2. Apply filters for the data you need
+3. Click **Export**
+4. Select format
+5. Download the file
 
-Stream to SIEM platforms:
+## Retention
 
-```yaml
-siem_integration:
-  type: splunk
-  endpoint: https://splunk.company.com:8088
-  token: ${SPLUNK_HEC_TOKEN}
-  index: securelens_audit
-  
-  # Or Elasticsearch
-  type: elasticsearch
-  endpoint: https://elastic.company.com:9200
-  index_pattern: securelens-audit-%Y.%m.%d
-```
+Audit logs are retained based on your plan:
 
-### Webhook Integration
+| Plan | Retention |
+|------|-----------|
+| Standard | 90 days |
+| Professional | 1 year |
+| Enterprise | 7 years |
 
-Send events to webhooks:
+Longer retention is available for compliance requirements.
 
-```yaml
-webhooks:
-  - name: "Security alerts"
-    url: https://security.company.com/webhook
-    events:
-      - policy.violation
-      - user.login_failed
-    headers:
-      Authorization: Bearer ${WEBHOOK_TOKEN}
-```
+## Common Use Cases
 
-## Compliance Reports
+### Compliance Audits
 
-### Access Reports
+Prepare for audits by:
+1. Filtering to the audit period
+2. Exporting relevant events
+3. Generating compliance reports
 
-Generate access reports:
+### Incident Investigation
 
-- Who accessed what data
-- When and how often
-- From which applications
-- Policy decisions made
+Investigate security incidents:
+1. Search for the affected user or resource
+2. Review the timeline of events
+3. Identify the root cause
 
-### Audit Reports
+### Access Reviews
 
-Compliance-ready reports:
-
-- SOC 2 audit trail
-- HIPAA access logs
-- GDPR Article 30 records
-- PCI-DSS access logs
+Conduct periodic access reviews:
+1. Filter by sensitive data access
+2. Review who accessed what
+3. Verify access was appropriate
 
 ## Next Steps
 
-- [Observability](/features/observability)
-- [Reports](/features/reports)
-- [Compliance Advisor](/features/compliance-advisor)
+- [Reports](/features/reports) — Generate compliance reports
+- [Observability](/features/observability) — Set up alerts
+- [Governance Policies](/features/governance-policies) — Adjust access controls

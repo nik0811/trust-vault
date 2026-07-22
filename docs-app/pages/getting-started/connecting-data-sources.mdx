@@ -1,0 +1,183 @@
+# Connecting Data Sources
+
+SecureLens can connect to a wide variety of data sources. This guide walks you through adding your first connection.
+
+## Supported Data Sources
+
+### Databases
+- PostgreSQL
+- MySQL / MariaDB
+- Microsoft SQL Server
+- Oracle
+- MongoDB
+
+### Cloud Data Warehouses
+- Snowflake
+- Google BigQuery
+- Amazon Redshift
+- Azure Synapse
+- Databricks
+
+### Cloud Storage
+- Amazon S3
+- Google Cloud Storage
+- Azure Blob Storage
+
+### SaaS Applications
+- Salesforce
+- HubSpot
+- Zendesk
+- ServiceNow
+
+## Adding a Data Source
+
+### Step 1: Navigate to Data Sources
+
+1. Click **Data Sources** in the left sidebar
+2. Click the **Add Data Source** button
+
+### Step 2: Select Your Source Type
+
+Choose the type of data source you want to connect. The available options are organized by category (Databases, Cloud Storage, SaaS, etc.).
+
+### Step 3: Enter Connection Details
+
+The required fields depend on your source type. Here's an example for PostgreSQL:
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **Name** | A friendly name for this source | `Production Database` |
+| **Host** | Database server address | `db.yourcompany.com` |
+| **Port** | Database port | `5432` |
+| **Database** | Database name | `production` |
+| **Username** | Database user | `securelens_reader` |
+| **Password** | Database password | `••••••••` |
+| **SSL Mode** | Connection security | `require` |
+
+### Step 4: Test the Connection
+
+Click **Test Connection** to verify:
+
+- Network connectivity from SecureLens to your database
+- Authentication credentials are correct
+- Required permissions are in place
+
+If the test fails, check the error message for guidance on what to fix.
+
+### Step 5: Configure Scan Settings
+
+Before saving, configure how SecureLens should scan this source:
+
+| Setting | Description | Recommended |
+|---------|-------------|-------------|
+| **Scan Schedule** | How often to scan for changes | Daily |
+| **Sample Size** | Records to sample per table | 1,000 |
+| **Include/Exclude** | Tables to include or skip | Include all |
+| **Auto-classify** | Automatically classify discovered data | Enabled |
+
+### Step 6: Save and Start Scanning
+
+Click **Save & Scan** to:
+1. Save the data source configuration
+2. Start the initial discovery scan
+3. Begin classifying sensitive data
+
+## Network Configuration
+
+SecureLens connects to your data sources from our cloud infrastructure. You may need to allow our IP addresses through your firewall.
+
+### Allowlist IP Addresses
+
+Add these IP addresses to your firewall rules:
+
+```
+52.12.34.56/32
+52.12.34.57/32
+52.12.34.58/32
+```
+
+> **Note:** Contact support@securelens.ai for the current list of IP addresses for your region.
+
+### VPC Peering (Enterprise)
+
+For enterprise customers, we support VPC peering for private network connectivity:
+
+- AWS VPC Peering
+- Azure VNet Peering
+- GCP VPC Network Peering
+
+Contact your account manager to set up private connectivity.
+
+## Required Permissions
+
+SecureLens needs read-only access to discover and classify your data. Here are the minimum permissions for common databases:
+
+### PostgreSQL
+
+```sql
+-- Create a read-only user
+CREATE USER securelens_reader WITH PASSWORD 'your_secure_password';
+
+-- Grant access to schemas
+GRANT USAGE ON SCHEMA public TO securelens_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO securelens_reader;
+
+-- For future tables
+ALTER DEFAULT PRIVILEGES IN SCHEMA public 
+  GRANT SELECT ON TABLES TO securelens_reader;
+```
+
+### MySQL
+
+```sql
+-- Create a read-only user
+CREATE USER 'securelens'@'%' IDENTIFIED BY 'your_secure_password';
+
+-- Grant read access
+GRANT SELECT ON your_database.* TO 'securelens'@'%';
+```
+
+### Snowflake
+
+```sql
+-- Create role and user
+CREATE ROLE securelens_role;
+CREATE USER securelens_user PASSWORD = 'your_secure_password';
+GRANT ROLE securelens_role TO USER securelens_user;
+
+-- Grant access
+GRANT USAGE ON WAREHOUSE your_warehouse TO ROLE securelens_role;
+GRANT USAGE ON DATABASE your_database TO ROLE securelens_role;
+GRANT SELECT ON ALL TABLES IN DATABASE your_database TO ROLE securelens_role;
+```
+
+## Troubleshooting
+
+### Connection Failed
+
+**Check these common issues:**
+
+1. **Firewall** — Ensure SecureLens IP addresses are allowed
+2. **Credentials** — Verify username and password are correct
+3. **Host/Port** — Confirm the server address is reachable
+4. **SSL** — Try different SSL modes if connection fails
+
+### Permission Denied
+
+**The user may lack required permissions:**
+
+1. Verify the user has SELECT access to the tables
+2. Check schema-level permissions
+3. Ensure the user can access the database
+
+### Timeout
+
+**The connection is taking too long:**
+
+1. Check network latency between SecureLens and your database
+2. Verify the database server is not overloaded
+3. Consider VPC peering for better performance
+
+## Next Steps
+
+Once your data source is connected, continue to [Running Your First Scan](/getting-started/first-scan).

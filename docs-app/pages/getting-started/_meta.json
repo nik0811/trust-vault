@@ -1,6 +1,5 @@
 {
-  "prerequisites": "Prerequisites",
-  "quickstart": "Quick Start",
-  "configuration": "Configuration",
-  "first-login": "First Login & Setup"
+  "index": "Dashboard Overview",
+  "connecting-data-sources": "Connecting Data Sources",
+  "first-scan": "Running Your First Scan"
 }

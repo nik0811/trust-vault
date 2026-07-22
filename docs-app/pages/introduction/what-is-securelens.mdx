@@ -1,16 +1,16 @@
 # What is SecureLens?
 
-SecureLens is an **enterprise-grade Data & AI Trust Platform** that provides comprehensive governance, classification, and audit capabilities for organizations adopting AI and large language models (LLMs).
+SecureLens is an **enterprise Data & AI Trust Platform** that provides comprehensive governance, classification, and audit capabilities for organizations adopting AI and large language models (LLMs).
 
 ## The Problem
 
-As enterprises rush to adopt AI, they face unprecedented data governance challenges:
+As enterprises adopt AI, they face unprecedented data governance challenges:
 
-- **Sensitive data exposure**: PII, PHI, and confidential information can leak into AI training data or prompts
-- **Compliance violations**: GDPR, CCPA, HIPAA, and other regulations require strict data handling
-- **No visibility**: Organizations lack insight into what data flows to AI systems
-- **Data quality issues**: Poor data quality leads to poor AI outputs
-- **Audit gaps**: No trail of what data was used, when, and by whom
+- **Sensitive data exposure** — PII, PHI, and confidential information can leak into AI training data or prompts
+- **Compliance violations** — GDPR, CCPA, HIPAA, and other regulations require strict data handling
+- **No visibility** — Organizations lack insight into what data flows to AI systems
+- **Data quality issues** — Poor data quality leads to poor AI outputs
+- **Audit gaps** — No trail of what data was used, when, and by whom
 
 ## The Solution
 
@@ -18,8 +18,8 @@ SecureLens acts as an **active governance gateway** between your data sources an
 
 ```
 ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Data      │────▶│  SecureLens │────▶│    AI/LLM   │
-│   Sources   │     │   Gateway   │     │   Systems   │
+│   Your      │────▶│  SecureLens │────▶│    AI/LLM   │
+│   Data      │     │   Platform  │     │   Systems   │
 └─────────────┘     └─────────────┘     └─────────────┘
                            │
                     ┌──────┴──────┐
@@ -33,12 +33,11 @@ SecureLens acts as an **active governance gateway** between your data sources an
 
 ### 1. Automated Classification
 
-SecureLens uses **GLiNER**, a state-of-the-art named entity recognition model, to automatically detect and classify sensitive data:
+SecureLens uses advanced AI to automatically detect and classify sensitive data:
 
 - **60+ PII types** out of the box (names, emails, SSN, credit cards, etc.)
 - **Custom entity types** for your domain
-- **4M characters/second** processing speed
-- **CPU-only inference** — no GPU required
+- **Context-aware detection** — understands meaning, not just patterns
 
 ### 2. Policy Enforcement
 
@@ -62,20 +61,18 @@ A transparent proxy for all LLM interactions:
 
 Every data access and transformation is logged:
 
-- **OpenLineage integration** — Industry-standard lineage format
-- **DataHub backend** — Powerful metadata management
 - **Immutable logs** — Tamper-proof audit records
 - **Compliance reports** — Generate reports for auditors
+- **Data lineage** — Track data from source to AI
 
 ## Key Differentiators
 
 | Feature | SecureLens | Traditional DLP |
 |---------|------------|-----------------|
-| AI-native | ✅ Built for LLM workflows | ❌ Retrofitted |
-| Real-time | ✅ Inline processing | ⚠️ Batch scanning |
-| Classification | ✅ AI-powered (GLiNER) | ⚠️ Regex patterns |
-| Self-learning | ✅ Feedback loop | ❌ Static rules |
-| Multi-tenant | ✅ Native isolation | ⚠️ Bolt-on |
+| AI-native | Built for LLM workflows | Retrofitted |
+| Real-time | Inline processing | Batch scanning |
+| Classification | AI-powered, context-aware | Regex patterns |
+| Self-learning | Improves from feedback | Static rules |
 
 ## Use Cases
 
@@ -96,6 +93,6 @@ Understand what data you have, where it lives, and how sensitive it is.
 
 ## Next Steps
 
-- [Why Enterprises Need SecureLens](/introduction/why-securelens)
-- [Key Benefits & ROI](/introduction/benefits)
+- [Key Benefits](/introduction/benefits)
 - [Supported Compliance Frameworks](/introduction/compliance)
+- [Getting Started](/getting-started)

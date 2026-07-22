@@ -2,276 +2,198 @@
 
 Define and enforce data governance rules across your organization.
 
-## Overview
+## What Policies Do
 
-![Governance Policies](/screenshots/governance-policies.png)
+Governance policies automate data protection by defining rules for:
 
-Governance policies automate data protection:
-
-- **Access Control**: Who can access what data
-- **Redaction**: Mask sensitive data
-- **Retention**: Data lifecycle management
-- **Residency**: Geographic restrictions
-- **AI Governance**: LLM usage rules
+- **Access Control** — Who can access what data
+- **Redaction** — Automatically mask sensitive data
+- **Retention** — Data lifecycle management
+- **Residency** — Geographic restrictions
+- **AI Governance** — LLM usage rules
 
 ## Policy Types
 
 ### Access Policies
 
-Control data access by role:
+Control who can access sensitive data based on their role:
 
-```yaml
-name: "PII Access Control"
-type: access
-conditions:
-  - sensitivity_label: "Highly Confidential"
-rules:
-  - action: allow
-    roles: ["admin", "compliance"]
-  - action: deny
-    roles: ["*"]
-    message: "Access to highly confidential data requires approval"
-```
+**Example:** Only compliance and admin roles can access highly confidential data.
 
 ### Redaction Policies
 
-Automatically mask sensitive data:
+Automatically mask sensitive data in exports, API responses, or AI prompts:
 
-```yaml
-name: "SSN Redaction"
-type: redaction
-conditions:
-  - pii_type: SSN
-rules:
-  - action: redact
-    method: mask
-    pattern: "XXX-XX-{last4}"
-    applies_to:
-      - api_responses
-      - exports
-      - ai_prompts
-```
+**Example:** SSN values are displayed as `XXX-XX-1234` (showing only last 4 digits).
 
 ### Retention Policies
 
-Enforce data lifecycle:
+Enforce data lifecycle rules:
 
-```yaml
-name: "Customer Data Retention"
-type: retention
-conditions:
-  - data_source: "customers"
-rules:
-  - retention_period: 7y
-    action: archive
-    after_period: delete
-    exceptions:
-      - legal_hold: true
-```
+**Example:** Customer data is archived after 7 years and deleted after 10 years.
 
 ### Residency Policies
 
-Geographic data restrictions:
+Restrict where data can be stored or transferred:
 
-```yaml
-name: "EU Data Residency"
-type: residency
-conditions:
-  - pii_type: EU_PERSONAL_DATA
-rules:
-  - allowed_regions: ["EU-*"]
-    prohibited_regions: ["US-*", "APAC-*"]
-    action: block_transfer
-    alert: true
-```
+**Example:** EU personal data cannot be transferred to US regions.
 
 ### AI Policies
 
-Govern AI/LLM usage:
+Govern how data flows to AI/LLM systems:
 
-```yaml
-name: "AI Data Protection"
-type: ai_governance
-conditions:
-  - destination: ai_gate
-rules:
-  - pii_types: [SSN, CREDIT_CARD]
-    action: redact_before_send
-  - pii_types: [PERSON_NAME, EMAIL]
-    action: allow_with_audit
-  - model_types: [external]
-    action: require_approval
-```
+**Example:** SSN and credit card numbers are redacted before sending to any LLM.
 
-## Creating Policies
+## Creating a Policy
 
-### Step 1: Define Scope
+### Step 1: Navigate to Policies
 
-1. Navigate to **Governance** → **Policies**
+1. Go to **Governance** → **Policies**
 2. Click **Create Policy**
-3. Select policy type
-4. Define conditions:
-   - Data sources
-   - PII types
-   - Sensitivity labels
-   - Regions
 
-### Step 2: Configure Rules
+### Step 2: Choose Policy Type
+
+Select the type of policy you want to create:
+- Access
+- Redaction
+- Retention
+- Residency
+- AI Governance
+
+### Step 3: Define Conditions
+
+Specify when this policy applies:
+
+| Condition | Description |
+|-----------|-------------|
+| **Data Sources** | Which sources this applies to |
+| **PII Types** | Which data types (e.g., SSN, EMAIL) |
+| **Sensitivity Labels** | Which sensitivity levels |
+| **Regions** | Geographic locations |
+
+### Step 4: Configure Rules
 
 Add rules with actions:
 
-| Action | Description |
-|--------|-------------|
-| `allow` | Permit access |
-| `deny` | Block access |
-| `redact` | Mask data |
-| `encrypt` | Apply encryption |
-| `audit` | Log access |
-| `alert` | Send notification |
-| `require_approval` | Workflow approval |
+| Action | What It Does |
+|--------|--------------|
+| **Allow** | Permit access |
+| **Deny** | Block access |
+| **Redact** | Mask the data |
+| **Audit** | Log the access |
+| **Alert** | Send notification |
+| **Require Approval** | Trigger workflow |
 
-### Step 3: Set Enforcement
+### Step 5: Set Enforcement Mode
 
-Choose enforcement mode:
+Choose how the policy is enforced:
 
 | Mode | Behavior |
 |------|----------|
-| **Monitor** | Log violations, don't block |
-| **Warn** | Alert user, allow override |
+| **Monitor** | Log violations but don't block |
+| **Warn** | Alert user but allow override |
 | **Enforce** | Block violations |
 
-### Step 4: Activate
+### Step 6: Activate
 
-1. Review policy summary
+1. Review the policy summary
 2. Click **Activate**
-3. Policy takes effect immediately
+3. The policy takes effect immediately
 
-## Policy Management
+## Managing Policies
 
-### Policy Lifecycle
+### View Policy Details
 
-```
-Draft → Review → Active → Deprecated → Archived
-          ↓
-       Rejected
-```
+1. Click on a policy name
+2. See conditions, rules, and recent activity
+3. View violation history
 
-### Versioning
+### Edit a Policy
 
-Policies are versioned:
+1. Click on a policy
+2. Click **Edit**
+3. Make changes
+4. Click **Save**
 
-- Each change creates new version
-- Previous versions retained
-- Rollback available
+Changes create a new version. Previous versions are retained for audit purposes.
 
-### Testing
+### Test Before Activating
 
-Test policies before activation:
+Test policies before they go live:
 
 1. Click **Test Policy**
 2. Select test data
 3. View simulated results
 4. Adjust if needed
 
-## Policy Evaluation
+### Disable or Delete
 
-### Evaluation Order
-
-Policies evaluated in order:
-
-1. Explicit deny rules
-2. Explicit allow rules
-3. Default action (deny)
-
-### Conflict Resolution
-
-When policies conflict:
-
-```yaml
-conflict_resolution:
-  mode: most_restrictive
-  # Options: most_restrictive, first_match, explicit_priority
-```
-
-### Exceptions
-
-Grant policy exceptions:
-
-```yaml
-exceptions:
-  - name: "Legal hold exception"
-    policy: "Customer Data Retention"
-    reason: "Active litigation"
-    expires: "2025-12-31"
-    approved_by: "legal@company.com"
-```
+- **Disable** — Temporarily stop enforcement
+- **Delete** — Remove the policy entirely
 
 ## Policy Templates
 
-### Pre-built Templates
+SecureLens includes pre-built templates for common compliance requirements:
 
-SecureLens includes templates for:
+- **GDPR Compliance** — EU data protection rules
+- **CCPA Compliance** — California privacy rules
+- **HIPAA Compliance** — Healthcare data protection
+- **PCI-DSS Compliance** — Payment card security
+- **SOX Compliance** — Financial controls
 
-- GDPR compliance
-- CCPA compliance
-- HIPAA compliance
-- PCI-DSS compliance
-- SOX compliance
+### Using a Template
 
-### Using Templates
-
-1. Navigate to **Policies** → **Templates**
-2. Select template
+1. Go to **Policies** → **Templates**
+2. Select a template
 3. Customize for your environment
 4. Activate
 
-## Monitoring
+## Monitoring Policies
 
 ### Policy Dashboard
 
 View policy effectiveness:
 
-| Metric | Description |
-|--------|-------------|
+| Metric | What It Shows |
+|--------|---------------|
 | **Evaluations** | Policy checks performed |
 | **Violations** | Rules triggered |
 | **Blocks** | Access denied |
-| **Overrides** | User overrides |
+| **Overrides** | User overrides (if allowed) |
 
 ### Violation Alerts
 
-Configure alerts for violations:
+Get notified when policies are violated:
 
-```yaml
-alerts:
-  - policy: "PII Access Control"
-    condition: "violation_count > 10"
-    window: "1h"
-    notify: ["security@company.com"]
-```
+1. Go to **Settings** → **Notifications**
+2. Enable policy violation alerts
+3. Choose notification method (email, Slack, etc.)
 
-## Audit
+## Common Use Cases
 
-### Policy Audit Log
+### Protect PII from Unauthorized Access
 
-All policy actions logged:
+Create an access policy that:
+- Applies to all data with PII classifications
+- Allows access only to authorized roles
+- Logs all access attempts
 
-- Policy changes
-- Evaluations
-- Violations
-- Exceptions granted
+### Redact SSN in Exports
 
-### Compliance Reports
+Create a redaction policy that:
+- Applies to SSN data type
+- Masks values in exports and API responses
+- Shows only last 4 digits
 
-Generate policy compliance reports:
+### Prevent PII in AI Prompts
 
-- Policy coverage
-- Violation trends
-- Exception usage
-- Remediation status
+Create an AI policy that:
+- Scans all prompts sent through AI Gate
+- Redacts SSN, credit cards, and health data
+- Allows names and emails with audit logging
 
 ## Next Steps
 
-- [AI Gate](/features/ai-gate)
-- [Privacy Center](/features/privacy-center)
-- [Audit Trail](/features/audit-trail)
+- [AI Gate](/features/ai-gate) — Protect LLM interactions
+- [Privacy Center](/features/privacy-center) — Handle data subject requests
+- [Audit Trail](/features/audit-trail) — Review policy activity

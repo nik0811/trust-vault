@@ -1,4 +1,4 @@
-# Key Endpoints
+# API Endpoints
 
 Reference for the most commonly used API endpoints.
 
@@ -7,7 +7,7 @@ Reference for the most commonly used API endpoints.
 ### List Data Sources
 
 ```bash
-GET /api/v1/data-sources
+GET https://api.securelens.ai/v1/data-sources
 ```
 
 Response:
@@ -29,7 +29,7 @@ Response:
 ### Create Data Source
 
 ```bash
-POST /api/v1/data-sources
+POST https://api.securelens.ai/v1/data-sources
 Content-Type: application/json
 
 {
@@ -48,7 +48,7 @@ Content-Type: application/json
 ### Trigger Scan
 
 ```bash
-POST /api/v1/data-sources/{id}/scan
+POST https://api.securelens.ai/v1/data-sources/{id}/scan
 Content-Type: application/json
 
 {
@@ -62,7 +62,7 @@ Content-Type: application/json
 ### List Classifications
 
 ```bash
-GET /api/v1/classifications?data_source_id=ds-123&type=EMAIL
+GET https://api.securelens.ai/v1/classifications?data_source_id=ds-123&type=EMAIL
 ```
 
 Response:
@@ -86,7 +86,7 @@ Response:
 ### Submit Feedback
 
 ```bash
-POST /api/v1/classifications/{id}/feedback
+POST https://api.securelens.ai/v1/classifications/{id}/feedback
 Content-Type: application/json
 
 {
@@ -100,13 +100,13 @@ Content-Type: application/json
 ### List Policies
 
 ```bash
-GET /api/v1/policies
+GET https://api.securelens.ai/v1/policies
 ```
 
 ### Create Policy
 
 ```bash
-POST /api/v1/policies
+POST https://api.securelens.ai/v1/policies
 Content-Type: application/json
 
 {
@@ -122,8 +122,10 @@ Content-Type: application/json
 
 ### Evaluate Policy
 
+Test a policy decision:
+
 ```bash
-POST /api/v1/policies/evaluate
+POST https://api.securelens.ai/v1/policies/evaluate
 Content-Type: application/json
 
 {
@@ -153,8 +155,10 @@ Response:
 
 ### Proxy Request
 
+Send requests through AI Gate:
+
 ```bash
-POST /api/v1/ai-gate/chat/completions
+POST https://api.securelens.ai/ai-gate/v1/chat/completions
 Content-Type: application/json
 
 {
@@ -168,7 +172,7 @@ Content-Type: application/json
 ### Get Usage
 
 ```bash
-GET /api/v1/ai-gate/usage?period=today
+GET https://api.securelens.ai/v1/ai-gate/usage?period=today
 ```
 
 Response:
@@ -189,10 +193,10 @@ Response:
 
 ## Privacy (DSAR)
 
-### Create DSAR
+### Create Request
 
 ```bash
-POST /api/v1/privacy/dsar
+POST https://api.securelens.ai/v1/privacy/dsar
 Content-Type: application/json
 
 {
@@ -204,10 +208,10 @@ Content-Type: application/json
 }
 ```
 
-### Get DSAR Status
+### Get Request Status
 
 ```bash
-GET /api/v1/privacy/dsar/{id}
+GET https://api.securelens.ai/v1/privacy/dsar/{id}
 ```
 
 ## Audit
@@ -215,7 +219,7 @@ GET /api/v1/privacy/dsar/{id}
 ### Query Audit Logs
 
 ```bash
-GET /api/v1/audit/events?start=2024-01-20T00:00:00Z&type=DATA_ACCESS
+GET https://api.securelens.ai/v1/audit/events?start=2024-01-20T00:00:00Z&type=DATA_ACCESS
 ```
 
 Response:
@@ -241,7 +245,7 @@ Response:
 ### Generate Report
 
 ```bash
-POST /api/v1/reports/generate
+POST https://api.securelens.ai/v1/reports/generate
 Content-Type: application/json
 
 {
@@ -258,49 +262,7 @@ Content-Type: application/json
 ### Download Report
 
 ```bash
-GET /api/v1/reports/{id}/download
-```
-
-## Jobs
-
-### List Jobs
-
-```bash
-GET /api/v1/jobs
-```
-
-### Trigger Job
-
-```bash
-POST /api/v1/jobs/{id}/run
-```
-
-### Get Execution Status
-
-```bash
-GET /api/v1/jobs/{id}/executions/{execution_id}
-```
-
-## Health
-
-### Health Check
-
-```bash
-GET /health
-```
-
-Response:
-
-```json
-{
-  "status": "healthy",
-  "version": "1.0.0",
-  "components": {
-    "database": "healthy",
-    "kafka": "healthy",
-    "classification_engine": "healthy"
-  }
-}
+GET https://api.securelens.ai/v1/reports/{id}/download
 ```
 
 ## Error Codes
@@ -316,5 +278,5 @@ Response:
 
 ## Next Steps
 
-- [Authentication](/api-reference/authentication)
-- [SDK Libraries](/api-reference#sdk-libraries)
+- [Authentication](/api-reference/authentication) — Get your API key
+- [Features](/features) — Learn about platform features

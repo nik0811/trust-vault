@@ -2,11 +2,9 @@
 
 Connect and manage your data sources for classification and governance.
 
-## Overview
+## Supported Data Sources
 
-![Data Sources](/screenshots/data-sources.png)
-
-SecureLens supports a wide variety of data sources:
+SecureLens connects to a wide variety of data sources:
 
 ### Databases
 - PostgreSQL
@@ -14,7 +12,6 @@ SecureLens supports a wide variety of data sources:
 - Microsoft SQL Server
 - Oracle
 - MongoDB
-- Redis
 
 ### Cloud Data Warehouses
 - Snowflake
@@ -27,7 +24,6 @@ SecureLens supports a wide variety of data sources:
 - Amazon S3
 - Google Cloud Storage
 - Azure Blob Storage
-- MinIO
 
 ### SaaS Applications
 - Salesforce
@@ -37,96 +33,57 @@ SecureLens supports a wide variety of data sources:
 
 ## Adding a Data Source
 
-### Step 1: Select Type
+### Step 1: Navigate to Data Sources
 
-1. Navigate to **Data Sources**
+1. Click **Data Sources** in the left sidebar
 2. Click **Add Data Source**
-3. Select the source type
 
-### Step 2: Configure Connection
+### Step 2: Select Your Source Type
 
-Enter connection details:
+Choose the type of data source you want to connect. Options are organized by category.
 
-```yaml
-# PostgreSQL Example
-host: db.company.com
-port: 5432
-database: production
-username: securelens_reader
-password: ********
-ssl_mode: require
-```
+### Step 3: Enter Connection Details
 
-### Step 3: Test Connection
+Fill in the required fields for your source type. For example, for a PostgreSQL database:
+
+| Field | Description |
+|-------|-------------|
+| **Name** | A friendly name for this source |
+| **Host** | Database server address |
+| **Port** | Database port (default: 5432) |
+| **Database** | Database name |
+| **Username** | Database user |
+| **Password** | Database password |
+| **SSL Mode** | Connection security setting |
+
+### Step 4: Test the Connection
 
 Click **Test Connection** to verify:
 
 - Network connectivity
-- Authentication
+- Authentication credentials
 - Required permissions
 
-### Step 4: Configure Scan
+### Step 5: Configure Scan Settings
 
-Set scan options:
+| Setting | Description | Recommended |
+|---------|-------------|-------------|
+| **Scan Schedule** | How often to scan | Daily |
+| **Sample Size** | Records to sample per table | 1,000 |
+| **Include/Exclude** | Tables to include or skip | Include all |
+| **Auto-classify** | Automatically classify data | Enabled |
 
-| Option | Description |
-|--------|-------------|
-| **Scan Schedule** | How often to scan |
-| **Sample Size** | Records to sample per table |
-| **Include/Exclude** | Tables to include or exclude |
-| **Classification** | Enable auto-classification |
+### Step 6: Save and Start Scanning
 
-### Step 5: Start Initial Scan
-
-Click **Save & Scan** to begin the initial discovery.
-
-## Connection Security
-
-### Credentials
-
-SecureLens supports multiple credential methods:
-
-- **Username/Password**: Basic authentication
-- **IAM Roles**: AWS IAM, GCP Service Account
-- **OAuth**: For SaaS applications
-- **Certificates**: mTLS for databases
-
-### Network Security
-
-- **VPC Peering**: Connect to private networks
-- **SSH Tunnels**: Secure database access
-- **Private Link**: AWS/Azure private endpoints
-
-### Encryption
-
-- TLS 1.2+ required for all connections
-- Credentials encrypted at rest
-- Secrets stored in configured secret manager
-
-## Scan Results
-
-After scanning, view discovered data:
-
-### Schema Discovery
-
-- Tables and columns
-- Data types
-- Row counts
-- Sample values (redacted)
-
-### Classification Results
-
-- Detected PII types
-- Confidence scores
-- Suggested labels
-
-### Data Quality
-
-- Completeness scores
-- Format validation
-- Anomaly detection
+Click **Save & Scan** to save the configuration and start the initial scan.
 
 ## Managing Data Sources
+
+### View Data Source Details
+
+1. Click on a data source name
+2. View connection status, last scan time, and classification summary
+3. See tables and columns discovered
 
 ### Edit Configuration
 
@@ -135,28 +92,24 @@ After scanning, view discovered data:
 3. Modify settings
 4. Click **Save**
 
-### Rescan
-
-Trigger a manual rescan:
+### Trigger a Manual Scan
 
 1. Click on a data source
 2. Click **Rescan**
-3. Select scan type:
-   - **Full**: Rescan everything
-   - **Incremental**: Only new/changed data
-   - **Schema Only**: Just structure
+3. Choose scan type:
+   - **Full** — Rescan everything
+   - **Incremental** — Only new/changed data
+   - **Schema Only** — Just structure
 
-### Disable/Enable
+### Disable or Enable
 
 Temporarily disable a data source:
 
 1. Click on a data source
 2. Toggle **Enabled** off
-3. Scans and policies pause
+3. Scans and policies pause until re-enabled
 
-### Delete
-
-Remove a data source:
+### Delete a Data Source
 
 1. Click on a data source
 2. Click **Delete**
@@ -164,71 +117,63 @@ Remove a data source:
 
 > **Warning:** Deleting a data source removes all associated classifications and audit history.
 
-## Permissions Required
+## Scan Results
 
-### PostgreSQL
+After scanning, you can view:
 
-```sql
--- Create read-only user
-CREATE USER securelens_reader WITH PASSWORD 'secure_password';
+### Schema Discovery
+- Tables and columns
+- Data types
+- Row counts
+- Sample values (redacted)
 
--- Grant schema access
-GRANT USAGE ON SCHEMA public TO securelens_reader;
-GRANT SELECT ON ALL TABLES IN SCHEMA public TO securelens_reader;
+### Classification Results
+- Detected PII types
+- Confidence scores
+- Suggested labels
 
--- For future tables
-ALTER DEFAULT PRIVILEGES IN SCHEMA public 
-  GRANT SELECT ON TABLES TO securelens_reader;
-```
-
-### MySQL
-
-```sql
--- Create read-only user
-CREATE USER 'securelens'@'%' IDENTIFIED BY 'secure_password';
-
--- Grant read access
-GRANT SELECT ON database_name.* TO 'securelens'@'%';
-```
-
-### Snowflake
-
-```sql
--- Create role and user
-CREATE ROLE securelens_role;
-CREATE USER securelens_user PASSWORD = 'secure_password';
-GRANT ROLE securelens_role TO USER securelens_user;
-
--- Grant warehouse and database access
-GRANT USAGE ON WAREHOUSE compute_wh TO ROLE securelens_role;
-GRANT USAGE ON DATABASE production TO ROLE securelens_role;
-GRANT SELECT ON ALL TABLES IN DATABASE production TO ROLE securelens_role;
-```
+### Data Quality
+- Completeness scores
+- Format validation
+- Anomaly detection
 
 ## Troubleshooting
 
 ### Connection Failed
 
-1. Verify network connectivity
-2. Check firewall rules
-3. Confirm credentials
-4. Test SSL/TLS settings
+Check these common issues:
+
+1. **Firewall** — Ensure SecureLens IP addresses are allowed
+2. **Credentials** — Verify username and password
+3. **Host/Port** — Confirm the server address is correct
+4. **SSL** — Try different SSL modes
+
+### Permission Denied
+
+The database user may lack required permissions:
+
+1. Verify SELECT access to tables
+2. Check schema-level permissions
+3. Ensure database access is granted
 
 ### Scan Timeout
 
+The scan is taking too long:
+
 1. Reduce sample size
 2. Exclude large tables
-3. Increase timeout setting
-4. Check database performance
+3. Check database performance
 
 ### Missing Tables
 
+Tables aren't appearing:
+
 1. Verify schema permissions
 2. Check include/exclude filters
-3. Refresh schema cache
+3. Refresh the schema cache
 
 ## Next Steps
 
-- [Classification](/features/classification)
-- [Data Map](/features/data-map)
-- [Governance Policies](/features/governance-policies)
+- [Classification](/features/classification) — Review classification results
+- [Data Map](/features/data-map) — Visualize your data landscape
+- [Governance Policies](/features/governance-policies) — Set up access controls

@@ -2,36 +2,40 @@
 
 AI-powered sensitive data detection and classification.
 
-## Overview
+## What Classification Does
 
-![Classification](/screenshots/classification.png)
+SecureLens uses advanced AI to automatically detect and classify sensitive data in your connected sources. When you scan a data source, the classification engine:
 
-SecureLens uses GLiNER, a state-of-the-art named entity recognition model, to automatically detect and classify sensitive data.
+1. **Samples data** from each table
+2. **Analyzes content** using AI models
+3. **Identifies sensitive data** like PII, PHI, and PCI
+4. **Assigns confidence scores** to each detection
+5. **Applies sensitivity labels** based on the findings
 
 ## How It Works
 
-### 1. Data Sampling
+### Data Sampling
 
 When a data source is scanned:
+- SecureLens samples records from each table
+- Default: 1,000 records per table
+- Configurable per data source
 
-1. SecureLens samples records from each table
-2. Default: 1,000 records per table
-3. Configurable per data source
+### AI Classification
 
-### 2. AI Classification
+The classification engine analyzes text content and identifies entities:
 
-The GLiNER model analyzes text content:
-
+**Example:**
 ```
 Input: "Contact John Smith at john.smith@company.com or 555-123-4567"
 
-Output:
-  - "John Smith" → PERSON_NAME (0.95)
-  - "john.smith@company.com" → EMAIL_ADDRESS (0.99)
-  - "555-123-4567" → PHONE_NUMBER (0.97)
+Detected:
+  - "John Smith" → PERSON_NAME (95% confidence)
+  - "john.smith@company.com" → EMAIL_ADDRESS (99% confidence)
+  - "555-123-4567" → PHONE_NUMBER (97% confidence)
 ```
 
-### 3. Aggregation
+### Aggregation
 
 Classifications are aggregated at the column level:
 
@@ -41,14 +45,14 @@ Classifications are aggregated at the column level:
 | `email` | EMAIL_ADDRESS | 99% | 1000/1000 |
 | `phone` | PHONE_NUMBER | 95% | 875/1000 |
 
-### 4. Label Assignment
+### Label Assignment
 
 Based on classifications, sensitivity labels are assigned:
 
-- **Highly Sensitive**: SSN, credit cards, health data
-- **Sensitive**: Names, emails, addresses
-- **Internal**: Business data, IDs
-- **Public**: Non-sensitive data
+- **Highly Sensitive** — SSN, credit cards, health data
+- **Sensitive** — Names, emails, addresses
+- **Internal** — Business data, IDs
+- **Public** — Non-sensitive data
 
 ## Supported PII Types
 
@@ -60,7 +64,7 @@ Based on classifications, sensitivity labels are assigned:
 | `EMAIL_ADDRESS` | john@example.com |
 | `PHONE_NUMBER` | +1-555-123-4567 |
 | `PHYSICAL_ADDRESS` | 123 Main St, City, ST 12345 |
-| `DATE_OF_BIRTH` | 1990-01-15, January 15, 1990 |
+| `DATE_OF_BIRTH` | 1990-01-15 |
 
 ### Government IDs
 
@@ -78,7 +82,6 @@ Based on classifications, sensitivity labels are assigned:
 | `CREDIT_CARD` | 4111-1111-1111-1111 |
 | `BANK_ACCOUNT` | Account numbers |
 | `IBAN` | DE89370400440532013000 |
-| `SWIFT_CODE` | DEUTDEFF |
 
 ### Health Information
 
@@ -87,145 +90,108 @@ Based on classifications, sensitivity labels are assigned:
 | `MEDICAL_RECORD` | MRN-12345 |
 | `HEALTH_CONDITION` | Diabetes, hypertension |
 | `MEDICATION` | Metformin, Lisinopril |
-| `INSURANCE_ID` | Policy numbers |
 
 ### Technical Identifiers
 
 | Type | Examples |
 |------|----------|
-| `IP_ADDRESS` | 192.168.1.1, 2001:db8::1 |
-| `MAC_ADDRESS` | 00:1A:2B:3C:4D:5E |
+| `IP_ADDRESS` | 192.168.1.1 |
 | `API_KEY` | sk-... |
 | `PASSWORD` | Detected patterns |
 
-## Classification Views
+## Viewing Classifications
 
 ### By Data Source
 
-View classifications grouped by data source:
-
-1. Navigate to **Classification**
+1. Go to **Classification**
 2. Select **By Data Source**
-3. Expand to see tables and columns
+3. Expand a source to see tables and columns
+4. Click a column for details
 
 ### By PII Type
 
-View all instances of a specific PII type:
-
-1. Navigate to **Classification**
+1. Go to **Classification**
 2. Select **By PII Type**
-3. Click on a type to see all occurrences
+3. Click a type (e.g., EMAIL) to see all occurrences
 
 ### By Sensitivity
 
-View data by sensitivity level:
-
-1. Navigate to **Classification**
+1. Go to **Classification**
 2. Select **By Sensitivity**
-3. Filter by label
+3. Filter by label (Highly Sensitive, Sensitive, etc.)
 
-## Manual Classification
+## Reviewing and Editing Classifications
 
-### Override AI Classification
+### Confirm a Classification
 
-1. Click on a column
+When you verify a classification is correct:
+
+1. Click on a classified column
+2. Review the detected PII type and confidence
+3. Click **Confirm**
+
+### Correct a Classification
+
+If the AI made a mistake:
+
+1. Click on a classified column
 2. Click **Edit Classification**
 3. Select the correct PII type
-4. Add notes (optional)
+4. Add a note explaining the correction
 5. Click **Save**
 
-### Add Custom Classification
-
-1. Click on a column
-2. Click **Add Classification**
-3. Select PII type
-4. Set confidence manually
-5. Click **Save**
+Your feedback helps improve future classifications.
 
 ### Bulk Operations
 
-1. Select multiple columns
-2. Click **Bulk Edit**
-3. Apply classification to all
-4. Click **Save**
+For efficient review:
+
+1. Go to **Classification**
+2. Filter by confidence (e.g., 70-89%)
+3. Select multiple items
+4. Click **Bulk Confirm** or **Bulk Edit**
 
 ## Custom Entity Types
 
 Define custom PII types for your domain:
 
-### Create Custom Type
+### Create a Custom Type
 
-1. Navigate to **Settings** → **Classification**
+1. Go to **Settings** → **Classification**
 2. Click **Add Custom Type**
 3. Configure:
+   - **Name** — Internal identifier (e.g., EMPLOYEE_ID)
+   - **Display Name** — Human-readable name
+   - **Patterns** — Regex patterns to match
+   - **Sensitivity** — Default sensitivity level
 
-```yaml
-name: EMPLOYEE_ID
-display_name: Employee ID
-description: Internal employee identifier
-patterns:
-  - "EMP-[0-9]{6}"
-  - "E[0-9]{8}"
-sensitivity: internal
-```
+### Example Custom Types
 
-### Train Custom Model
-
-For complex patterns:
-
-1. Provide training examples
-2. SecureLens fine-tunes the model
-3. Deploy to classification pipeline
-
-## Classification Rules
-
-Supplement AI with rule-based classification:
-
-### Pattern Rules
-
-```yaml
-rules:
-  - name: "Credit Card (Visa)"
-    pattern: "4[0-9]{15}"
-    type: CREDIT_CARD
-    confidence: 0.99
-    
-  - name: "Internal Project Code"
-    pattern: "PRJ-[A-Z]{3}-[0-9]{4}"
-    type: PROJECT_CODE
-    confidence: 0.95
-```
-
-### Column Name Rules
-
-```yaml
-rules:
-  - name: "SSN by column name"
-    column_pattern: ".*ssn.*|.*social_security.*"
-    type: SSN
-    confidence: 0.90
-```
+- **Employee ID** — Internal employee identifiers
+- **Project Code** — Project tracking codes
+- **Customer Number** — Your customer ID format
 
 ## Confidence Thresholds
 
-Configure minimum confidence for classifications:
+Configure how classifications are handled based on confidence:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Auto-label threshold** | 0.90 | Auto-apply labels above this |
-| **Review threshold** | 0.70 | Flag for human review |
-| **Ignore threshold** | 0.50 | Ignore below this |
+| Threshold | Default | Behavior |
+|-----------|---------|----------|
+| **Auto-label** | 90% | Automatically apply labels |
+| **Review** | 70% | Flag for human review |
+| **Ignore** | 50% | Don't label |
 
-## Export Classifications
+Adjust these in **Settings** → **Classification**.
 
-Export classification data:
+## Exporting Classifications
 
-- **CSV**: Full classification report
-- **JSON**: Machine-readable format
-- **API**: Programmatic access
+Export classification data for reporting or analysis:
+
+- **CSV** — Full classification report
+- **JSON** — Machine-readable format
 
 ## Next Steps
 
-- [Sensitivity Labels](/features/sensitivity-labels)
-- [Data Map](/features/data-map)
-- [Feedback & Learning](/features/feedback)
+- [Sensitivity Labels](/features/sensitivity-labels) — Manage label definitions
+- [Data Map](/features/data-map) — Visualize your data
+- [Feedback & Learning](/features/feedback) — Improve accuracy

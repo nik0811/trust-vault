@@ -1,13 +1,53 @@
 # Authentication
 
-SecureLens supports multiple authentication methods.
+SecureLens supports multiple authentication methods for API access.
+
+## API Key Authentication
+
+API keys are the recommended method for server-to-server integrations.
+
+### Getting Your API Key
+
+1. Log in to SecureLens
+2. Go to **Settings** → **API Keys**
+3. Click **Generate Key**
+4. Give it a name and select permissions
+5. Copy the key (it won't be shown again)
+
+### Using Your API Key
+
+Include the API key in the `X-API-Key` header:
+
+```bash
+curl -X GET "https://api.securelens.ai/v1/data-sources" \
+  -H "X-API-Key: your-api-key"
+```
+
+Or as a query parameter (not recommended for production):
+
+```bash
+curl "https://api.securelens.ai/v1/data-sources?api_key=your-api-key"
+```
+
+### API Key Permissions
+
+When creating an API key, select the appropriate scope:
+
+| Scope | Permissions |
+|-------|-------------|
+| `read` | Read-only access |
+| `write` | Create and update resources |
+| `delete` | Delete resources |
+| `admin` | Full access |
 
 ## JWT Authentication
+
+For user-based authentication (e.g., custom integrations):
 
 ### Login
 
 ```bash
-POST /api/v1/auth/login
+POST https://api.securelens.ai/v1/auth/login
 Content-Type: application/json
 
 {
@@ -29,117 +69,53 @@ Response:
 }
 ```
 
-### Using JWT
+### Using the Token
 
-Include in Authorization header:
+Include the token in the Authorization header:
 
 ```bash
-curl -X GET "https://api.your-domain.com/v1/classifications" \
-  -H "Authorization: Bearer <your-jwt-token>"
+curl -X GET "https://api.securelens.ai/v1/data-sources" \
+  -H "Authorization: Bearer your-access-token"
 ```
 
-### Refresh Token
+### Refreshing Tokens
+
+When the access token expires, use the refresh token:
 
 ```bash
-POST /api/v1/auth/refresh
+POST https://api.securelens.ai/v1/auth/refresh
 Content-Type: application/json
 
 {
-  "refresh_token": "eyJhbGciOiJIUzI1NiIs..."
+  "refresh_token": "your-refresh-token"
 }
 ```
 
-## API Key Authentication
+## OAuth 2.0 / SSO
 
-### Creating API Keys
+For enterprise SSO integration, SecureLens supports OAuth 2.0 and OIDC.
 
-1. Navigate to **Settings → API Keys**
-2. Click **Generate Key**
-3. Configure permissions
-4. Copy the key
-
-### Using API Keys
-
-Include in header:
-
-```bash
-curl -X GET "https://api.your-domain.com/v1/classifications" \
-  -H "X-API-Key: <your-api-key>"
-```
-
-Or as query parameter:
-
-```bash
-curl "https://api.your-domain.com/v1/classifications?api_key=<your-api-key>"
-```
-
-### API Key Scopes
-
-| Scope | Permissions |
-|-------|-------------|
-| `read` | Read-only access |
-| `write` | Create and update |
-| `delete` | Delete resources |
-| `admin` | Full access |
-
-## OAuth 2.0 / OIDC
-
-For SSO integration:
-
-```bash
-# Authorization URL
-GET /oauth/authorize?
-  client_id=your-client-id&
-  redirect_uri=https://your-app.com/callback&
-  response_type=code&
-  scope=openid profile email
-
-# Token exchange
-POST /oauth/token
-Content-Type: application/x-www-form-urlencoded
-
-grant_type=authorization_code&
-code=AUTH_CODE&
-client_id=your-client-id&
-client_secret=your-client-secret&
-redirect_uri=https://your-app.com/callback
-```
-
-## Multi-Tenant Authentication
-
-### Tenant Header
-
-Specify tenant in requests:
-
-```bash
-curl -X GET "https://api.your-domain.com/v1/classifications" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "X-Tenant-ID: <your-tenant-id>"
-```
-
-### Tenant from Token
-
-JWT includes tenant claim:
-
-```json
-{
-  "sub": "user-123",
-  "email": "user@company.com",
-  "tenant_id": "<your-tenant-id>",
-  "roles": ["analyst"],
-  "exp": 1705750800
-}
-```
+Contact your account manager to configure SSO for API access.
 
 ## Security Best Practices
 
-1. **Never expose API keys** in client-side code
-2. **Use short-lived JWTs** (1 hour recommended)
-3. **Rotate API keys** regularly
-4. **Use scoped API keys** with minimal permissions
-5. **Enable MFA** for user accounts
+1. **Never expose API keys** in client-side code or public repositories
+2. **Use environment variables** to store credentials
+3. **Rotate API keys** regularly (recommended: every 90 days)
+4. **Use scoped API keys** with minimal required permissions
+5. **Monitor API key usage** in the audit trail
+
+## Revoking API Keys
+
+If an API key is compromised:
+
+1. Go to **Settings** → **API Keys**
+2. Find the compromised key
+3. Click **Revoke**
+4. Generate a new key
+5. Update your applications
 
 ## Next Steps
 
-- [Key Endpoints](/api-reference/endpoints)
-- [User Management](/features/settings)
+- [Endpoints](/api-reference/endpoints) — Explore available endpoints
+- [Settings](/features/settings) — Manage API keys in the UI
