@@ -503,7 +503,7 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 
 		recentLogs := []store.AuditLog{}
 		err := s.db.SelectContext(ctx, &recentLogs,
-			`SELECT id, tenant_id, COALESCE(user_id,'') as user_id, action, resource, COALESCE(resource_id,'') as resource_id, COALESCE(details, '{}') as details, COALESCE(ip,'') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`, tenantID)
+			`SELECT id, tenant_id, COALESCE(user_id::text,'') as user_id, action, resource, COALESCE(resource_id,'') as resource_id, COALESCE(details, '{}') as details, COALESCE(ip,'') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`, tenantID)
 		if err != nil {
 			log.Error().Err(err).Str("tenant_id", tenantID).Msg("failed to fetch audit logs for report")
 		}
