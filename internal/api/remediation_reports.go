@@ -248,22 +248,30 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Determine if we have enough data to assess compliance
-		hasDataToAssess := len(advCtx.Classifications) > 0 || scannedSources > 0
+		// Compliance requires BOTH: data sources scanned AND classifications found
+		hasClassifications := len(advCtx.Classifications) > 0
+		hasScannedSources := scannedSources > 0
 		hasPoliciesConfigured := activePolicies > 0
+		
+		// For compliance to be meaningful, we need classifications (not just scanned sources)
+		hasDataToAssess := hasClassifications
 
 		score := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount, hasDataToAssess)
 
 		var status string
 		switch {
-		case !hasDataToAssess:
+		case !hasScannedSources && !hasClassifications:
+			// No data sources scanned at all
 			status = "No Data"
-			score = 0 // Show 0 instead of -1 in the report
-		case !hasPoliciesConfigured && len(advCtx.Classifications) > 0:
+			score = 0
+		case hasScannedSources && !hasClassifications:
+			// Sources scanned but no classifications found - not configured properly
+			status = "Not Configured"
+			score = 0
+		case !hasPoliciesConfigured:
+			// Has data but no policies - at risk
 			status = "At Risk"
-			// If we have data but no policies, cap the score
-			if score > 50 {
-				score = 50
-			}
+			score = 0
 		case score < 0:
 			status = "Not Assessed"
 			score = 0
@@ -340,10 +348,14 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 			var regScore float64
 			var regStatus string
 			
-			if !hasDataToAssess {
-				// No data scanned - cannot assess
+			if !hasClassifications {
+				// No classifications - cannot assess any regulation
 				regScore = 0
 				regStatus = "Not Assessed"
+			} else if !hasPoliciesConfigured {
+				// Has data but no policies - at risk for all regulations
+				regScore = 0
+				regStatus = "At Risk"
 			} else if e.FindingsCount == 0 {
 				// Data exists but no findings for this regulation
 				// Check if we have relevant data types for this regulation
@@ -803,10 +815,13 @@ func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	
 	// Determine if we have data to assess
-	hasDataToAssess := totalClassifications > 0 || totalSources > 0
+	// Compliance requires classifications AND policies to be meaningful
+	hasClassifications := totalClassifications > 0
+	hasPolicies := totalPolicies > 0
+	hasDataToAssess := hasClassifications && hasPolicies
 	complianceScore := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount, hasDataToAssess) / 100.0
-	if complianceScore < 0 {
-		complianceScore = 0 // Show 0 for N/A state
+	if complianceScore < 0 || !hasDataToAssess {
+		complianceScore = 0 // Show 0 when no data or not configured
 	}
 
 	pkg.JSON(w, map[string]any{
