@@ -233,18 +233,6 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		score := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount)
-
-		status := "Compliant"
-		switch {
-		case score < 50:
-			status = "Non-Compliant"
-		case score < 75:
-			status = "Needs Attention"
-		case score < 90:
-			status = "Partially Compliant"
-		}
-
 		scannedSources := 0
 		for _, ds := range advCtx.DataSources {
 			if ds.LastScan != nil && !ds.LastScan.IsZero() {
@@ -257,6 +245,36 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 			if p.Active {
 				activePolicies++
 			}
+		}
+
+		// Determine if we have enough data to assess compliance
+		hasDataToAssess := len(advCtx.Classifications) > 0 || scannedSources > 0
+		hasPoliciesConfigured := activePolicies > 0
+
+		score := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount, hasDataToAssess)
+
+		var status string
+		switch {
+		case !hasDataToAssess:
+			status = "No Data"
+			score = 0 // Show 0 instead of -1 in the report
+		case !hasPoliciesConfigured && len(advCtx.Classifications) > 0:
+			status = "At Risk"
+			// If we have data but no policies, cap the score
+			if score > 50 {
+				score = 50
+			}
+		case score < 0:
+			status = "Not Assessed"
+			score = 0
+		case score < 50:
+			status = "Non-Compliant"
+		case score < 75:
+			status = "Needs Attention"
+		case score < 90:
+			status = "Partially Compliant"
+		default:
+			status = "Compliant"
 		}
 
 		regulationMap := map[string]*complianceRegEntry{}
@@ -309,18 +327,49 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Always include major regulations with proper status
+		majorRegulations := []string{"GDPR", "CCPA", "HIPAA", "DPDP Act 2023", "UAE PDPL", "EU AI Act", "PCI-DSS"}
+		for _, regName := range majorRegulations {
+			if _, exists := regulationMap[regName]; !exists {
+				regulationMap[regName] = &complianceRegEntry{Name: regName}
+			}
+		}
+
 		regulations := make([]map[string]any, 0, len(regulationMap))
 		for _, e := range regulationMap {
-			regScore := 100.0 - float64(e.CriticalCount)*15 - float64(e.HighCount)*10
-			if regScore < 0 {
+			var regScore float64
+			var regStatus string
+			
+			if !hasDataToAssess {
+				// No data scanned - cannot assess
 				regScore = 0
+				regStatus = "Not Assessed"
+			} else if e.FindingsCount == 0 {
+				// Data exists but no findings for this regulation
+				// Check if we have relevant data types for this regulation
+				hasRelevantData := checkRelevantDataForRegulation(advCtx, e.Name)
+				if hasRelevantData {
+					regScore = 100
+					regStatus = "Compliant"
+				} else {
+					regScore = 0
+					regStatus = "Not Applicable"
+				}
+			} else {
+				// Has findings - calculate score
+				regScore = 100.0 - float64(e.CriticalCount)*15 - float64(e.HighCount)*10
+				if regScore < 0 {
+					regScore = 0
+				}
+				if regScore < 50 {
+					regStatus = "Non-Compliant"
+				} else if regScore < 80 {
+					regStatus = "Partially Compliant"
+				} else {
+					regStatus = "Compliant"
+				}
 			}
-			regStatus := "Compliant"
-			if regScore < 50 {
-				regStatus = "Non-Compliant"
-			} else if regScore < 80 {
-				regStatus = "Partially Compliant"
-			}
+			
 			regulations = append(regulations, map[string]any{
 				"name":              e.Name,
 				"score":             regScore,
@@ -549,8 +598,61 @@ type complianceRegEntry struct {
 	Articles      []string
 }
 
-// calcComplianceScore starts at 100 and deducts per finding severity
-func calcComplianceScore(critical, high, medium, low int) float64 {
+// checkRelevantDataForRegulation determines if the tenant has data relevant to a specific regulation
+func checkRelevantDataForRegulation(advCtx *domain.AdvisorContext, regulation string) bool {
+	if advCtx == nil || len(advCtx.Classifications) == 0 {
+		return false
+	}
+	
+	// Map PII types to regulations
+	gdprTypes := map[string]bool{"PII": true, "EMAIL": true, "NAME": true, "ADDRESS": true, "PHONE": true, "DATE_OF_BIRTH": true, "PERSON_NAME": true, "PERSON": true, "IP_ADDRESS": true, "LOCATION": true}
+	ccpaTypes := map[string]bool{"PII": true, "SSN": true, "EMAIL": true, "NAME": true, "ADDRESS": true, "PHONE": true, "IP_ADDRESS": true, "LOCATION": true}
+	hipaaTypes := map[string]bool{"PHI": true, "HEALTH_RECORD": true, "MEDICAL_RECORD": true, "HEALTH_INSURANCE_ID": true, "SSN": true}
+	pciTypes := map[string]bool{"CREDIT_CARD": true, "BANK_ACCOUNT": true, "IBAN": true, "ROUTING_NUMBER": true}
+	dpdpTypes := map[string]bool{"PII": true, "EMAIL": true, "NAME": true, "ADDRESS": true, "PHONE": true, "DATE_OF_BIRTH": true}
+	uaePdplTypes := map[string]bool{"PII": true, "EMAIL": true, "NAME": true, "ADDRESS": true, "PHONE": true, "DATE_OF_BIRTH": true}
+	euAiTypes := map[string]bool{"PII": true, "GENETIC_DATA": true, "BIOMETRIC": true}
+	
+	var relevantTypes map[string]bool
+	switch regulation {
+	case "GDPR":
+		relevantTypes = gdprTypes
+	case "CCPA":
+		relevantTypes = ccpaTypes
+	case "HIPAA":
+		relevantTypes = hipaaTypes
+	case "PCI-DSS":
+		relevantTypes = pciTypes
+	case "DPDP Act 2023":
+		relevantTypes = dpdpTypes
+	case "UAE PDPL":
+		relevantTypes = uaePdplTypes
+	case "EU AI Act":
+		relevantTypes = euAiTypes
+	default:
+		return false
+	}
+	
+	for _, c := range advCtx.Classifications {
+		if relevantTypes[c.EntityType] {
+			return true
+		}
+	}
+	return false
+}
+
+// calcComplianceScore calculates compliance score based on findings
+// Returns -1 if no data exists to assess (N/A state)
+func calcComplianceScore(critical, high, medium, low int, hasData bool) float64 {
+	if !hasData {
+		return -1 // N/A - no data to assess
+	}
+	
+	totalFindings := critical + high + medium + low
+	if totalFindings == 0 {
+		return 100.0 // Compliant - data exists but no issues found
+	}
+	
 	score := 100.0
 	score -= float64(critical) * 15
 	score -= float64(high) * 10
@@ -699,7 +801,13 @@ func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
 			lowCount++
 		}
 	}
-	complianceScore := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount) / 100.0
+	
+	// Determine if we have data to assess
+	hasDataToAssess := totalClassifications > 0 || totalSources > 0
+	complianceScore := calcComplianceScore(criticalCount, highCount, mediumCount, lowCount, hasDataToAssess) / 100.0
+	if complianceScore < 0 {
+		complianceScore = 0 // Show 0 for N/A state
+	}
 
 	pkg.JSON(w, map[string]any{
 		"total_sources":         totalSources,
