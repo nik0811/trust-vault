@@ -73,17 +73,19 @@ type Tenant struct {
 
 // User represents a platform user
 type User struct {
-	ID           string     `db:"id" json:"id"`
-	TenantID     string     `db:"tenant_id" json:"-"`
-	Email        string     `db:"email" json:"email" validate:"required,email"`
-	PasswordHash string     `db:"password_hash" json:"-"`
-	Name         string     `db:"name" json:"name"`
-	Status       string     `db:"status" json:"status"`
-	IsSuperAdmin bool       `db:"is_super_admin" json:"is_super_admin"`
-	MFAEnabled   bool       `db:"mfa_enabled" json:"mfa_enabled"`
-	LastLoginAt  *time.Time `db:"last_login_at" json:"last_login_at,omitempty"`
-	CreatedAt    time.Time  `db:"created_at" json:"created_at"`
-	UpdatedAt    time.Time  `db:"updated_at" json:"updated_at"`
+	ID            string     `db:"id" json:"id"`
+	TenantID      string     `db:"tenant_id" json:"-"`
+	Email         string     `db:"email" json:"email" validate:"required,email"`
+	PasswordHash  string     `db:"password_hash" json:"-"`
+	Name          string     `db:"name" json:"name"`
+	Status        string     `db:"status" json:"status"`
+	IsSuperAdmin  bool       `db:"is_super_admin" json:"is_super_admin"`
+	MFAEnabled    bool       `db:"mfa_enabled" json:"mfa_enabled"`
+	LastLoginAt   *time.Time `db:"last_login_at" json:"last_login_at,omitempty"`
+	CreatedAt     time.Time  `db:"created_at" json:"created_at"`
+	UpdatedAt     time.Time  `db:"updated_at" json:"updated_at"`
+	SSOProviderID *string    `db:"sso_provider_id" json:"sso_provider_id,omitempty"`
+	SSOSubjectID  *string    `db:"sso_subject_id" json:"sso_subject_id,omitempty"`
 }
 
 // Role defines a set of permissions
