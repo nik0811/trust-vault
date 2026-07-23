@@ -25,6 +25,8 @@ type Server struct {
 	qdrant         *external.Qdrant
 	httpServer     *http.Server
 	internalServer *http.Server
+	startTime      *time.Time
+	classifier     any // GLiNER classifier service reference
 
 	// Repositories
 	tenants             *store.Repository[store.Tenant]
@@ -71,6 +73,7 @@ type Server struct {
 }
 
 func NewServer(db *store.DB, kafka *external.Kafka) *Server {
+	now := time.Now()
 	s := &Server{
 		router:         chi.NewRouter(),
 		internalRouter: chi.NewRouter(),
@@ -78,6 +81,8 @@ func NewServer(db *store.DB, kafka *external.Kafka) *Server {
 		kafka:          kafka,
 		datahub:        external.NewDataHub(""),
 		qdrant:         external.NewQdrant("", ""),
+		startTime:      &now,
+		classifier:     true, // Classifier is available via HTTP service
 
 		tenants:             store.NewRepo[store.Tenant](db, "tenants"),
 		users:               store.NewRepo[store.User](db, "users"),

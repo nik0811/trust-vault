@@ -65,9 +65,20 @@ export interface SystemHealth {
 export interface SystemMetrics {
   cpu_usage: number
   memory_usage: number
+  memory_alloc_mb: number
+  memory_sys_mb: number
+  goroutines: number
   disk_usage: number
   active_connections: number
+  open_connections: number
+  max_connections: number
   requests_per_minute: number
+  queries: {
+    total: number
+    last_24h: number
+    blocked: number
+    avg_latency: number
+  }
 }
 
 export function useSystemHealth() {
