@@ -21,30 +21,38 @@ const integrationSchema = z.object({
 type IntegrationForm = z.infer<typeof integrationSchema>
 
 const integrationTypes = [
-  // Communication
-  { value: 'slack', label: 'Slack', description: 'Slack workspace notifications', category: 'Communication' },
-  { value: 'teams', label: 'Microsoft Teams', description: 'Teams channel notifications', category: 'Communication' },
-  { value: 'email', label: 'Email (SMTP)', description: 'Email notifications via SMTP', category: 'Communication' },
-  { value: 'webhook', label: 'Webhook', description: 'Generic HTTP webhook endpoint', category: 'Communication' },
-  // Ticketing
-  { value: 'jira', label: 'Jira', description: 'Atlassian Jira issue tracking', category: 'Ticketing' },
-  { value: 'servicenow', label: 'ServiceNow', description: 'ServiceNow ITSM platform', category: 'Ticketing' },
-  { value: 'pagerduty', label: 'PagerDuty', description: 'Incident management', category: 'Ticketing' },
-  // Security / DLP
-  { value: 'dlp', label: 'DLP', description: 'Generic Data Loss Prevention', category: 'Security' },
-  { value: 'siem', label: 'SIEM', description: 'Generic security monitoring', category: 'Security' },
-  { value: 'splunk', label: 'Splunk', description: 'Splunk HEC endpoint', category: 'Security' },
-  { value: 'sentinel', label: 'Azure Sentinel', description: 'Microsoft Azure Sentinel SIEM', category: 'Security' },
-  // Catalog
-  { value: 'catalog', label: 'Data Catalog', description: 'Generic data catalog', category: 'Catalog' },
-  { value: 'collibra', label: 'Collibra', description: 'Collibra data governance', category: 'Catalog' },
-  { value: 'alation', label: 'Alation', description: 'Alation data catalog', category: 'Catalog' },
-  // Privacy
-  { value: 'onetrust', label: 'OneTrust', description: 'OneTrust privacy platform', category: 'Privacy' },
-  { value: 'privacyops', label: 'PrivacyOps', description: 'Privacy operations platform', category: 'Privacy' },
-  // Custom
-  { value: 'rest_api', label: 'REST API', description: 'Custom REST API endpoint', category: 'Custom' },
-  { value: 'custom', label: 'Custom', description: 'Custom integration', category: 'Custom' },
+  // Notifications - Alert channels for policy violations, classification events, compliance issues
+  { value: 'slack', label: 'Slack', description: 'Send alerts to Slack channels', category: 'Notifications' },
+  { value: 'teams', label: 'Microsoft Teams', description: 'Send alerts to Teams channels', category: 'Notifications' },
+  { value: 'email', label: 'Email (SMTP)', description: 'Email notifications for alerts', category: 'Notifications' },
+  { value: 'pagerduty', label: 'PagerDuty', description: 'Critical incident alerting', category: 'Notifications' },
+  { value: 'opsgenie', label: 'Opsgenie', description: 'Alert management and on-call', category: 'Notifications' },
+  // Ticketing - Create tickets for remediation workflows
+  { value: 'jira', label: 'Jira', description: 'Create issues for data remediation', category: 'Ticketing' },
+  { value: 'servicenow', label: 'ServiceNow', description: 'ITSM tickets for compliance', category: 'Ticketing' },
+  // SIEM/Logging - Forward security events and audit logs
+  { value: 'splunk', label: 'Splunk', description: 'Forward events to Splunk HEC', category: 'SIEM & Logging' },
+  { value: 'datadog', label: 'Datadog', description: 'Send logs and metrics to Datadog', category: 'SIEM & Logging' },
+  { value: 'sentinel', label: 'Azure Sentinel', description: 'Forward to Microsoft Sentinel', category: 'SIEM & Logging' },
+  { value: 'elastic', label: 'Elastic/OpenSearch', description: 'Send to Elasticsearch or OpenSearch', category: 'SIEM & Logging' },
+  // Vector Databases - For AI Gate context retrieval
+  { value: 'pinecone', label: 'Pinecone', description: 'Vector DB for RAG context', category: 'Vector Databases' },
+  { value: 'qdrant', label: 'Qdrant', description: 'Vector search for AI Gate', category: 'Vector Databases' },
+  { value: 'weaviate', label: 'Weaviate', description: 'Vector DB with hybrid search', category: 'Vector Databases' },
+  { value: 'chroma', label: 'Chroma', description: 'Open-source embedding database', category: 'Vector Databases' },
+  { value: 'milvus', label: 'Milvus', description: 'Scalable vector database', category: 'Vector Databases' },
+  // LLM Providers - For AI Gate LLM proxy
+  { value: 'openai', label: 'OpenAI', description: 'GPT models via OpenAI API', category: 'LLM Providers' },
+  { value: 'anthropic', label: 'Anthropic', description: 'Claude models via Anthropic API', category: 'LLM Providers' },
+  { value: 'azure_openai', label: 'Azure OpenAI', description: 'OpenAI models on Azure', category: 'LLM Providers' },
+  { value: 'aws_bedrock', label: 'AWS Bedrock', description: 'Foundation models on AWS', category: 'LLM Providers' },
+  { value: 'google_vertex', label: 'Google Vertex AI', description: 'Gemini and PaLM models', category: 'LLM Providers' },
+  // Data Governance - Sync with existing governance platforms
+  { value: 'collibra', label: 'Collibra', description: 'Sync with Collibra catalog', category: 'Data Governance' },
+  { value: 'alation', label: 'Alation', description: 'Sync with Alation catalog', category: 'Data Governance' },
+  { value: 'onetrust', label: 'OneTrust', description: 'Privacy compliance sync', category: 'Data Governance' },
+  // Custom - Webhook for custom integrations
+  { value: 'webhook', label: 'Webhook', description: 'Custom HTTP webhook endpoint', category: 'Custom' },
 ]
 
 const typeCategories = Array.from(new Set(integrationTypes.map(t => t.category)))
@@ -59,6 +67,7 @@ interface ConfigField {
 }
 
 const configFieldsByType: Record<string, ConfigField[]> = {
+  // Notifications
   slack: [
     { name: 'webhook_url', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.slack.com/services/...', required: true },
     { name: 'channel', label: 'Channel (optional)', type: 'text', placeholder: '#security-alerts' },
@@ -74,13 +83,16 @@ const configFieldsByType: Record<string, ConfigField[]> = {
     { name: 'from_address', label: 'From Address', type: 'text', placeholder: 'noreply@example.com', required: true },
     { name: 'to_addresses', label: 'To Addresses (comma-separated)', type: 'text', placeholder: 'admin@example.com, security@example.com', required: true },
   ],
-  webhook: [
-    { name: 'url', label: 'Webhook URL', type: 'text', placeholder: 'https://api.example.com/webhook', required: true },
-    { name: 'method', label: 'HTTP Method', type: 'select', options: [{ value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }], required: true },
-    { name: 'auth_type', label: 'Authentication', type: 'select', options: [{ value: 'none', label: 'None' }, { value: 'bearer', label: 'Bearer Token' }, { value: 'basic', label: 'Basic Auth' }] },
-    { name: 'token', label: 'Token / Password', type: 'password', placeholder: 'Bearer token or password' },
-    { name: 'headers', label: 'Custom Headers (JSON)', type: 'textarea', placeholder: '{"X-Custom-Header": "value"}' },
+  pagerduty: [
+    { name: 'routing_key', label: 'Routing Key', type: 'password', placeholder: 'Events API v2 routing key', required: true },
+    { name: 'severity', label: 'Default Severity', type: 'select', options: [{ value: 'critical', label: 'Critical' }, { value: 'error', label: 'Error' }, { value: 'warning', label: 'Warning' }, { value: 'info', label: 'Info' }] },
   ],
+  opsgenie: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Opsgenie API key', required: true },
+    { name: 'region', label: 'Region', type: 'select', options: [{ value: 'us', label: 'US' }, { value: 'eu', label: 'EU' }], required: true },
+    { name: 'priority', label: 'Default Priority', type: 'select', options: [{ value: 'P1', label: 'P1 - Critical' }, { value: 'P2', label: 'P2 - High' }, { value: 'P3', label: 'P3 - Moderate' }, { value: 'P4', label: 'P4 - Low' }, { value: 'P5', label: 'P5 - Informational' }] },
+  ],
+  // Ticketing
   jira: [
     { name: 'url', label: 'Jira URL', type: 'text', placeholder: 'https://yourcompany.atlassian.net', required: true },
     { name: 'email', label: 'Email', type: 'text', placeholder: 'user@example.com', required: true },
@@ -94,23 +106,85 @@ const configFieldsByType: Record<string, ConfigField[]> = {
     { name: 'password', label: 'Password', type: 'password', placeholder: '••••••••', required: true },
     { name: 'table_name', label: 'Table Name', type: 'text', placeholder: 'incident' },
   ],
-  pagerduty: [
-    { name: 'routing_key', label: 'Routing Key', type: 'password', placeholder: 'Events API v2 routing key', required: true },
-  ],
+  // SIEM & Logging
   splunk: [
     { name: 'url', label: 'HEC URL', type: 'text', placeholder: 'https://splunk.example.com:8088/services/collector', required: true },
     { name: 'token', label: 'HEC Token', type: 'password', placeholder: 'Your Splunk HEC token', required: true },
     { name: 'index', label: 'Index (optional)', type: 'text', placeholder: 'main' },
+    { name: 'source_type', label: 'Source Type', type: 'text', placeholder: 'securelens' },
+  ],
+  datadog: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Datadog API key', required: true },
+    { name: 'site', label: 'Site', type: 'select', options: [{ value: 'datadoghq.com', label: 'US1 (datadoghq.com)' }, { value: 'datadoghq.eu', label: 'EU (datadoghq.eu)' }, { value: 'us3.datadoghq.com', label: 'US3' }, { value: 'us5.datadoghq.com', label: 'US5' }], required: true },
+    { name: 'service', label: 'Service Name', type: 'text', placeholder: 'securelens' },
   ],
   sentinel: [
     { name: 'workspace_id', label: 'Workspace ID', type: 'text', placeholder: 'Log Analytics Workspace ID', required: true },
     { name: 'shared_key', label: 'Shared Key', type: 'password', placeholder: 'Primary or Secondary key', required: true },
     { name: 'log_type', label: 'Log Type', type: 'text', placeholder: 'SecureLens' },
   ],
-  datadog: [
-    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Datadog API key', required: true },
-    { name: 'site', label: 'Site', type: 'select', options: [{ value: 'datadoghq.com', label: 'US1 (datadoghq.com)' }, { value: 'datadoghq.eu', label: 'EU (datadoghq.eu)' }, { value: 'us3.datadoghq.com', label: 'US3' }, { value: 'us5.datadoghq.com', label: 'US5' }] },
+  elastic: [
+    { name: 'url', label: 'Elasticsearch URL', type: 'text', placeholder: 'https://elasticsearch.example.com:9200', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Elasticsearch API key' },
+    { name: 'index', label: 'Index Pattern', type: 'text', placeholder: 'securelens-logs', required: true },
+    { name: 'cloud_id', label: 'Cloud ID (if Elastic Cloud)', type: 'text', placeholder: 'deployment:region:id' },
   ],
+  // Vector Databases
+  pinecone: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Pinecone API key', required: true },
+    { name: 'environment', label: 'Environment', type: 'text', placeholder: 'us-east-1-aws', required: true },
+    { name: 'index_name', label: 'Index Name', type: 'text', placeholder: 'securelens-vectors', required: true },
+  ],
+  qdrant: [
+    { name: 'url', label: 'Qdrant URL', type: 'text', placeholder: 'https://qdrant.example.com:6333', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Qdrant API key' },
+    { name: 'collection', label: 'Collection Name', type: 'text', placeholder: 'securelens', required: true },
+  ],
+  weaviate: [
+    { name: 'url', label: 'Weaviate URL', type: 'text', placeholder: 'https://weaviate.example.com', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Weaviate API key' },
+    { name: 'class_name', label: 'Class Name', type: 'text', placeholder: 'SecureLensDocument', required: true },
+  ],
+  chroma: [
+    { name: 'url', label: 'Chroma URL', type: 'text', placeholder: 'http://localhost:8000', required: true },
+    { name: 'collection', label: 'Collection Name', type: 'text', placeholder: 'securelens', required: true },
+    { name: 'auth_token', label: 'Auth Token (optional)', type: 'password', placeholder: 'Bearer token' },
+  ],
+  milvus: [
+    { name: 'url', label: 'Milvus URL', type: 'text', placeholder: 'localhost:19530', required: true },
+    { name: 'token', label: 'Token', type: 'password', placeholder: 'Milvus token' },
+    { name: 'collection', label: 'Collection Name', type: 'text', placeholder: 'securelens', required: true },
+    { name: 'database', label: 'Database', type: 'text', placeholder: 'default' },
+  ],
+  // LLM Providers
+  openai: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true },
+    { name: 'organization', label: 'Organization ID (optional)', type: 'text', placeholder: 'org-...' },
+    { name: 'default_model', label: 'Default Model', type: 'select', options: [{ value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }, { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }] },
+  ],
+  anthropic: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'sk-ant-...', required: true },
+    { name: 'default_model', label: 'Default Model', type: 'select', options: [{ value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' }, { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' }, { value: 'claude-3-opus-20240229', label: 'Claude 3 Opus' }, { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku' }] },
+  ],
+  azure_openai: [
+    { name: 'endpoint', label: 'Azure Endpoint', type: 'text', placeholder: 'https://your-resource.openai.azure.com', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Azure OpenAI API key', required: true },
+    { name: 'deployment_name', label: 'Deployment Name', type: 'text', placeholder: 'gpt-4', required: true },
+    { name: 'api_version', label: 'API Version', type: 'text', placeholder: '2024-02-15-preview' },
+  ],
+  aws_bedrock: [
+    { name: 'region', label: 'AWS Region', type: 'text', placeholder: 'us-east-1', required: true },
+    { name: 'access_key_id', label: 'Access Key ID', type: 'text', placeholder: 'AKIA...', required: true },
+    { name: 'secret_access_key', label: 'Secret Access Key', type: 'password', placeholder: 'Your AWS secret key', required: true },
+    { name: 'default_model', label: 'Default Model', type: 'select', options: [{ value: 'anthropic.claude-3-sonnet-20240229-v1:0', label: 'Claude 3 Sonnet' }, { value: 'anthropic.claude-3-haiku-20240307-v1:0', label: 'Claude 3 Haiku' }, { value: 'amazon.titan-text-express-v1', label: 'Titan Text Express' }] },
+  ],
+  google_vertex: [
+    { name: 'project_id', label: 'GCP Project ID', type: 'text', placeholder: 'my-project', required: true },
+    { name: 'location', label: 'Location', type: 'text', placeholder: 'us-central1', required: true },
+    { name: 'credentials_json', label: 'Service Account JSON', type: 'textarea', placeholder: '{"type": "service_account", ...}', required: true },
+    { name: 'default_model', label: 'Default Model', type: 'select', options: [{ value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' }, { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' }, { value: 'gemini-1.0-pro', label: 'Gemini 1.0 Pro' }] },
+  ],
+  // Data Governance
   collibra: [
     { name: 'url', label: 'Collibra URL', type: 'text', placeholder: 'https://yourcompany.collibra.com', required: true },
     { name: 'username', label: 'Username', type: 'text', placeholder: 'api-user', required: true },
@@ -125,17 +199,13 @@ const configFieldsByType: Record<string, ConfigField[]> = {
     { name: 'client_id', label: 'Client ID', type: 'text', placeholder: 'OAuth Client ID', required: true },
     { name: 'client_secret', label: 'Client Secret', type: 'password', placeholder: 'OAuth Client Secret', required: true },
   ],
-  rest_api: [
-    { name: 'url', label: 'API URL', type: 'text', placeholder: 'https://api.example.com/endpoint', required: true },
-    { name: 'method', label: 'HTTP Method', type: 'select', options: [{ value: 'GET', label: 'GET' }, { value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }] },
-    { name: 'auth_type', label: 'Authentication', type: 'select', options: [{ value: 'none', label: 'None' }, { value: 'bearer', label: 'Bearer Token' }, { value: 'api_key', label: 'API Key' }, { value: 'basic', label: 'Basic Auth' }] },
-    { name: 'token', label: 'Token / API Key', type: 'password', placeholder: 'Authentication credential' },
+  // Custom
+  webhook: [
+    { name: 'url', label: 'Webhook URL', type: 'text', placeholder: 'https://api.example.com/webhook', required: true },
+    { name: 'method', label: 'HTTP Method', type: 'select', options: [{ value: 'POST', label: 'POST' }, { value: 'PUT', label: 'PUT' }], required: true },
+    { name: 'auth_type', label: 'Authentication', type: 'select', options: [{ value: 'none', label: 'None' }, { value: 'bearer', label: 'Bearer Token' }, { value: 'basic', label: 'Basic Auth' }, { value: 'api_key', label: 'API Key Header' }] },
+    { name: 'token', label: 'Token / Password', type: 'password', placeholder: 'Bearer token or password' },
     { name: 'headers', label: 'Custom Headers (JSON)', type: 'textarea', placeholder: '{"X-Custom-Header": "value"}' },
-  ],
-  custom: [
-    { name: 'url', label: 'Endpoint URL', type: 'text', placeholder: 'https://...' },
-    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Optional API key' },
-    { name: 'custom_config', label: 'Custom Configuration (JSON)', type: 'textarea', placeholder: '{"key": "value"}' },
   ],
 }
 
