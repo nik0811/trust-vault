@@ -404,13 +404,14 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 
 	switch req.Type {
 	case "quality":
-		var qualityStats []struct {
-			DatasetID   string  `db:"dataset_id"`
-			Overall     float64 `db:"overall"`
-			Completeness float64 `db:"completeness"`
-			Accuracy    float64 `db:"accuracy"`
-			IssueCount  int     `db:"issue_count"`
+		type qualityStat struct {
+			DatasetID    string  `db:"dataset_id" json:"dataset_id"`
+			Overall      float64 `db:"overall" json:"overall"`
+			Completeness float64 `db:"completeness" json:"completeness"`
+			Accuracy     float64 `db:"accuracy" json:"accuracy"`
+			IssueCount   int     `db:"issue_count" json:"issue_count"`
 		}
+		qualityStats := []qualityStat{}
 		s.db.SelectContext(ctx, &qualityStats,
 			`SELECT dataset_id, overall_score as overall, completeness_score as completeness, accuracy_score as accuracy, issue_count FROM quality_assessments WHERE tenant_id = $1 ORDER BY assessed_at DESC LIMIT 50`, tenantID)
 
@@ -445,17 +446,17 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 
 	case "ai_usage":
 		var gateStats struct {
-			TotalQueries   int     `db:"total"`
-			AllowedQueries int     `db:"allowed"`
-			BlockedQueries int     `db:"blocked"`
-			RedactedCount  int     `db:"redacted"`
+			TotalQueries   int `db:"total"`
+			AllowedQueries int `db:"allowed"`
+			BlockedQueries int `db:"blocked"`
+			RedactedCount  int `db:"redacted"`
 		}
 		s.db.GetContext(ctx, &gateStats.TotalQueries, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1`, tenantID)
 		s.db.GetContext(ctx, &gateStats.AllowedQueries, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND action = 'allow'`, tenantID)
 		s.db.GetContext(ctx, &gateStats.BlockedQueries, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND action = 'block'`, tenantID)
 		s.db.GetContext(ctx, &gateStats.RedactedCount, `SELECT COUNT(*) FROM gate_queries WHERE tenant_id = $1 AND action = 'redact'`, tenantID)
 
-		var recentQueries []map[string]any
+		recentQueries := []map[string]any{}
 		rows, _ := s.db.QueryxContext(ctx, `SELECT id, query_text, action, created_at FROM gate_queries WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 20`, tenantID)
 		if rows != nil {
 			defer rows.Close()
@@ -500,7 +501,7 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 		s.db.GetContext(ctx, &auditStats.DataEvents, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'datasource.%'`, tenantID)
 		s.db.GetContext(ctx, &auditStats.PolicyEvents, `SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1 AND action LIKE 'policy.%'`, tenantID)
 
-		var recentLogs []store.AuditLog
+		recentLogs := []store.AuditLog{}
 		s.db.SelectContext(ctx, &recentLogs,
 			`SELECT id, tenant_id, COALESCE(user_id,'') as user_id, action, resource, COALESCE(resource_id,'') as resource_id, details, COALESCE(ip,'') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`, tenantID)
 
