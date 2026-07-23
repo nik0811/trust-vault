@@ -503,7 +503,7 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 
 		recentLogs := []store.AuditLog{}
 		s.db.SelectContext(ctx, &recentLogs,
-			`SELECT id, tenant_id, COALESCE(user_id,'') as user_id, action, resource, COALESCE(resource_id,'') as resource_id, details, COALESCE(ip,'') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`, tenantID)
+			`SELECT id, tenant_id, COALESCE(user_id,'') as user_id, action, resource, COALESCE(resource_id,'') as resource_id, COALESCE(details, '{}') as details, COALESCE(ip,'') as ip, created_at FROM audit_logs WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 50`, tenantID)
 
 		reportContent = map[string]any{
 			"title":        "SecureLens Audit Report",
