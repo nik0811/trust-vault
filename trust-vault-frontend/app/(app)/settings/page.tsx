@@ -2,7 +2,7 @@
 
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import Link from 'next/link'
-import { Users, Key, Bell, Palette } from 'lucide-react'
+import { Users, Key, Bell, Palette, Shield } from 'lucide-react'
 
 export default function SettingsPage() {
   return (
@@ -36,6 +36,17 @@ export default function SettingsPage() {
             <h3 className="text-lg font-semibold text-foreground">API Keys</h3>
             <p className="text-sm text-muted-foreground mt-1">
               Manage API keys for service-to-service authentication
+            </p>
+          </Link>
+
+          <Link
+            href="/settings/sso"
+            className="rounded-lg border border-border bg-card p-6 hover:border-primary/50 transition-colors"
+          >
+            <Shield className="h-8 w-8 text-primary mb-4" />
+            <h3 className="text-lg font-semibold text-foreground">Single Sign-On (SSO)</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Configure OIDC and SAML identity providers
             </p>
           </Link>
 
