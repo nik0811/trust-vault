@@ -163,7 +163,7 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-16 z-40 flex h-[calc(100vh-64px)] w-64 flex-col border-r border-border bg-card transition-transform duration-300 md:relative md:top-0 md:translate-x-0',
+          'fixed left-0 top-16 z-40 flex h-[calc(100vh-64px)] w-64 flex-shrink-0 flex-col border-r border-border bg-card transition-transform duration-300 md:sticky md:top-0 md:h-full md:translate-x-0',
           !isOpen && '-translate-x-full md:translate-x-0',
         )}
       >

@@ -170,7 +170,7 @@ export default function NewIntegrationPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full bg-background overflow-auto">
       {/* Header */}
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs

@@ -67,7 +67,7 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card px-8 py-6 flex items-center justify-between">
         <div>

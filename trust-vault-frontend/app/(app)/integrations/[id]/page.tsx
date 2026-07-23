@@ -165,7 +165,7 @@ export default function IntegrationDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="h-full bg-background p-8">
         <Skeleton className="h-8 w-48 mb-4" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -174,7 +174,7 @@ export default function IntegrationDetailPage() {
 
   if (!integration) {
     return (
-      <div className="min-h-screen bg-background p-8">
+      <div className="h-full bg-background p-8">
         <div className="text-center py-12">
           <p className="text-destructive">Integration not found</p>
           <Link href="/integrations" className="mt-4 text-primary hover:underline">
@@ -189,7 +189,7 @@ export default function IntegrationDetailPage() {
   const configData = typeof integration.config === 'object' && integration.config !== null ? integration.config : {}
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="h-full bg-background overflow-auto">
       {/* Header */}
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs
