@@ -106,11 +106,15 @@ func (s *Server) getSystemHealth(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Determine overall status
+	// Logic: all healthy → "healthy", any degraded but none unhealthy → "degraded", any unhealthy → "unhealthy"
 	overallStatus := "healthy"
 	for _, comp := range components {
 		if comp.Status == "unhealthy" {
-			overallStatus = "degraded"
+			overallStatus = "unhealthy"
 			break
+		}
+		if comp.Status == "degraded" {
+			overallStatus = "degraded"
 		}
 	}
 

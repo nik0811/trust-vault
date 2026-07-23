@@ -29,6 +29,20 @@ import {
   Globe,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useSystemHealth } from '@/hooks/use-audit'
+
+function formatUptime(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86400) {
+    const hours = Math.floor(seconds / 3600)
+    const mins = Math.floor((seconds % 3600) / 60)
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`
+  }
+  const days = Math.floor(seconds / 86400)
+  const hours = Math.floor((seconds % 86400) / 3600)
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+}
 
 interface SidebarProps {
   isOpen?: boolean
@@ -114,6 +128,27 @@ const navGroups: NavGroup[] = [
 
 export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
   const pathname = usePathname()
+  const { data: health } = useSystemHealth()
+
+  const statusColor = health?.status === 'healthy' 
+    ? 'bg-green-500' 
+    : health?.status === 'degraded' 
+      ? 'bg-yellow-500' 
+      : health?.status === 'unhealthy'
+        ? 'bg-red-500'
+        : 'bg-gray-400'
+
+  const statusText = health?.status === 'healthy'
+    ? 'All systems healthy'
+    : health?.status === 'degraded'
+      ? 'Systems degraded'
+      : health?.status === 'unhealthy'
+        ? 'Systems unhealthy'
+        : 'Checking status...'
+
+  const uptimeText = health?.uptime_seconds 
+    ? `Uptime: ${formatUptime(health.uptime_seconds)}`
+    : ''
 
   return (
     <>
@@ -173,11 +208,16 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         <div className="border-t border-border p-4">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-green-500" aria-hidden="true" />
-              All systems healthy
+              <span className={cn("h-2 w-2 rounded-full", statusColor)} aria-hidden="true" />
+              {statusText}
             </span>
             <span>v1.0.0</span>
           </div>
+          {uptimeText && (
+            <div className="mt-1 text-[10px] text-muted-foreground/70">
+              {uptimeText}
+            </div>
+          )}
           <div className="mt-3 text-[10px] text-muted-foreground/70 text-center">
             Powered by{' '}
             <a href="https://plainsurf.com/" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors underline">
