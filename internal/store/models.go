@@ -337,9 +337,9 @@ type KnowledgeCacheEntry struct {
 }
 
 // Integration stores outbound integration configs.
-// Supported types: slack, teams, email, webhook, jira, servicenow, pagerduty,
-// dlp, siem, splunk, sentinel, catalog, collibra, alation, onetrust, privacyops,
-// rest_api, custom, privacy_platform, ticketing, communication
+// Supported types: slack, teams, email, webhook (notifications),
+// pinecone, qdrant, weaviate, chroma (vector DBs),
+// openai, anthropic, azure_openai, aws_bedrock, ollama (LLM providers)
 type Integration struct {
 	ID        string     `db:"id" json:"id"`
 	TenantID  string     `db:"tenant_id" json:"-"`

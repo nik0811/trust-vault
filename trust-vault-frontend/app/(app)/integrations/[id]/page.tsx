@@ -30,6 +30,7 @@ interface ConfigField {
 }
 
 const configFieldsByType: Record<string, ConfigField[]> = {
+  // Notifications
   slack: [
     { name: 'webhook_url', label: 'Webhook URL', type: 'text', placeholder: 'https://hooks.slack.com/services/...', required: true },
     { name: 'channel', label: 'Channel (optional)', type: 'text', placeholder: '#security-alerts' },
@@ -51,23 +52,50 @@ const configFieldsByType: Record<string, ConfigField[]> = {
     { name: 'auth_type', label: 'Authentication', type: 'select', options: [{ value: 'none', label: 'None' }, { value: 'bearer', label: 'Bearer Token' }, { value: 'basic', label: 'Basic Auth' }] },
     { name: 'token', label: 'Token / Password', type: 'password', placeholder: 'Bearer token or password' },
   ],
-  jira: [
-    { name: 'url', label: 'Jira URL', type: 'text', placeholder: 'https://yourcompany.atlassian.net', required: true },
-    { name: 'email', label: 'Email', type: 'text', placeholder: 'user@example.com', required: true },
-    { name: 'api_token', label: 'API Token', type: 'password', placeholder: 'Your Jira API token', required: true },
-    { name: 'project_key', label: 'Project Key', type: 'text', placeholder: 'SEC', required: true },
+  // Vector Databases
+  pinecone: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Pinecone API key', required: true },
+    { name: 'environment', label: 'Environment', type: 'text', placeholder: 'us-east-1-aws', required: true },
+    { name: 'index_name', label: 'Index Name', type: 'text', placeholder: 'securelens-vectors', required: true },
   ],
-  servicenow: [
-    { name: 'instance', label: 'Instance Name', type: 'text', placeholder: 'yourcompany', required: true },
-    { name: 'username', label: 'Username', type: 'text', placeholder: 'admin', required: true },
-    { name: 'password', label: 'Password', type: 'password', placeholder: '••••••••', required: true },
+  qdrant: [
+    { name: 'url', label: 'Qdrant URL', type: 'text', placeholder: 'https://qdrant.example.com:6333', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Qdrant API key' },
+    { name: 'collection', label: 'Collection Name', type: 'text', placeholder: 'securelens', required: true },
   ],
-  pagerduty: [
-    { name: 'routing_key', label: 'Routing Key', type: 'password', placeholder: 'Events API v2 routing key', required: true },
+  weaviate: [
+    { name: 'url', label: 'Weaviate URL', type: 'text', placeholder: 'https://weaviate.example.com', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Weaviate API key' },
+    { name: 'class_name', label: 'Class Name', type: 'text', placeholder: 'SecureLensDocument', required: true },
   ],
-  splunk: [
-    { name: 'url', label: 'HEC URL', type: 'text', placeholder: 'https://splunk.example.com:8088/services/collector', required: true },
-    { name: 'token', label: 'HEC Token', type: 'password', placeholder: 'Your Splunk HEC token', required: true },
+  chroma: [
+    { name: 'url', label: 'Chroma URL', type: 'text', placeholder: 'http://localhost:8000', required: true },
+    { name: 'collection', label: 'Collection Name', type: 'text', placeholder: 'securelens', required: true },
+    { name: 'auth_token', label: 'Auth Token (optional)', type: 'password', placeholder: 'Bearer token' },
+  ],
+  // LLM Providers
+  openai: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'sk-...', required: true },
+    { name: 'organization', label: 'Organization ID (optional)', type: 'text', placeholder: 'org-...' },
+    { name: 'default_model', label: 'Default Model', type: 'select', options: [{ value: 'gpt-4o', label: 'GPT-4o' }, { value: 'gpt-4o-mini', label: 'GPT-4o Mini' }, { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' }] },
+  ],
+  anthropic: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'sk-ant-...', required: true },
+    { name: 'default_model', label: 'Default Model', type: 'select', options: [{ value: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4' }, { value: 'claude-3-5-sonnet-20241022', label: 'Claude 3.5 Sonnet' }] },
+  ],
+  azure_openai: [
+    { name: 'endpoint', label: 'Azure Endpoint', type: 'text', placeholder: 'https://your-resource.openai.azure.com', required: true },
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Azure OpenAI API key', required: true },
+    { name: 'deployment_name', label: 'Deployment Name', type: 'text', placeholder: 'gpt-4', required: true },
+  ],
+  aws_bedrock: [
+    { name: 'region', label: 'AWS Region', type: 'text', placeholder: 'us-east-1', required: true },
+    { name: 'access_key_id', label: 'Access Key ID', type: 'text', placeholder: 'AKIA...', required: true },
+    { name: 'secret_access_key', label: 'Secret Access Key', type: 'password', placeholder: 'Your AWS secret key', required: true },
+  ],
+  ollama: [
+    { name: 'url', label: 'Ollama URL', type: 'text', placeholder: 'http://localhost:11434', required: true },
+    { name: 'default_model', label: 'Default Model', type: 'text', placeholder: 'llama3.1', required: true },
   ],
 }
 

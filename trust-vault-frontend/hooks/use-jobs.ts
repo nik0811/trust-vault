@@ -158,7 +158,7 @@ export function useJobHistory(id: string) {
 export interface Integration {
   id: string
   name: string
-  type: string  // slack, teams, email, webhook, jira, servicenow, pagerduty, dlp, siem, splunk, sentinel, catalog, collibra, alation, onetrust, privacyops, rest_api, custom, privacy_platform, ticketing, communication
+  type: string  // slack, teams, email, webhook, pinecone, qdrant, weaviate, chroma, openai, anthropic, azure_openai, aws_bedrock, ollama
   provider: string
   config: any
   sync_freq: string
