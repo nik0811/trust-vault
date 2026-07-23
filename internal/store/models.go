@@ -725,3 +725,38 @@ type ComplianceAssessment struct {
 	Summary               JSON      `db:"summary" json:"summary"`
 	CreatedAt             time.Time `db:"created_at" json:"created_at"`
 }
+
+// SSOProvider stores SSO configuration for OIDC and SAML providers
+type SSOProvider struct {
+	ID                    string         `db:"id" json:"id"`
+	TenantID              string         `db:"tenant_id" json:"-"`
+	Name                  string         `db:"name" json:"name" validate:"required"`
+	Type                  string         `db:"type" json:"type" validate:"required,oneof=oidc saml"`
+	Enabled               bool           `db:"enabled" json:"enabled"`
+	IssuerURL             *string        `db:"issuer_url" json:"issuer_url,omitempty"`
+	ClientID              *string        `db:"client_id" json:"client_id,omitempty"`
+	ClientSecretEncrypted *string        `db:"client_secret_encrypted" json:"-"`
+	Scopes                pq.StringArray `db:"scopes" json:"scopes,omitempty"`
+	IDPMetadataURL        *string        `db:"idp_metadata_url" json:"idp_metadata_url,omitempty"`
+	IDPEntityID           *string        `db:"idp_entity_id" json:"idp_entity_id,omitempty"`
+	IDPSSOURL             *string        `db:"idp_sso_url" json:"idp_sso_url,omitempty"`
+	IDPCertificate        *string        `db:"idp_certificate" json:"idp_certificate,omitempty"`
+	SPEntityID            *string        `db:"sp_entity_id" json:"sp_entity_id,omitempty"`
+	AttributeMapping      JSON           `db:"attribute_mapping" json:"attribute_mapping"`
+	DefaultRole           string         `db:"default_role" json:"default_role"`
+	AutoCreateUsers       bool           `db:"auto_create_users" json:"auto_create_users"`
+	CreatedAt             time.Time      `db:"created_at" json:"created_at"`
+	UpdatedAt             time.Time      `db:"updated_at" json:"updated_at"`
+}
+
+// SSOSession stores temporary SSO login state
+type SSOSession struct {
+	ID          string    `db:"id" json:"id"`
+	TenantID    string    `db:"tenant_id" json:"-"`
+	ProviderID  string    `db:"provider_id" json:"provider_id"`
+	State       string    `db:"state" json:"state"`
+	Nonce       string    `db:"nonce" json:"nonce"`
+	RedirectURI string    `db:"redirect_uri" json:"redirect_uri"`
+	CreatedAt   time.Time `db:"created_at" json:"created_at"`
+	ExpiresAt   time.Time `db:"expires_at" json:"expires_at"`
+}

@@ -178,6 +178,14 @@ func (s *Server) setupRoutes() {
 			r.Post("/auth/refresh", s.refreshToken)
 			r.Get("/invitations/verify/{token}", s.verifyInvitation)
 			r.Post("/auth/register", s.registerWithInvitation)
+			
+			// SSO public endpoints (no auth required)
+			r.Get("/auth/sso/providers", s.listTenantSSOProviders)
+			r.Get("/auth/sso/oidc/{provider_id}", s.ssoOIDCInitiate)
+			r.Get("/auth/sso/oidc/callback", s.ssoOIDCCallback)
+			r.Get("/auth/sso/saml/{provider_id}", s.ssoSAMLInitiate)
+			r.Post("/auth/sso/saml/acs", s.ssoSAMLACS)
+			r.Get("/auth/sso/saml/metadata/{tenant_id}", s.ssoSAMLMetadata)
 		})
 
 		// Protected routes with general rate limiting (1000/min per tenant+IP)
@@ -209,6 +217,16 @@ func (s *Server) setupRoutes() {
 				r.Post("/", s.createInvitation)
 				r.Delete("/{id}", s.cancelInvitation)
 				r.Post("/{id}/resend", s.resendInvitation)
+			})
+
+			// SSO Provider Management (admin only)
+			r.Route("/admin/sso/providers", func(r chi.Router) {
+				r.Use(s.rbacMiddleware("settings:read"))
+				r.Get("/", s.listSSOProviders)
+				r.Post("/", s.createSSOProvider)
+				r.Get("/{id}", s.getSSOProvider)
+				r.Put("/{id}", s.updateSSOProvider)
+				r.Delete("/{id}", s.deleteSSOProvider)
 			})
 
 			// Roles
