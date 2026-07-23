@@ -189,7 +189,7 @@ export default function IntegrationDetailPage() {
   const configData = typeof integration.config === 'object' && integration.config !== null ? integration.config : {}
 
   return (
-    <div className="h-full bg-background overflow-auto">
+    <div className="h-full bg-background">
       {/* Header */}
       <div className="border-b border-border bg-card px-8 py-6">
         <Breadcrumbs

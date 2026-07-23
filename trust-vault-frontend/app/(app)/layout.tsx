@@ -65,18 +65,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
-      {/* Top bar */}
+    <div className="h-screen overflow-hidden bg-background">
+      {/* Top bar - fixed at top */}
       <TopBar onMenuClick={toggleSidebar} />
 
-      {/* Main container */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
+      {/* Main container below top bar */}
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Sidebar - fixed position, never scrolls with content */}
         <Sidebar isOpen={sidebarOpen} onClose={toggleSidebar} />
 
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">
-          <div className="h-full p-6">{children}</div>
+        {/* Main content - this is the ONLY scrollable area */}
+        <main className="flex-1 overflow-y-auto">
+          <div className="p-6">{children}</div>
         </main>
       </div>
     </div>

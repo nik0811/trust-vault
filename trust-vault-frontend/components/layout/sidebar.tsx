@@ -160,11 +160,14 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar - flex-shrink-0 keeps it from shrinking, h-full fills the container */}
       <aside
         className={cn(
-          'fixed left-0 top-16 z-40 flex h-[calc(100vh-64px)] w-64 flex-shrink-0 flex-col border-r border-border bg-card transition-transform duration-300 md:sticky md:top-0 md:h-full md:translate-x-0',
+          'flex h-full w-64 flex-shrink-0 flex-col border-r border-border bg-card transition-transform duration-300',
+          'md:translate-x-0',
           !isOpen && '-translate-x-full md:translate-x-0',
+          // Mobile: fixed overlay
+          'max-md:fixed max-md:left-0 max-md:top-16 max-md:z-40 max-md:h-[calc(100vh-64px)]',
         )}
       >
         <nav className="flex-1 overflow-y-auto p-4">
