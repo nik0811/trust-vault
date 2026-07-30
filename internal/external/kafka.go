@@ -91,7 +91,7 @@ func (k *Kafka) ConsumeClassificationJobs(ctx context.Context, db *store.DB) {
 	// Initialize classifier client
 	classifierURL := os.Getenv("CLASSIFIER_URL")
 	if classifierURL == "" {
-		classifierURL = "http://securelens-classifier:8085"
+		classifierURL = "http://trustvault-classifier:8085"
 	}
 	classifier := NewClassifierClient(classifierURL)
 
@@ -579,7 +579,7 @@ func sendClassificationProgressAndLog(ctx context.Context, db *store.DB, scanID,
 
 // sendClassificationCallback sends a completion callback to the gateway for SSE broadcast
 func sendClassificationCallback(tenantID, datasetID, status string, columnsClassified int, message, errMsg string) {
-	gatewayURL := envOr("GATEWAY_URL", "http://securelens-gateway:8080")
+	gatewayURL := envOr("GATEWAY_URL", "http://trustvault-gateway:8080")
 	callbackURL := gatewayURL + "/api/v1/classification/callback"
 
 	payload := map[string]any{
@@ -608,7 +608,7 @@ func sendClassificationCallback(tenantID, datasetID, status string, columnsClass
 
 // sendClassificationProgress sends a progress update to the gateway for SSE broadcast
 func sendClassificationProgress(tenantID, datasetID, message string, current, total int) {
-	gatewayURL := envOr("GATEWAY_URL", "http://securelens-gateway:8080")
+	gatewayURL := envOr("GATEWAY_URL", "http://trustvault-gateway:8080")
 	progressURL := gatewayURL + "/api/v1/classification/progress"
 
 	payload := map[string]any{

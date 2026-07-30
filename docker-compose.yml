@@ -48,11 +48,36 @@ services:
     environment:
       - DATABASE_URL=postgres://trustvault:trustvault@postgres:5432/trustvault?sslmode=disable
       - KAFKA_BROKERS=kafka:29092
-      - MODEL_PATH=/models/gliner-pii-edge-int8.onnx
+      - GATEWAY_URL=http://trustvault-gateway:8080
+      - CLASSIFIER_URL=http://trustvault-classifier:8085
     depends_on:
       - postgres
       - kafka
+      - trustvault-classifier
     command: ["./server", "--mode=worker"]
+
+  # TrustVault GLiNER Classifier Service
+  trustvault-classifier:
+    build:
+      context: ./models
+      dockerfile: Dockerfile
+    ports:
+      - "8086:8085"
+    environment:
+      - MODEL_PATH=/models/gliner-pii-edge-int8.onnx
+      - LOG_LEVEL=info
+    volumes:
+      - classifier_models:/models
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8085/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   # PostgreSQL
   postgres:
@@ -215,3 +240,4 @@ volumes:
   mysql_data:
   elasticsearch_data:
   docservice_models:
+  classifier_models:

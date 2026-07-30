@@ -341,7 +341,7 @@ func classifyEndpointValues(values map[string]string) []endpointFinding {
 	payload, _ := json.Marshal(glinerRequest{Texts: texts, Labels: labels})
 	classifyCtx, classifyCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer classifyCancel()
-	classifyReq, err := http.NewRequestWithContext(classifyCtx, "POST", "http://securelens-classifier:8085/classify", bytes.NewReader(payload))
+	classifyReq, err := http.NewRequestWithContext(classifyCtx, "POST", "http://trustvault-classifier:8085/classify", bytes.NewReader(payload))
 	if err != nil {
 		return localClassifyValues(values)
 	}

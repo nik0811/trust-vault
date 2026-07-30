@@ -456,7 +456,7 @@ func (s *Server) ingestionCallbackURL() string {
 	if url := os.Getenv("INGESTION_CALLBACK_URL"); url != "" {
 		return url
 	}
-	return "http://securelens-gateway:8080/api/v1/datasources/callback"
+	return "http://trustvault-gateway:8080/api/v1/datasources/callback"
 }
 
 // callIngestionSidecar makes an HTTP POST to the ingestion sidecar
