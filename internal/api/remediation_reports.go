@@ -213,6 +213,11 @@ func (s *Server) generateReport(w http.ResponseWriter, r *http.Request) {
 		pkg.JSON(w, report, http.StatusAccepted)
 
 		go func(reportID, tid string) {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().Interface("panic", r).Str("report_id", reportID).Msg("Panic in compliance report generation")
+				}
+			}()
 			bgCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 			defer cancel()
 
@@ -1604,7 +1609,7 @@ func (s *Server) getComplianceGaps(w http.ResponseWriter, r *http.Request) {
 		}}
 		var assets []domain.AffectedAsset
 		for _, c := range sampleClassifications {
-			assets = append(assets, domain.AffectedAsset{ID: pkg.DerefStr(c.SourceID), Name: c.DatasetID, Type: "dataset"})
+			assets = append(assets, domain.AffectedAsset{ID: pkg.DerefStr(c.SourceID), Name: pkg.DerefStr(c.DatasetID), Type: "dataset"})
 		}
 		gaps = append(gaps, FrontendComplianceGap{
 			Regulation:        "GDPR",

@@ -329,7 +329,7 @@ func (s *Server) executeDSAR(w http.ResponseWriter, r *http.Request) {
 				SourceID:   cSourceID,
 				SourceName: sourceName,
 				SourceType: sourceType,
-				DatasetID:  c.DatasetID,
+				DatasetID:  pkg.DerefStr(c.DatasetID),
 				EntityType: c.EntityType,
 				Value:      c.Value,
 				Context:    ctxMap,

@@ -156,7 +156,7 @@ type Policy struct {
 type Classification struct {
 	ID                   string    `db:"id" json:"id"`
 	TenantID             string    `db:"tenant_id" json:"-"`
-	DatasetID            string    `db:"dataset_id" json:"dataset_id"`
+	DatasetID            *string   `db:"dataset_id" json:"dataset_id,omitempty"`
 	SourceID             *string   `db:"source_id" json:"source_id,omitempty"`
 	EntityType           string    `db:"entity_type" json:"entity_type"`
 	Value                string    `db:"value" json:"value"`

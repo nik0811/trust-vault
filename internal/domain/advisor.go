@@ -127,16 +127,17 @@ func checkUnprotectedPII(advCtx *AdvisorContext) []Recommendation {
 				piiAssets[c.EntityType] = make(map[string]AffectedAsset)
 			}
 			cSrcID := pkg.DerefStr(c.SourceID)
+			datasetID := pkg.DerefStr(c.DatasetID)
 			piiAssets[c.EntityType][cSrcID] = AffectedAsset{
-				ID: cSrcID, Name: c.DatasetID, Type: "dataset",
+				ID: cSrcID, Name: datasetID, Type: "dataset",
 			}
 			if len(piiEvidence[c.EntityType]) < 5 {
 				piiEvidence[c.EntityType] = append(piiEvidence[c.EntityType], EvidenceItem{
 					ID:          c.ID,
 					Type:        "classification_result",
 					Source:      "classification_engine",
-					Description: c.EntityType + " detected in dataset " + c.DatasetID + " with confidence " + strconv.FormatFloat(c.Confidence, 'f', 2, 64),
-					ResourceID:  c.DatasetID,
+					Description: c.EntityType + " detected in dataset " + datasetID + " with confidence " + strconv.FormatFloat(c.Confidence, 'f', 2, 64),
+					ResourceID:  datasetID,
 					ResourceRef: "classifications/" + c.ID,
 					DetectedAt:  c.CreatedAt,
 					Metadata:    map[string]any{"confidence": c.Confidence, "entity_type": c.EntityType, "source_id": cSrcID},
@@ -236,7 +237,7 @@ func checkGDPRCompliance(advCtx *AdvisorContext) []Recommendation {
 				Type:        "classification_result",
 				Source:      "classification_engine",
 				Description: "PII type " + c.EntityType + " processed without documented processing activity",
-				ResourceID:  c.DatasetID,
+				ResourceID:  pkg.DerefStr(c.DatasetID),
 				ResourceRef: "classifications/" + c.ID,
 				DetectedAt:  c.CreatedAt,
 			})
@@ -461,13 +462,14 @@ func checkHighSensitivityData(advCtx *AdvisorContext) []Recommendation {
 	for _, c := range advCtx.Classifications {
 		if HighSensitivityTypes[c.EntityType] {
 			totalHighSens++
+			datasetID := pkg.DerefStr(c.DatasetID)
 			if len(evidence) < 5 {
 				evidence = append(evidence, EvidenceItem{
 					ID:          "ev-highsens-" + c.ID,
 					Type:        "classification_result",
 					Source:      "classification_engine",
-					Description: "High-sensitivity " + c.EntityType + " found in " + c.DatasetID,
-					ResourceID:  c.DatasetID,
+					Description: "High-sensitivity " + c.EntityType + " found in " + datasetID,
+					ResourceID:  datasetID,
 					ResourceRef: "classifications/" + c.ID,
 					DetectedAt:  c.CreatedAt,
 					Metadata:    map[string]any{"entity_type": c.EntityType, "confidence": c.Confidence},
@@ -475,7 +477,7 @@ func checkHighSensitivityData(advCtx *AdvisorContext) []Recommendation {
 			}
 		if !seenAssets[pkg.DerefStr(c.SourceID)] {
 			seenAssets[pkg.DerefStr(c.SourceID)] = true
-			assets = append(assets, AffectedAsset{ID: pkg.DerefStr(c.SourceID), Name: c.DatasetID, Type: "dataset"})
+			assets = append(assets, AffectedAsset{ID: pkg.DerefStr(c.SourceID), Name: datasetID, Type: "dataset"})
 		}
 		}
 	}
