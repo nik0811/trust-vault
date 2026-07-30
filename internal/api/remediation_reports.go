@@ -772,12 +772,13 @@ func (s *Server) getAnalyticsSummary(w http.ResponseWriter, r *http.Request) {
 	// Get PII detected count
 	var piiDetected int
 	s.db.GetContext(ctx, &piiDetected,
-		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND entity_type IN ('PII', 'SSN', 'EMAIL', 'PHONE', 'CREDIT_CARD', 'ADDRESS', 'NAME', 'DOB', 'PHI')", tenantID)
+		"SELECT COUNT(*) FROM classifications WHERE tenant_id = $1 AND entity_type IN ('PII', 'SSN', 'EMAIL', 'PHONE', 'CREDIT_CARD', 'ADDRESS', 'NAME', 'DOB', 'PHI', 'PERSON_NAME', 'IP_ADDRESS')", tenantID)
 
-	// Get columns classified (distinct column_name from classifications)
+	// Get columns classified (distinct column_name from context JSONB)
 	var columnsClassified int
 	s.db.GetContext(ctx, &columnsClassified,
-		"SELECT COUNT(DISTINCT column_name) FROM classifications WHERE tenant_id = $1", tenantID)
+		`SELECT COUNT(DISTINCT COALESCE(NULLIF(context->>'column_name', ''), dataset_id)) 
+		 FROM classifications WHERE tenant_id = $1`, tenantID)
 
 	// Get documents processed
 	var documentsProcessed int
