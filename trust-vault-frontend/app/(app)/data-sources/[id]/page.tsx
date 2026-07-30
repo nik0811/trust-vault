@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Breadcrumbs } from '@/components/base/breadcrumbs'
 import { Skeleton } from '@/components/base/skeleton'
 import { StatusIndicator } from '@/components/base/status-badge'
-import { ArrowLeft, RefreshCw, Trash2, Play, Settings, Loader2, History, ChevronDown, ChevronRight, Clock, CheckCircle2, XCircle, Database, Tag } from 'lucide-react'
+import { ArrowLeft, RefreshCw, Trash2, Play, Settings, Loader2, History, ChevronDown, ChevronRight, Clock, CheckCircle2, XCircle, Database, Tag, X, Info, AlertTriangle, Shield, ShieldAlert } from 'lucide-react'
 import { useDataSource, useDeleteDataSource, useTriggerScan, useScanLogs, useDataSourceClassificationStats, ScanLog, ScanLogEntry } from '@/hooks/use-datasources'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -740,9 +740,183 @@ function ScanLogsCard({ dataSourceId, isScanning, status }: { dataSourceId: stri
   )
 }
 
+// Entity type sensitivity levels and display names
+const ENTITY_SENSITIVITY: Record<string, { level: 'high' | 'medium' | 'low'; shortName: string }> = {
+  // High sensitivity (red)
+  SSN: { level: 'high', shortName: 'SSN' },
+  SOCIAL_SECURITY_NUMBER: { level: 'high', shortName: 'SSN' },
+  CREDIT_CARD: { level: 'high', shortName: 'Card' },
+  CREDIT_CARD_NUMBER: { level: 'high', shortName: 'Card' },
+  PASSPORT: { level: 'high', shortName: 'Passport' },
+  PASSPORT_NUMBER: { level: 'high', shortName: 'Passport' },
+  BANK_ACCOUNT: { level: 'high', shortName: 'Bank' },
+  BANK_ACCOUNT_NUMBER: { level: 'high', shortName: 'Bank' },
+  DRIVER_LICENSE: { level: 'high', shortName: 'License' },
+  DRIVER_LICENSE_NUMBER: { level: 'high', shortName: 'License' },
+  TAX_ID: { level: 'high', shortName: 'Tax ID' },
+  NATIONAL_ID: { level: 'high', shortName: 'Nat. ID' },
+  
+  // Medium sensitivity (orange)
+  EMAIL: { level: 'medium', shortName: 'Email' },
+  EMAIL_ADDRESS: { level: 'medium', shortName: 'Email' },
+  PHONE: { level: 'medium', shortName: 'Phone' },
+  PHONE_NUMBER: { level: 'medium', shortName: 'Phone' },
+  ADDRESS: { level: 'medium', shortName: 'Address' },
+  STREET_ADDRESS: { level: 'medium', shortName: 'Address' },
+  DATE_OF_BIRTH: { level: 'medium', shortName: 'DOB' },
+  DOB: { level: 'medium', shortName: 'DOB' },
+  MEDICAL_RECORD: { level: 'medium', shortName: 'Medical' },
+  HEALTH_INSURANCE: { level: 'medium', shortName: 'Health ID' },
+  
+  // Low sensitivity (yellow)
+  PERSON_NAME: { level: 'low', shortName: 'Name' },
+  NAME: { level: 'low', shortName: 'Name' },
+  FIRST_NAME: { level: 'low', shortName: 'Name' },
+  LAST_NAME: { level: 'low', shortName: 'Name' },
+  IP_ADDRESS: { level: 'low', shortName: 'IP' },
+  IP: { level: 'low', shortName: 'IP' },
+  DATE: { level: 'low', shortName: 'Date' },
+  AGE: { level: 'low', shortName: 'Age' },
+  GENDER: { level: 'low', shortName: 'Gender' },
+  LOCATION: { level: 'low', shortName: 'Location' },
+  CITY: { level: 'low', shortName: 'City' },
+  STATE: { level: 'low', shortName: 'State' },
+  COUNTRY: { level: 'low', shortName: 'Country' },
+  ZIP_CODE: { level: 'low', shortName: 'ZIP' },
+  POSTAL_CODE: { level: 'low', shortName: 'ZIP' },
+}
+
+function getEntityInfo(type: string): { level: 'high' | 'medium' | 'low'; shortName: string } {
+  const normalized = type.toUpperCase().replace(/-/g, '_')
+  return ENTITY_SENSITIVITY[normalized] || { level: 'low', shortName: type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).substring(0, 12) }
+}
+
+function getSensitivityColor(level: 'high' | 'medium' | 'low'): { bg: string; text: string; border: string } {
+  switch (level) {
+    case 'high':
+      return { bg: 'bg-red-500/10', text: 'text-red-600 dark:text-red-400', border: 'border-red-500/30' }
+    case 'medium':
+      return { bg: 'bg-orange-500/10', text: 'text-orange-600 dark:text-orange-400', border: 'border-orange-500/30' }
+    case 'low':
+      return { bg: 'bg-yellow-500/10', text: 'text-yellow-600 dark:text-yellow-400', border: 'border-yellow-500/30' }
+  }
+}
+
+function getSensitivityIcon(level: 'high' | 'medium' | 'low') {
+  switch (level) {
+    case 'high':
+      return <ShieldAlert className="h-3 w-3" />
+    case 'medium':
+      return <AlertTriangle className="h-3 w-3" />
+    case 'low':
+      return <Shield className="h-3 w-3" />
+  }
+}
+
+// Entity Types Details Modal
+function EntityTypesModal({ 
+  entities, 
+  isOpen, 
+  onClose 
+}: { 
+  entities: Array<{ type: string; count: number }>
+  isOpen: boolean
+  onClose: () => void 
+}) {
+  if (!isOpen) return null
+
+  const totalCount = entities.reduce((sum, e) => sum + e.count, 0)
+  const sortedEntities = [...entities].sort((a, b) => b.count - a.count)
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <div className="relative bg-card border border-border rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Tag className="h-5 w-5 text-primary" />
+            <h3 className="text-lg font-semibold">Entity Types Breakdown</h3>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-muted transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        
+        <div className="p-4 overflow-y-auto max-h-[60vh]">
+          <div className="mb-4 p-3 rounded-lg bg-muted/50">
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Total Entity Types</span>
+              <span className="font-semibold">{entities.length}</span>
+            </div>
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-sm text-muted-foreground">Total Occurrences</span>
+              <span className="font-semibold">{totalCount.toLocaleString()}</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {sortedEntities.map((entity) => {
+              const info = getEntityInfo(entity.type)
+              const colors = getSensitivityColor(info.level)
+              const percentage = totalCount > 0 ? ((entity.count / totalCount) * 100).toFixed(1) : '0'
+              
+              return (
+                <div 
+                  key={entity.type} 
+                  className={`flex items-center justify-between p-3 rounded-lg border ${colors.bg} ${colors.border}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={colors.text}>
+                      {getSensitivityIcon(info.level)}
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm">{info.shortName}</span>
+                        <span className="text-xs text-muted-foreground">({entity.type})</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-xs capitalize ${colors.text}`}>{info.level} risk</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-semibold">{entity.count.toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground ml-1">({percentage}%)</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-border bg-muted/30">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div className="flex items-center gap-4">
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-red-500" /> High
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-orange-500" /> Medium
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-yellow-500" /> Low
+              </span>
+            </div>
+            <button onClick={onClose} className="text-primary hover:underline">
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // Classification Overview Card - Shows classification stats for this datasource
 function ClassificationOverviewCard({ dataSourceId }: { dataSourceId: string }) {
   const { data: stats, isLoading } = useDataSourceClassificationStats(dataSourceId)
+  const [showAllEntities, setShowAllEntities] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
 
   if (isLoading) {
     return (
@@ -760,6 +934,11 @@ function ClassificationOverviewCard({ dataSourceId }: { dataSourceId: string }) 
   }
 
   const hasClassifications = stats && stats.total_classifications > 0
+  const sortedEntities = stats?.top_entities 
+    ? [...stats.top_entities].sort((a, b) => b.count - a.count)
+    : []
+  const displayedEntities = sortedEntities.slice(0, 5)
+  const remainingCount = sortedEntities.length - 5
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
@@ -801,16 +980,45 @@ function ClassificationOverviewCard({ dataSourceId }: { dataSourceId: string }) 
             </div>
           </div>
 
-          {stats.top_entities && stats.top_entities.length > 0 && (
+          {sortedEntities.length > 0 && (
             <div className="space-y-2">
-              <p className="text-xs text-muted-foreground font-medium">Top Entity Types</p>
-              <div className="flex flex-wrap gap-2">
-                {stats.top_entities.slice(0, 6).map((entity) => (
-                  <span key={entity.type} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-xs font-medium text-primary">
-                    {entity.type}
-                    <span className="text-muted-foreground">({entity.count})</span>
-                  </span>
-                ))}
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-muted-foreground font-medium">Top Entity Types</p>
+                {sortedEntities.length > 0 && (
+                  <button 
+                    onClick={() => setShowDetailsModal(true)}
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <Info className="h-3 w-3" />
+                    Details
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {displayedEntities.map((entity) => {
+                  const info = getEntityInfo(entity.type)
+                  const colors = getSensitivityColor(info.level)
+                  
+                  return (
+                    <span 
+                      key={entity.type} 
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border ${colors.bg} ${colors.text} ${colors.border}`}
+                      title={`${entity.type} - ${info.level} sensitivity`}
+                    >
+                      {getSensitivityIcon(info.level)}
+                      {info.shortName}
+                      <span className="opacity-70">({entity.count.toLocaleString()})</span>
+                    </span>
+                  )
+                })}
+                {remainingCount > 0 && (
+                  <button
+                    onClick={() => setShowDetailsModal(true)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
+                  >
+                    +{remainingCount} more
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -825,6 +1033,12 @@ function ClassificationOverviewCard({ dataSourceId }: { dataSourceId: string }) 
           </div>
         </div>
       )}
+
+      <EntityTypesModal 
+        entities={sortedEntities}
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+      />
     </div>
   )
 }
